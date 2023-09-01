@@ -11,6 +11,7 @@ import numpy as np
 # Heavily based on: https://huggingface.co/blog/sentiment-analysis-python, and
 # https://huggingface.co/docs/transformers/tasks/sequence_classification
 
+
 class SentimentClassifier:
     def __init__(self, network_name, id2label, label2id):
         self.tokenizer = AutoTokenizer.from_pretrained(network_name)
