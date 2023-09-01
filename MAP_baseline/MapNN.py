@@ -16,9 +16,9 @@ def get_nonlinearity_from_string(non_linearity):
         return nn.SiLU()
 
 
-class map_nn(nn.Module):
+class MapNN(nn.Module):
     """
-    MAP neural network for
+    MAP neural network
     """
     def __init__(self, input_size: int, width: int, size: int, output_size: int = 1, non_linearity: str = "silu"):
         """
