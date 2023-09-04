@@ -44,5 +44,5 @@ class MapNN(nn.Module):
 
         Returns:
         """
-        output = self.layers(x.squeeze())
+        output = self.layers(x)
         return output

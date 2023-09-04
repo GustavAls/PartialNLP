@@ -1,12 +1,10 @@
 import numpy as np
 import torch
-from sentence_transformers import SentenceTransformer, models, losses
 from torch.nn import MSELoss
-from torch.optim import SGD
+from torch.optim import SGD, Adam
 import torch.nn as nn
 import os
 from copy import deepcopy
-from sklearn.metrics import balanced_accuracy_score
 from tqdm import trange
 
 
@@ -26,43 +24,40 @@ def train(network: nn.Module,
     """
 
     network.to(device)
-    optimizer = SGD(network.parameters(), lr=0.001)
+    optimizer = SGD(network.parameters(), lr=0.1)
 
     loss_fn = MSELoss()
-    best_score = 0
+    best_loss = np.infty
     best_model = None
     for epoch in trange(epochs, desc="Training MAP network"):
         network.train()
-        for idx, (batch, label) in enumerate(dataloader_train):
+        for idx, (batch, target) in enumerate(dataloader_train):
             optimizer.zero_grad()
             batch = batch.to(device)
-            label = label.to(device)
-            prediction = network(batch)
-            loss = loss_fn(prediction, label)
+            target = target.to(device)
+            output = network(batch)
+            loss = loss_fn(output, target)
             loss.backward()
             optimizer.step()
 
         if epoch % 2 == 0:
             network.eval()
-            predictions = []
-            labels = []
-            for idx, (batch, label) in enumerate(dataloader_val):
-                predictions.append(network(batch).detach().cpu().numpy())
-                labels.append(label.detach().cpu().numpy())
+            current_loss = 0
+            for idx, (batch, target) in enumerate(dataloader_val):
+                batch = batch.to(device)
+                target = target.detach().cpu().numpy()
+                output = network(batch).detach().cpu().numpy()
+                current_loss += loss_fn(torch.FloatTensor(output), torch.FloatTensor(target))
+            current_loss /= len(dataloader_val)
 
-            predictions = np.concatenate(predictions)
-            labels = np.concatenate(labels)
-
-            current_score = balanced_accuracy_score(labels.argmax(-1), predictions.argmax(-1))
-
-            if current_score > best_score:
-                best_score = current_score
+            if current_loss < best_loss:
+                best_loss = current_loss
                 best_model = deepcopy(network)
 
     if best_model is None:
         UserWarning("The model failed to improve, something went wrong")
     else:
         torch.save(best_model.state_dict(), save_path)
-        print(f"Model was saved to location {save_path}, terminated with score {best_score}")
+        print(f"Model was saved to location {save_path}, terminated with MSELoss {best_loss}")
 
     return best_model

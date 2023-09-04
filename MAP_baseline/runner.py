@@ -6,12 +6,12 @@ from toy_datasets import ToyRegressionDDataModule
 
 
 def main(args):
-    data = ToyRegressionDDataModule(batch_size=35)
+    data = ToyRegressionDDataModule(batch_size=1)
     train_dataloader = data.train_dataloader()
     val_dataloader = data.val_dataloader()
-    map_model = MapNN(input_size=35, width=35, size=3, output_size=1, non_linearity="silu")
+    map_model = MapNN(input_size=1, width=1, size=3, output_size=1, non_linearity="silu")
 
-    trainer.train(
+    trained_model = trainer.train(
         map_model,
         dataloader_train=train_dataloader,
         dataloader_val=val_dataloader,
