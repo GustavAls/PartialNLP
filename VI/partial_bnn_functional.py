@@ -163,7 +163,7 @@ def train(network: nn.Module,
                 for idx, (batch, target) in enumerate(dataloader_val):
                     batch = batch.to(device)
                     output = network(batch)
-                    current_loss += loss_fn(output, target)
+                    current_loss += loss_fn(output, target.to(device))
                 current_loss /= len(dataloader_val)
 
                 if current_loss < best_loss:
