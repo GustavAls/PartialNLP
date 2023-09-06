@@ -101,7 +101,7 @@ def set_model_weights(model, model_, name_to_mask):
 
     for (name_, module_), (name, module) in zip(org_model_items, new_model_items):
         if hasattr(module_, 'bias'):
-            if module_.bias:
+            if module_.bias is not None:
                 mask_linear = ~(name_to_mask[name_][0] == 1)
                 mask_bias = ~(name_to_mask[name_][1] == 1)
                 parameters = [p for p in module_.parameters()]
@@ -163,7 +163,7 @@ def train(network: nn.Module,
                 for idx, (batch, target) in enumerate(dataloader_val):
                     batch = batch.to(device)
                     output = network(batch)
-                    current_loss += loss_fn(output, output)
+                    current_loss += loss_fn(output, target.to(device))
                 current_loss /= len(dataloader_val)
 
                 if current_loss < best_loss:
