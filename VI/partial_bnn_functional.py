@@ -124,7 +124,8 @@ def train(network: nn.Module,
           vi=True,
           device='cpu',
           epochs=50,
-          save_path=None):
+          save_path=None,
+          num_mc_samples = 25):
     """
 
     :param network: (nn.Module) feed forward classification model
@@ -139,6 +140,10 @@ def train(network: nn.Module,
     loss_fn = nn.MSELoss()
     best_loss = np.infty
     best_model = None
+    if vi:
+        current_loss = evaluate_monte_carlo(network, dataloader_val, loss_fn, num_mc_samples, device)
+        print(f'"loss without training was {current_loss}')
+
     for epoch in trange(epochs, desc="Training MAP network"):
         network.train()
         for idx, (batch, target) in enumerate(dataloader_train):
@@ -157,6 +162,13 @@ def train(network: nn.Module,
                 set_model_weights(network, model_old, mask)
 
         if epoch % 2 == 0:
+            if vi:
+                current_loss = evaluate_monte_carlo(network, dataloader_val,loss_fn, num_mc_samples, device)
+                if current_loss < best_loss:
+                    best_loss = current_loss
+                    best_model = deepcopy(network)
+                continue
+
             with torch.no_grad():
                 network.eval()
                 current_loss = 0
@@ -179,6 +191,21 @@ def train(network: nn.Module,
     return best_model
 
 
+def evaluate_monte_carlo(model, dataloader, loss_fn, num_mc_samples = 25, device = 'cpu'):
+
+    with torch.no_grad():
+        loss = 0
+        mc_output = []
+        for idx, (batch, target) in enumerate(dataloader):
+            for mc_run in range(num_mc_samples):
+                batch = batch.to(device)
+                output = model(batch)
+                mc_output.append(output)
+
+            loss += loss_fn(torch.stack(mc_output).mean(0), target.to(device))
+        loss /= len(dataloader)
+
+        return loss
 
 def train_model_with_varying_stochasticity(untrained_model, dataloader, dataloader_val, percentages, train_args):
     model_ = train(
