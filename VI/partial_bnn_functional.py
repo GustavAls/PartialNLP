@@ -198,7 +198,7 @@ def evaluate_monte_carlo(model, dataloader, loss_fn, num_mc_samples = 25, device
                 output = model(batch)
                 mc_output.append(output)
 
-            loss += loss_fn(torch.stack(output).mean(0), target.to(device))
+            loss += loss_fn(torch.stack(mc_output).mean(0), target.to(device))
         loss /= len(dataloader)
 
         return loss
