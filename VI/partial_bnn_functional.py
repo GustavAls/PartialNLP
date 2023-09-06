@@ -140,6 +140,10 @@ def train(network: nn.Module,
     loss_fn = nn.MSELoss()
     best_loss = np.infty
     best_model = None
+    if vi:
+        current_loss = evaluate_monte_carlo(network, dataloader_val, loss_fn, num_mc_samples, device)
+        print(f'"loss without training was {current_loss}')
+
     for epoch in trange(epochs, desc="Training MAP network"):
         network.train()
         for idx, (batch, target) in enumerate(dataloader_train):
