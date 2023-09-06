@@ -9,6 +9,7 @@ from copy import deepcopy
 from torch.utils.data import DataLoader, Dataset
 import utils_temp
 from tqdm import tqdm
+
 def run_swag_partial(model:nn.Module,
                      train_loader: DataLoader,
                      lr=1e-2,
@@ -37,7 +38,7 @@ def run_swag_partial(model:nn.Module,
         UserWarning("bnn_params set to none, running full swag")
         model.requires_grad_(True)
     else:
-        utils_temp.set_gradient_parameters(bnn_params)
+        utils_temp.set_gradient_parameters(model, bnn_params)
 
     batch_snapshot_freq = int(len(train_loader) / snapshots_per_epoch)
 
@@ -52,7 +53,7 @@ def run_swag_partial(model:nn.Module,
     n_snapshots = 0
 
     optimizer = SGD(
-        [p for p in model.parameters() if p.requires_grad], lr = lr, momentum=momentum, weight_decay = weight_decay
+        [p for p in _model.parameters() if p.requires_grad], lr = lr, momentum=momentum, weight_decay = weight_decay
     )
 
     criterion = criterion()
@@ -86,3 +87,87 @@ def run_swag_partial(model:nn.Module,
                 pbar.set_postfix({'Running epoch_loss': np.mean(epoch_losses), 'snapshots': n_snapshots})
 
         average_losses.append(np.mean(epoch_losses))
+
+    D = torch.zeros((utils_temp._parameter_vector(model).numel(), K))
+    for i in range(K):
+        D[:, i] = deviations[i]
+
+    return {
+        "theta_swa": mean.to(device),
+        "sigma_diag": (sq_mean - mean ** 2).to(device).clamp(1e-14),
+        "D": D.to(device),
+        "K": K
+    }
+
+
+class TestModelSmall(nn.Module):
+    def __init__(self):
+        super(TestModelSmall, self).__init__()
+
+        self.layer_one = nn.Linear(10, 10)
+        self.activation = nn.ReLU()
+        self.layer_two = nn.Linear(10, 10)
+
+    def forward(self, x):
+
+        out = self.layer_one(x)
+        out = self.activation(out)
+        out = self.layer_two(out)
+        return out
+
+
+
+class TestModelMulti(nn.Module):
+    def __init__(self):
+        super(TestModelMulti, self).__init__()
+
+        self.module_one = TestModelSmall()
+        self.module_two = TestModelSmall()
+        self.activation = nn.ReLU()
+        self.last_layer = nn.Linear(10, 2)
+    def forward(self, x):
+        out = self.module_one(x)
+        out = self.activation(out)
+        out = self.module_two(out)
+        out = self.activation(out)
+        out = self.last_layer(out)
+
+        return out
+
+
+class TestData(Dataset):
+
+    def __init__(self):
+
+        self.data = np.random.normal(0,1, (1000, 10))
+        labels_ = np.random.binomial(n = 2, p = 0.5, size = (1000, ))
+        self.labels = [[1, 0] if lab == 0 else [0, 1] for lab in labels_ ]
+
+    def __len__(self):
+        return len(self.labels)
+    def __getitem__(self, item):
+
+        data = torch.from_numpy(self.data[item])
+        label = torch.Tensor(self.labels[item])
+        data = data.float()
+        label = label.float()
+        return data, label
+
+def test_swag():
+
+    model = TestModelMulti()
+    partial_dict = {'module_one': ['layer_one']}
+
+    utils_temp.set_gradient_parameters(model, partial_dict)
+    criterion = nn.CrossEntropyLoss()
+    dataset = TestData()
+    dataloader = DataLoader(dataset, batch_size=10)
+
+    swag_res = run_swag_partial(model, dataloader, bnn_params=partial_dict,n_epochs=40, K = 10)
+    breakpoint()
+
+
+if __name__ == '__main__':
+
+    test_swag()
+    breakpoint()
