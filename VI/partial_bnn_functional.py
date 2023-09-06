@@ -188,7 +188,7 @@ def train_model_with_varying_stochasticity(untrained_model, dataloader, dataload
         vi=False,
         device=train_args['device'],
         epochs=train_args['epochs'],
-        save_path=train_args['save_path'] + "map_model.pt"
+        save_path=os.path.join(train_args['save_path'], "map_model.pt")
     )
 
     model = copy.deepcopy(model_)
