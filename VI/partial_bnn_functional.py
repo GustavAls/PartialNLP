@@ -248,10 +248,10 @@ def train_model_with_varying_stochasticity_scheme_two(
         *args
 ):
 
-    untrained_model = uninitialised_model(*args)
+    untrained_model = uninitialised_model
 
     model_ = train(
-        untrained_model,
+        copy.deepcopy(untrained_model),
         dataloader,
         dataloader_val,
         model_old=None,
@@ -261,7 +261,7 @@ def train_model_with_varying_stochasticity_scheme_two(
         save_path=os.path.join(train_args['save_path'], "map_model.pt")
     )
 
-    model = uninitialised_model(*args)
+    model = copy.deepcopy(untrained_model)
 
     model = model.to(train_args['device'])
     for percentage in percentages:
