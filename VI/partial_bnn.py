@@ -44,7 +44,7 @@ class MiniTestModel(nn.Module):
         return upper_path + lower_part
 
 class MiniBNNModel(nn.Module):
-    def __init__(self):
+    def __init__(self, nothing = None, borge = None):
         super(MiniBNNModel, self).__init__()
         self.layer = nn.Linear(5,5, bias = False)
         self.activation = nn.ReLU()
@@ -164,7 +164,7 @@ if __name__ == '__main__':
                   'device': 'cpu',
                   'save_path': r'C:\Users\45292\Documents\Master\VI Simple\Models\Test Cases'}
     funct.train_model_with_varying_stochasticity_scheme_two(
-        model,dataloader,dataloader_val,range(10,100),train_args
+        model,dataloader,dataloader_val,range(10,100),train_args, 2, 3
     )
     # funct.train(model, dataloader,dataloader_val,model_old=None, mask=None, vi = False)
 
