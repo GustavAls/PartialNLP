@@ -261,10 +261,10 @@ def train_model_with_varying_stochasticity_scheme_two(
         save_path=os.path.join(train_args['save_path'], "map_model.pt")
     )
 
-    model = copy.deepcopy(untrained_model)
 
-    model = model.to(train_args['device'])
     for percentage in percentages:
+        model = copy.deepcopy(untrained_model)
+        model = model.to(train_args['device'])
         mask = create_mask(model_, percentage)
         bnn(model, mask)
         # set_model_weights(model, model_, mask)
