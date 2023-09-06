@@ -149,7 +149,7 @@ def train(network: nn.Module,
             loss = loss_fn(output, target)
             if vi:
                 kl = get_kl_loss(network)
-                loss += kl / batch.shape[0]
+                loss = kl / batch.shape[0]
 
             loss.backward()
             optimizer.step()
