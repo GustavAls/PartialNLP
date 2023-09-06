@@ -105,13 +105,13 @@ def set_model_weights(model, model_, name_to_mask):
                 mask_linear = ~(name_to_mask[name_][0] == 1)
                 mask_bias = ~(name_to_mask[name_][1] == 1)
                 parameters = [p for p in module_.parameters()]
-                module.mu_weight.data[mask_linear] = parameters[0][mask_linear].clone()
-                module.mu_bias.data[mask_bias] = parameters[1][mask_bias].clone()
+                module.mu_weight.data[mask_linear] = parameters[0][mask_linear].data.clone()
+                module.mu_bias.data[mask_bias] = parameters[1][mask_bias].data.clone()
 
             else:
                 mask_linear = ~(name_to_mask[name_][0] == 1)
                 parameters = [p for p in module_.parameters()]
-                module.mu_weight.data[mask_linear] = parameters[0][mask_linear].clone()
+                module.mu_weight.data[mask_linear] = parameters[0][mask_linear].data.clone()
 
     return None
 
@@ -192,6 +192,7 @@ def train_model_with_varying_stochasticity(untrained_model, dataloader, dataload
     )
 
     model = copy.deepcopy(model_)
+    model = model.to(train_args['device'])
     for percentage in percentages:
         mask = create_mask(model_, percentage)
         bnn(model, mask)
