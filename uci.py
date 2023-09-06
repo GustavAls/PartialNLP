@@ -8,7 +8,7 @@ from MAP_baseline.MapNN import MapNN
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
-
+import pickle
 import numpyro
 import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS, Predictive, Trace_ELBO, autoguide, SVI
@@ -16,7 +16,6 @@ import jax
 import jax.numpy as jnp
 import jax.nn
 from jax import random
-
 
 
 def _gap_train_test_split(X, y, gap_column, test_size):
@@ -262,14 +261,14 @@ def evaluate_MAP_old(model, svi_results, X, y, rng_key, y_scale=1.0, y_loc=0.0):
     )
     return log_likelihood, rmse
 
-def evaluate_MAP(model, X, y, y_scale=1.0, y_loc=0.0):
 
-    # sigma_obs = 1.0 / jnp.sqrt(svi_results.params["prec_obs_auto_loc"])
-    sigma_obs = 1.0
+def evaluate_MAP(model, X, y, y_scale=1.0, y_loc=0.0):
     y_scale = torch.tensor(y_scale)
     y_loc = torch.tensor(y_loc)
     model = model.to("cpu")
     y_pred = model(torch.tensor(X, dtype=torch.float32))
+    # Todo: Is this the correct sigma_obs?
+    sigma_obs = np.std(np.abs(y_pred.detach().numpy() - y))
     rmse = (((y_pred.detach().numpy() - y) ** 2).mean() ** 0.5) * y_scale
     y = torch.tensor(y)
 
@@ -308,42 +307,44 @@ if __name__ == "__main__":
                             test_split_type="gap" if args.gap else "random", test_size=0.1, val_fraction_of_train=0.1)
 
     ## Train MAP Solution
-    optimizer = numpyro.optim.Adam(0.01)
-    rng_key = random.PRNGKey(1)
+    # optimizer = numpyro.optim.Adam(0.01)
+    # rng_key = random.PRNGKey(1)
+    #
+    # model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
+    #
+    # svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
+    # start_time = time.time()
+    # svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
+    # end_time = time.time()
+    #
+    # train_ll, train_rmse = evaluate_MAP_old(
+    #     model,
+    #     svi_results,
+    #     dataset.X_test,
+    #     dataset.y_test,
+    #     rng_key,
+    #     y_scale=dataset.scl_Y.scale_,
+    #     y_loc=dataset.scl_Y.mean_,
+    # )
 
-    model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
+    n_train, p = dataset.X_train.shape
+    n_val = dataset.X_val.shape[0]
+    out_dim = dataset.y_train.shape[1]
 
-    svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
-    start_time = time.time()
-    svi_results = svi.run(rng_key, 1000, X=dataset.X_train, y=dataset.y_train)
-    end_time = time.time()
+    train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train)
+    val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
 
-    train_ll, train_rmse = evaluate_MAP_old(
-        model,
-        svi_results,
-        dataset.X_test,
-        dataset.y_test,
-        rng_key,
-        y_scale=dataset.scl_Y.scale_,
-        y_loc=dataset.scl_Y.mean_,
-    )
-
-    input_dim = dataset.X_train.shape[-1]
-    output_dim = dataset.y_train.shape[-1]
-
-    train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=100)
-    val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=50)
-
-    map_model = MapNN(input_size=input_dim, width=50, size=2, output_size=output_dim, non_linearity="silu")
+    map_model = MapNN(input_size=p, width=50, size=2, output_size=out_dim, non_linearity="leaky_relu")
     start_time = time.time()
     trained_model = trainer.train(
         map_model,
         dataloader_train=train_dataloader,
         dataloader_val=val_dataloader,
         device=args.device,
-        save_path=os.path.join(args.output_path, "map_yacht.pt"),
+        save_path=os.path.join(args.output_path, "uci_results/map_" + args.dataset + ".pt"),
         epochs=args.num_epochs,
     )
+
     end_time = time.time()
 
     train_ll, train_rmse = evaluate_MAP(
@@ -353,7 +354,6 @@ if __name__ == "__main__":
         y_scale=dataset.scl_Y.scale_,
         y_loc=dataset.scl_Y.mean_
     )
-
 
     val_ll, val_rmse = evaluate_MAP(
         map_model,
@@ -387,53 +387,13 @@ if __name__ == "__main__":
     }
 
     print(map_results)
-    #
-    #
-    # print(full_network_results)
-    #
-    # percentiles = list(np.logspace(-1, 1.996, 15))
-    # MAP_params = svi_results.params
-    #
-    # all_results = {
-    #     "all_results_not_scaled": [map_results, full_network_results],
-    #     "all_results_scaled": [map_results, full_network_results],
-    # }
-    #
-    # fname = f"/data/uci_subset_hmc/{args.dataset}_s{args.seed}_prior_var{args.prior_variance:.2f}_scale{args.likelihood_scale}"
-    #
-    # if args.gap:
-    #     fname = f"{fname}_gap"
-    #
-    # import pickle
-    #
-    # for percentile in percentiles:
-    #     print(
-    #         f"Running for {percentile} of weights sampled scaled, by maximum absolute value"
-    #     )
-    #     all_results["all_results_scaled"].append(
-    #         run_for_percentile(
-    #             dataset,
-    #             percentile,
-    #             MAP_params,
-    #             prior_variance_scaled=True,
-    #             scale=args.likelihood_scale,
-    #         )
-    #     )
-    #     print(all_results["all_results_scaled"][-1])
-    #
-    #     pickle.dump(all_results, open(f"{fname}.pkl", "wb"))
-    #
-    # for percentile in percentiles:
-    #     print(f"Running for {percentile} of weights sampled, by maximum absolute value")
-    #     all_results["all_results_not_scaled"].append(
-    #         run_for_percentile(
-    #             dataset,
-    #             percentile,
-    #             MAP_params,
-    #             prior_variance_scaled=False,
-    #             scale=args.likelihood_scale,
-    #         )
-    #     )
-    #     print(all_results["all_results_not_scaled"][-1])
-    #
-    #     pickle.dump(all_results, open(f"{fname}.pkl", "wb"))
+
+    all_results = {
+        "all_results_not_scaled": [map_results, map_results],
+        "all_results_scaled": [map_results, map_results],
+    }
+
+    file_name = os.path.join(args.output_path, "uci_results/map_" + args.dataset)
+
+    pickle.dump(all_results, open(f"{file_name}.pkl", "wb"))
+
