@@ -150,15 +150,26 @@ if __name__ == '__main__':
 
 
     model = MiniBNNModel()
-    param_mask = create_mask(model, 50)
-    model_ = deepcopy(model)
-    bnn(model, mask=param_mask)
-    funct.set_model_weights(model, model_, param_mask)
+    # param_mask = create_mask(model, 50)
+    # model_ = deepcopy(model)
+    # bnn(model, mask=param_mask)
+    # funct.set_model_weights(model, model_, param_mask)
 
 
     dataloader = DataLoader(DataForFun(), batch_size=10)
+    dataloader_val = DataLoader(DataForFun(), batch_size=10)
+    train_args = {'epochs': 10,
+                  'device': 'cpu',
+                  'save_path': r'C:\Users\45292\Documents\Master\VI Simple\Models\Test Cases'}
+    funct.train_model_with_varying_stochasticity(
+        model,dataloader,dataloader_val,range(10,100),train_args
+    )
+    # funct.train(model, dataloader,dataloader_val,model_old=None, mask=None, vi = False)
+
     criterion = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), 0.001)
+
+
 
     for epoch in tqdm(range(10)):
         for x, label in dataloader:
