@@ -217,9 +217,11 @@ def train_model_with_varying_stochasticity_scheme_two(
         dataloader,
         dataloader_val,
         percentages,
-        train_args
+        train_args,
+        *args
 ):
-    untrained_model = uninitialised_model()
+
+    untrained_model = uninitialised_model(*args)
 
     model_ = train(
         untrained_model,
@@ -232,7 +234,7 @@ def train_model_with_varying_stochasticity_scheme_two(
         save_path=os.path.join(train_args['save_path'], "map_model.pt")
     )
 
-    model = uninitialised_model()
+    model = uninitialised_model(*args)
 
     model = model.to(train_args['device'])
     for percentage in percentages:
