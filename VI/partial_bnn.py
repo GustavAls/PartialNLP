@@ -1,3 +1,5 @@
+from typing import List, Any
+
 import torch
 import numpy as np
 import pickle
@@ -65,7 +67,7 @@ def bnn(model, mask = None):
 
     dnn_to_bnn(model, const_bnn_prior_parameters, mask)
     return None
-def vector_mask_to_parameter_mask(vec, parameters) -> None:
+def vector_mask_to_parameter_mask(vec, parameters) -> list[Any]:
     r"""Convert one vector to the parameters
 
     Args:
@@ -149,7 +151,7 @@ if __name__ == '__main__':
 
 
 
-    model = MiniBNNModel()
+    model = MiniBNNModel
     # param_mask = create_mask(model, 50)
     # model_ = deepcopy(model)
     # bnn(model, mask=param_mask)
@@ -161,7 +163,7 @@ if __name__ == '__main__':
     train_args = {'epochs': 10,
                   'device': 'cpu',
                   'save_path': r'C:\Users\45292\Documents\Master\VI Simple\Models\Test Cases'}
-    funct.train_model_with_varying_stochasticity(
+    funct.train_model_with_varying_stochasticity_scheme_two(
         model,dataloader,dataloader_val,range(10,100),train_args
     )
     # funct.train(model, dataloader,dataloader_val,model_old=None, mask=None, vi = False)

@@ -149,7 +149,7 @@ def train(network: nn.Module,
             loss = loss_fn(output, target)
             if vi:
                 kl = get_kl_loss(network)
-                loss = kl / batch.shape[0]
+                loss += kl / batch.shape[0]
 
             loss.backward()
             optimizer.step()
@@ -179,6 +179,7 @@ def train(network: nn.Module,
     return best_model
 
 
+
 def train_model_with_varying_stochasticity(untrained_model, dataloader, dataloader_val, percentages, train_args):
     model_ = train(
         untrained_model,
@@ -204,6 +205,47 @@ def train_model_with_varying_stochasticity(untrained_model, dataloader, dataload
             dataloader_train=dataloader,
             dataloader_val=dataloader_val,
             model_old=model_,
+            mask=mask,
+            device=train_args['device'],
+            epochs=train_args['epochs'],
+            save_path=save_path
+        )
+
+
+def train_model_with_varying_stochasticity_scheme_two(
+        uninitialised_model,
+        dataloader,
+        dataloader_val,
+        percentages,
+        train_args
+):
+    untrained_model = uninitialised_model()
+
+    model_ = train(
+        untrained_model,
+        dataloader,
+        dataloader_val,
+        model_old=None,
+        vi=False,
+        device=train_args['device'],
+        epochs=train_args['epochs'],
+        save_path=os.path.join(train_args['save_path'], "map_model.pt")
+    )
+
+    model = uninitialised_model()
+
+    model = model.to(train_args['device'])
+    for percentage in percentages:
+        mask = create_mask(model_, percentage)
+        bnn(model, mask)
+        # set_model_weights(model, model_, mask)
+
+        save_path = os.path.join(train_args['save_path'], f"model_with_{percentage}_pct_stoch.pt")
+        model = train(
+            network=model,
+            dataloader_train=dataloader,
+            dataloader_val=dataloader_val,
+            model_old=None,
             mask=mask,
             device=train_args['device'],
             epochs=train_args['epochs'],
