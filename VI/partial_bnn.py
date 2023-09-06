@@ -9,7 +9,7 @@ from tqdm import tqdm
 import torch
 import torchvision
 from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn, get_kl_loss
-from bayesian_torch.utils import
+import partial_bnn_functional as funct
 
 class TestModelPartBNN(nn.Module):
     def __init__(self, bnn_part):
@@ -44,12 +44,13 @@ class MiniTestModel(nn.Module):
 class MiniBNNModel(nn.Module):
     def __init__(self):
         super(MiniBNNModel, self).__init__()
-        self.layer = nn.Linear(5,5)
+        self.layer = nn.Linear(5,5, bias=False)
         self.activation = nn.ReLU()
         self.layer1 = nn.Linear(5,1)
     def forward(self, x):
         out = self.layer(x)
-        out = self.layer1(x)
+        out = self.activation(out)
+        out = self.layer1(out)
         return out
 def bnn(model, mask = None):
     const_bnn_prior_parameters = {
@@ -106,22 +107,20 @@ def create_mask(model, percentile):
     param_mask = order_with_bias(param_mask, model)
     return param_mask
 
+
 def order_with_bias(param_mask, model):
 
-    tmp = []
-    layer = None
-    for idx, (name, module) in enumerate(model.named_parameters()):
-        if 'weight' in name and layer is None:
-            layer = [param_mask[idx]]
-        elif layer is not None and 'bias' in name:
-            layer.append(param_mask[idx])
-            tmp.append(layer)
-            layer = None
-        elif layer is not None and 'bias' not in name:
-            layer.append(None)
-            tmp.append(layer)
-            layer = None
-    return tmp
+    name_to_mask = {}
+    counter = 0
+    for name, module in list(model._modules.items()):
+        if "Linear" in model._modules[name].__class__.__name__:
+            if module.bias:
+                name_to_mask[name] = [param_mask[counter], param_mask[counter + 1]]
+                counter += 2
+            else:
+                name_to_mask[name] = [param_mask[counter]]
+                counter += 1
+    return name_to_mask
 class DataForFun(Dataset):
     def __init__(self):
 
@@ -152,12 +151,15 @@ if __name__ == '__main__':
 
     model = MiniBNNModel()
     param_mask = create_mask(model, 50)
-
+    model_ = deepcopy(model)
     bnn(model, mask=param_mask)
+    funct.set_model_weights(model, model_, param_mask)
+
+
     dataloader = DataLoader(DataForFun(), batch_size=10)
     criterion = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), 0.001)
-    model_ = deepcopy(model)
+
     for epoch in tqdm(range(10)):
         for x, label in dataloader:
             optimizer.zero_grad()
@@ -167,6 +169,7 @@ if __name__ == '__main__':
             loss = ce_loss + kl / 10
             loss.backward()
             optimizer.step()
+            funct.set_model_weights(model, model_, param_mask)
 
 
     breakpoint()
