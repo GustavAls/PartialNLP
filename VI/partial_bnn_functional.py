@@ -86,7 +86,7 @@ def order_with_bias(param_mask, model):
     counter = 0
     for name, module in list(model._modules.items()):
         if "Linear" in model._modules[name].__class__.__name__:
-            if module.bias:
+            if module.bias is not None:
                 name_to_mask[name] = [param_mask[counter], param_mask[counter + 1]]
                 counter += 2
             else:

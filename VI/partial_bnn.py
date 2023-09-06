@@ -44,7 +44,7 @@ class MiniTestModel(nn.Module):
 class MiniBNNModel(nn.Module):
     def __init__(self):
         super(MiniBNNModel, self).__init__()
-        self.layer = nn.Linear(5,5, bias=False)
+        self.layer = nn.Linear(5,5, bias = False)
         self.activation = nn.ReLU()
         self.layer1 = nn.Linear(5,1)
     def forward(self, x):
