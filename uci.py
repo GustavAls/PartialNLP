@@ -8,15 +8,15 @@ from MAP_baseline.MapNN import MapNN
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
-
+import pickle
 import numpyro
 import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS, Predictive, Trace_ELBO, autoguide, SVI
 import jax
 import jax.numpy as jnp
 import jax.nn
+from VI.partial_bnn_functional import *
 from jax import random
-
 
 
 def _gap_train_test_split(X, y, gap_column, test_size):
@@ -40,12 +40,12 @@ def _gap_train_test_split(X, y, gap_column, test_size):
 class UCIDataset():
     def __init__(
         self,
-        data_dir,
-        test_split_type="random",
-        gap_column=0,
-        test_size=0.2,
-        val_fraction_of_train=0.1,
-        seed=42,
+        data_dir: str,
+        test_split_type: str ="random",
+        gap_column: int = 0,
+        test_size: float = 0.2,
+        val_fraction_of_train: float = 0.1,
+        seed:int = 42,
         *args,
         **kwargs,
     ):
@@ -202,6 +202,7 @@ class UCIDataloader(Dataset):
     def __getitem__(self, item):
         return torch.tensor(self.X[item], dtype=torch.float32), torch.tensor(self.y[item], dtype=torch.float32)
 
+
 def one_d_bnn(X, y=None, prior_variance=0.1, width=50, scale=1.0):
     nB, n_features = X.shape
 
@@ -260,21 +261,23 @@ def evaluate_MAP_old(model, svi_results, X, y, rng_key, y_scale=1.0, y_loc=0.0):
         .log_prob(y_loc + (y * y_scale))
         .mean()
     )
-    return log_likelihood, rmse
 
-def evaluate_MAP(model, X, y, y_scale=1.0, y_loc=0.0):
-
-    # sigma_obs = 1.0 / jnp.sqrt(svi_results.params["prec_obs_auto_loc"])
-    sigma_obs = 1.0
-    y_scale = torch.tensor(y_scale)
-    y_loc = torch.tensor(y_loc)
-    model = model.to("cpu")
-    y_pred = model(torch.tensor(X, dtype=torch.float32))
-    rmse = (((y_pred.detach().numpy() - y) ** 2).mean() ** 0.5) * y_scale
-    y = torch.tensor(y)
-
-    log_likelihood = (torch.distributions.Normal((y_scale * y_pred) + y_loc, sigma_obs * y_scale).log_prob(y_loc + (y * y_scale)).mean())
     return float(log_likelihood), float(rmse)
+
+
+# def evaluate_MAP(model, X, y, y_scale=1.0, y_loc=0.0):
+#     y_scale = torch.tensor(y_scale)
+#     y_loc = torch.tensor(y_loc)
+#     model = model.to("cpu")
+#     y_pred = model(torch.tensor(X, dtype=torch.float32))
+#     rmse = (((y_pred.detach().numpy() - y) ** 2).mean() ** 0.5) * y_scale
+#     y = torch.tensor(y)
+#
+#     # log_likelihood = (torch.distributions.Normal((y_scale * y_pred) + y_loc, sigma_obs * y_scale).log_prob(y_loc + (y * y_scale)).mean())
+#     loss = nn.GaussianNLLLoss()
+#     loss(torch.from_numpy(np.array(predictive["mean"][0, :])), torch.from_numpy(y),
+#          torch.ones_like(torch.from_numpy(y)) * np.var(y - np.array(predictive["mean"][0, :])).item())
+#     return float(log_likelihood), float(rmse)
 
 
 if __name__ == "__main__":
@@ -282,13 +285,10 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int)
     parser.add_argument("--output_path", type=str, default=os.getcwd())
     parser.add_argument("--device", type=str, default="cuda")
-    parser.add_argument("--num_epochs", type=int, default=1000)
-    parser.add_argument("--dataset", type=str, default="energy")
-    parser.add_argument("--gap", action="store_true")
-    parser.add_argument("--prior_variance", type=float,
-                        default=0.1)  # 0.1 is good for yacht, but not for other datasets
-    parser.add_argument("--likelihood_scale", type=float,
-                        default=6.0)  # 6.0 is good for yacht, but not for other datasets
+    parser.add_argument("--num_epochs", type=int, default=2000)
+    parser.add_argument("--dataset", type=str, default="boston")
+    parser.add_argument("--gap", action="store_true", default=True)
+    parser.add_argument("--prior_variance", type=float, default=0.1) #0.1 is good for yacht, but not for other datasets
 
     args = parser.parse_args()
 
@@ -303,137 +303,106 @@ if __name__ == "__main__":
     else:
         dataset_class = UCIYachtDataset
 
+    dataset = dataset_class(data_dir=os.getcwd(),
+                            test_split_type="gap" if args.gap else "random",
+                            test_size=0.1,
+                            gap_column=1,
+                            val_fraction_of_train=0.1,
+                            seed=args.seed)
 
-    dataset = dataset_class(data_dir=os.path.join(os.getcwd()), gap_column="random", seed=args.seed,
-                            test_split_type="gap" if args.gap else "random", test_size=0.1, val_fraction_of_train=0.1)
+    n_train, p = dataset.X_train.shape
+    n_val = dataset.X_val.shape[0]
+    out_dim = dataset.y_train.shape[1]
 
-    ## Train MAP Solution
-    optimizer = numpyro.optim.Adam(0.01)
-    rng_key = random.PRNGKey(1)
+    train_args = {'epochs': 2000,
+                  'device': 'cpu',
+                  'save_path': os.path.join(os.getcwd(), "UCI_models_gap\\" + args.dataset)}
+    percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
+    train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train)
+    val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
 
-    model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
+    ### Train MAP Solution
+    # optimizer = numpyro.optim.Adam(0.01)
+    # rng_key = random.PRNGKey(1)
+    #
+    # model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
+    #
+    # svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
+    # start_time = time.time()
+    # svi_results = svi.run(rng_key, 1000, X=dataset.X_train, y=dataset.y_train)
+    #
+    # train_ll, train_rmse = evaluate_MAP_old(
+    #     model,
+    #     svi_results,
+    #     dataset.X_train,
+    #     dataset.y_train,
+    #     rng_key,
+    #     y_scale=dataset.scl_Y.scale_,
+    #     y_loc=dataset.scl_Y.mean_,
+    # )
 
-    svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
-    start_time = time.time()
-    svi_results = svi.run(rng_key, 1000, X=dataset.X_train, y=dataset.y_train)
+    train_model_with_varying_stochasticity_scheme_two(MapNN(p, 50, 2, out_dim, "leaky_relu"),
+                                                      train_dataloader,
+                                                      val_dataloader,
+                                                      percentages,
+                                                      train_args)
+
+
+    # train_model_with_varying_stochasticity(untrained_model=model,
+    #                                        dataloader=train_dataloader,
+    #                                        dataloader_val=val_dataloader,
+    #                                        percentages=percentages,
+    #                                        train_args=train_args)
+
     end_time = time.time()
 
-    train_ll, train_rmse = evaluate_MAP_old(
-        model,
-        svi_results,
-        dataset.X_test,
-        dataset.y_test,
-        rng_key,
-        y_scale=dataset.scl_Y.scale_,
-        y_loc=dataset.scl_Y.mean_,
-    )
-
-    input_dim = dataset.X_train.shape[-1]
-    output_dim = dataset.y_train.shape[-1]
-
-    train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=100)
-    val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=50)
-
-    map_model = MapNN(input_size=input_dim, width=50, size=2, output_size=output_dim, non_linearity="silu")
-    start_time = time.time()
-    trained_model = trainer.train(
-        map_model,
-        dataloader_train=train_dataloader,
-        dataloader_val=val_dataloader,
-        device=args.device,
-        save_path=os.path.join(args.output_path, "map_yacht.pt"),
-        epochs=args.num_epochs,
-    )
-    end_time = time.time()
-
-    train_ll, train_rmse = evaluate_MAP(
-        map_model,
-        dataset.X_test,
-        dataset.y_test,
-        y_scale=dataset.scl_Y.scale_,
-        y_loc=dataset.scl_Y.mean_
-    )
-
-
-    val_ll, val_rmse = evaluate_MAP(
-        map_model,
-        dataset.X_val,
-        dataset.y_val,
-        y_scale=dataset.scl_Y.scale_,
-        y_loc=dataset.scl_Y.mean_
-    )
-    test_ll, test_rmse = evaluate_MAP(
-        map_model,
-        dataset.X_test,
-        dataset.y_test,
-        y_scale=dataset.scl_Y.scale_,
-        y_loc=dataset.scl_Y.mean_
-    )
-
-    map_results = {
-        "prior_variance": args.prior_variance,
-        "test_rmse": test_rmse,
-        "test_ll": test_ll,
-        "val_rmse": val_rmse,
-        "val_ll": val_ll,
-        "train_rmse": train_rmse,
-        "train_ll": train_ll,
-        "runtime": end_time - start_time,
-        "num_params_sampled": 0,
-        "dataset": args.dataset,
-        "seed": args.seed,
-        "gap_split?": args.gap,
-        "name": "MAP",
-    }
-
-    print(map_results)
+    # train_ll, train_rmse = evaluate_MAP(
+    #     model,
+    #     dataset.X_test,
+    #     dataset.y_test,
+    #     y_scale=dataset.scl_Y.scale_,
+    #     y_loc=dataset.scl_Y.mean_
+    # )
     #
+    # val_ll, val_rmse = evaluate_MAP(
+    #     model,
+    #     dataset.X_val,
+    #     dataset.y_val,
+    #     y_scale=dataset.scl_Y.scale_,
+    #     y_loc=dataset.scl_Y.mean_
+    # )
+    # test_ll, test_rmse = evaluate_MAP(
+    #     model,
+    #     dataset.X_test,
+    #     dataset.y_test,
+    #     y_scale=dataset.scl_Y.scale_,
+    #     y_loc=dataset.scl_Y.mean_
+    # )
     #
-    # print(full_network_results)
-    #
-    # percentiles = list(np.logspace(-1, 1.996, 15))
-    # MAP_params = svi_results.params
-    #
-    # all_results = {
-    #     "all_results_not_scaled": [map_results, full_network_results],
-    #     "all_results_scaled": [map_results, full_network_results],
+    # map_results = {
+    #     "prior_variance": args.prior_variance,
+    #     "test_rmse": test_rmse,
+    #     "test_ll": test_ll,
+    #     "val_rmse": val_rmse,
+    #     "val_ll": val_ll,
+    #     "train_rmse": train_rmse,
+    #     "train_ll": train_ll,
+    #     "runtime": end_time - start_time,
+    #     "num_params_sampled": 0,
+    #     "dataset": args.dataset,
+    #     "seed": args.seed,
+    #     "gap_split?": args.gap,
+    #     "name": "MAP",
     # }
     #
-    # fname = f"/data/uci_subset_hmc/{args.dataset}_s{args.seed}_prior_var{args.prior_variance:.2f}_scale{args.likelihood_scale}"
+    # print(map_results)
     #
-    # if args.gap:
-    #     fname = f"{fname}_gap"
+    # all_results = {
+    #     "all_results_not_scaled": [map_results, map_results],
+    #     "all_results_scaled": [map_results, map_results],
+    # }
     #
-    # import pickle
+    # file_name = os.path.join(args.output_path, "uci_results/map_" + args.dataset)
     #
-    # for percentile in percentiles:
-    #     print(
-    #         f"Running for {percentile} of weights sampled scaled, by maximum absolute value"
-    #     )
-    #     all_results["all_results_scaled"].append(
-    #         run_for_percentile(
-    #             dataset,
-    #             percentile,
-    #             MAP_params,
-    #             prior_variance_scaled=True,
-    #             scale=args.likelihood_scale,
-    #         )
-    #     )
-    #     print(all_results["all_results_scaled"][-1])
-    #
-    #     pickle.dump(all_results, open(f"{fname}.pkl", "wb"))
-    #
-    # for percentile in percentiles:
-    #     print(f"Running for {percentile} of weights sampled, by maximum absolute value")
-    #     all_results["all_results_not_scaled"].append(
-    #         run_for_percentile(
-    #             dataset,
-    #             percentile,
-    #             MAP_params,
-    #             prior_variance_scaled=False,
-    #             scale=args.likelihood_scale,
-    #         )
-    #     )
-    #     print(all_results["all_results_not_scaled"][-1])
-    #
-    #     pickle.dump(all_results, open(f"{fname}.pkl", "wb"))
+    # pickle.dump(all_results, open(f"{file_name}.pkl", "wb"))
+

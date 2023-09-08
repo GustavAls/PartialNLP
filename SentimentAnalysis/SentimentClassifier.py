@@ -8,6 +8,7 @@ from transformers import (AutoTokenizer,
                           TrainingArguments,
                           Trainer)
 import numpy as np
+import argparse
 # Heavily based on: https://huggingface.co/blog/sentiment-analysis-python, and
 # https://huggingface.co/docs/transformers/tasks/sequence_classification
 
@@ -41,16 +42,16 @@ class SentimentClassifier:
         return accuracy
         # return {"accuracy": accuracy, "f1": f1}
 
-    def runner(self, train=True):
+    def runner(self, output_path, train_bs, eval_bs, num_epochs, train=True):
         train_data, test_data = self.load_text_dataset(dataset_name="imdb")
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=100)
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=100)
 
-        training_args = TrainingArguments(output_dir="Test",
+        training_args = TrainingArguments(output_dir=output_path,
                                           learning_rate=2e-5,
-                                          per_device_train_batch_size=4,
-                                          per_device_eval_batch_size=4,
-                                          num_train_epochs=2,
+                                          per_device_train_batch_size=train_bs,
+                                          per_device_eval_batch_size=eval_bs,
+                                          num_train_epochs=num_epochs,
                                           weight_decay=0.01,
                                           save_strategy="epoch",
                                           evaluation_strategy="epoch")
@@ -71,7 +72,19 @@ class SentimentClassifier:
             print("Evaluation is done")
 
 
+
+
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Run training and or evaluation of Semantic Similarity Model"
+    )
+    parser.add_argument("--output_path", type=str, default=None)
+    parser.add_argument("--train_batch_size", type=int, default=None)
+    parser.add_argument("--eval_batch_size", type=int, default=None)
+    parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument("--num_epochs", type=int, default=50)
+
+    args = parser.parse_args()
     torch.cuda.is_available()
     id2label = {0: "NEGATIVE", 1: "POSITIVE"}
     label2id = {"NEGATIVE": 0, "POSITIVE": 1}

@@ -30,11 +30,10 @@ class MapNN(nn.Module):
         super().__init__()
         self.layers = nn.Sequential()
         self.non_linearity = get_nonlinearity_from_string(non_linearity)
-        for idx in range(size):
-            self.layers.add_module(f'h{idx}', nn.Linear(input_size, width))
-            self.layers.add_module(f'a{idx}', self.non_linearity)
-            input_size = width
-        self.layers.add_module(f'output', nn.Linear(input_size, output_size))
+        self.linear1 = nn.Linear(in_features=input_size, out_features=width)
+        self.linear2 = nn.Linear(in_features=width, out_features=width)
+        self.out = nn.Linear(in_features=width, out_features=output_size)
+
 
     def forward(self, x):
         """
@@ -44,5 +43,9 @@ class MapNN(nn.Module):
 
         Returns:
         """
-        output = self.layers(x)
+        output = self.linear1(x)
+        output = self.non_linearity(output)
+        output = self.linear2(output)
+        output = self.non_linearity(output)
+        output = self.out(output)
         return output
