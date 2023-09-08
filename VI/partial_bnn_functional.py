@@ -269,7 +269,7 @@ def train_model_with_varying_stochasticity_scheme_two(
         dataloader_val,
         percentages,
         train_args,
-        *args
+        run_number = 0,
 ):
 
     untrained_model = uninitialised_model
@@ -282,7 +282,7 @@ def train_model_with_varying_stochasticity_scheme_two(
         vi=False,
         device=train_args['device'],
         epochs=train_args['epochs'],
-        save_path=os.path.join(train_args['save_path'], "map_model.pt")
+        save_path=os.path.join(train_args['save_path'], f"map_model_run_{run_number}.pt")
     )
 
 
@@ -293,7 +293,8 @@ def train_model_with_varying_stochasticity_scheme_two(
         bnn(model, mask)
         # set_model_weights(model, model_, mask)
 
-        save_path = os.path.join(train_args['save_path'], f"model_with_{percentage}_pct_stoch.pt")
+
+        save_path = os.path.join(train_args['save_path'], f"model_with_{percentage}_pct_stoch_run_{run_number}.pt")
         model = train(
             network=model,
             dataloader_train=dataloader,
