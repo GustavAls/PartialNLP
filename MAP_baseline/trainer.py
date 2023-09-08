@@ -46,9 +46,8 @@ def train(network: nn.Module,
             current_loss = 0
             for idx, (batch, target) in enumerate(dataloader_val):
                 batch = batch.to(device)
-                target = target.detach().cpu().numpy()
-                output = network(batch).detach().cpu().numpy()
-                current_loss += loss_fn(torch.FloatTensor(output), torch.FloatTensor(target))
+                output = network(batch)
+                current_loss += loss_fn(output, target.to(device))
             current_loss /= len(dataloader_val)
 
             if current_loss < best_loss:

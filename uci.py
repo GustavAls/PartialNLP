@@ -202,6 +202,7 @@ class UCIDataloader(Dataset):
     def __getitem__(self, item):
         return torch.tensor(self.X[item], dtype=torch.float32), torch.tensor(self.y[item], dtype=torch.float32)
 
+
 def one_d_bnn(X, y=None, prior_variance=0.1, width=50, scale=1.0):
     nB, n_features = X.shape
 
@@ -245,18 +246,38 @@ def one_d_bnn(X, y=None, prior_variance=0.1, width=50, scale=1.0):
         y_obs = numpyro.sample("y_obs", dist.Normal(mean, sigma_obs), obs=y)
 
 
-def evaluate_MAP(model, X, y, y_scale=1.0, y_loc=0.0):
-    y_scale = torch.tensor(y_scale)
-    y_loc = torch.tensor(y_loc)
-    model = model.to("cpu")
-    y_pred = model(torch.tensor(X, dtype=torch.float32))
-    # Todo: Is this the correct sigma_obs?
-    sigma_obs = np.std(np.abs(y_pred.detach().numpy() - y))
-    rmse = (((y_pred.detach().numpy() - y) ** 2).mean() ** 0.5) * y_scale
-    y = torch.tensor(y)
+def evaluate_MAP_old(model, svi_results, X, y, rng_key, y_scale=1.0, y_loc=0.0):
+    predictive = Predictive(
+        model=model,
+        guide=autoguide.AutoDelta(model),
+        params=svi_results.params,
+        num_samples=1,
+    )(rng_key, X=X)
 
-    log_likelihood = (torch.distributions.Normal((y_scale * y_pred) + y_loc, sigma_obs * y_scale).log_prob(y_loc + (y * y_scale)).mean())
+    sigma_obs = 1.0 / jnp.sqrt(svi_results.params["prec_obs_auto_loc"])
+    rmse = (((predictive["mean"][0, :] - y) ** 2).mean() ** 0.5) * y_scale
+    log_likelihood = (
+        dist.Normal((y_scale * predictive["mean"][0, :]) + y_loc, sigma_obs * y_scale)
+        .log_prob(y_loc + (y * y_scale))
+        .mean()
+    )
+
     return float(log_likelihood), float(rmse)
+
+
+# def evaluate_MAP(model, X, y, y_scale=1.0, y_loc=0.0):
+#     y_scale = torch.tensor(y_scale)
+#     y_loc = torch.tensor(y_loc)
+#     model = model.to("cpu")
+#     y_pred = model(torch.tensor(X, dtype=torch.float32))
+#     rmse = (((y_pred.detach().numpy() - y) ** 2).mean() ** 0.5) * y_scale
+#     y = torch.tensor(y)
+#
+#     # log_likelihood = (torch.distributions.Normal((y_scale * y_pred) + y_loc, sigma_obs * y_scale).log_prob(y_loc + (y * y_scale)).mean())
+#     loss = nn.GaussianNLLLoss()
+#     loss(torch.from_numpy(np.array(predictive["mean"][0, :])), torch.from_numpy(y),
+#          torch.ones_like(torch.from_numpy(y)) * np.var(y - np.array(predictive["mean"][0, :])).item())
+#     return float(log_likelihood), float(rmse)
 
 
 if __name__ == "__main__":
@@ -264,13 +285,10 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int)
     parser.add_argument("--output_path", type=str, default=os.getcwd())
     parser.add_argument("--device", type=str, default="cuda")
-    parser.add_argument("--num_epochs", type=int, default=1000)
-    parser.add_argument("--dataset", type=str, default="energy")
-    parser.add_argument("--gap", action="store_true")
-    parser.add_argument("--prior_variance", type=float,
-                        default=0.1)  # 0.1 is good for yacht, but not for other datasets
-    parser.add_argument("--likelihood_scale", type=float,
-                        default=6.0)  # 6.0 is good for yacht, but not for other datasets
+    parser.add_argument("--num_epochs", type=int, default=2000)
+    parser.add_argument("--dataset", type=str, default="boston")
+    parser.add_argument("--gap", action="store_true", default=True)
+    parser.add_argument("--prior_variance", type=float, default=0.1) #0.1 is good for yacht, but not for other datasets
 
     args = parser.parse_args()
 
@@ -288,6 +306,7 @@ if __name__ == "__main__":
     dataset = dataset_class(data_dir=os.getcwd(),
                             test_split_type="gap" if args.gap else "random",
                             test_size=0.1,
+                            gap_column=1,
                             val_fraction_of_train=0.1,
                             seed=args.seed)
 
@@ -295,19 +314,45 @@ if __name__ == "__main__":
     n_val = dataset.X_val.shape[0]
     out_dim = dataset.y_train.shape[1]
 
-    train_args = {'epochs': 1000,
+    train_args = {'epochs': 2000,
                   'device': 'cpu',
-                  'save_path': os.path.join(os.getcwd(), "UCI_models")}
+                  'save_path': os.path.join(os.getcwd(), "UCI_models_gap\\" + args.dataset)}
     percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
     train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train)
     val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
-    model = MapNN(input_size=p, width=50, size=2, output_size=out_dim, non_linearity="leaky_relu")
 
-    train_model_with_varying_stochasticity(untrained_model=model,
-                                           dataloader=train_dataloader,
-                                           dataloader_val=val_dataloader,
-                                           percentages=percentages,
-                                           train_args=train_args)
+    ### Train MAP Solution
+    # optimizer = numpyro.optim.Adam(0.01)
+    # rng_key = random.PRNGKey(1)
+    #
+    # model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
+    #
+    # svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
+    # start_time = time.time()
+    # svi_results = svi.run(rng_key, 1000, X=dataset.X_train, y=dataset.y_train)
+    #
+    # train_ll, train_rmse = evaluate_MAP_old(
+    #     model,
+    #     svi_results,
+    #     dataset.X_train,
+    #     dataset.y_train,
+    #     rng_key,
+    #     y_scale=dataset.scl_Y.scale_,
+    #     y_loc=dataset.scl_Y.mean_,
+    # )
+
+    train_model_with_varying_stochasticity_scheme_two(MapNN(p, 50, 2, out_dim, "leaky_relu"),
+                                                      train_dataloader,
+                                                      val_dataloader,
+                                                      percentages,
+                                                      train_args)
+
+
+    # train_model_with_varying_stochasticity(untrained_model=model,
+    #                                        dataloader=train_dataloader,
+    #                                        dataloader_val=val_dataloader,
+    #                                        percentages=percentages,
+    #                                        train_args=train_args)
 
     end_time = time.time()
 
