@@ -185,11 +185,35 @@ def train(network: nn.Module,
     if best_model is None:
         UserWarning("The model failed to improve, something went wrong")
     else:
+
         torch.save(best_model.state_dict(), save_path)
         print(f"Model was saved to location {save_path}, terminated with MSELoss {best_loss}")
 
     return best_model
 
+def get_sigma(model, dataloader, vi = True, num_mc_samples = 25, device = 'cpu'):
+
+    predictions = []
+    targets = []
+    rmse = lambda pred, target: ((pred - target)**2).mean()**0.5
+    with torch.no_grad():
+
+        for idx, (batch, target) in enumerate(dataloader):
+            mc_output = []
+            batch = batch.to(device)
+            target = target.to(device)
+            if vi:
+                for _ in range(num_mc_samples):
+                    mc_output.append(model(batch))
+                predictions.append(torch.stack(mc_output).mean(0))
+            else:
+                predictions.append(model(batch))
+            targets.append(target)
+
+        targets = torch.stack(targets)
+        predictions = torch.stack(predictions)
+
+    return rmse(predictions, targets)
 
 def evaluate_monte_carlo(model, dataloader, loss_fn, num_mc_samples = 25, device = 'cpu'):
 
