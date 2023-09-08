@@ -52,8 +52,8 @@ class SentimentClassifier:
 
         training_args = TrainingArguments(output_dir=output_path,
                                           learning_rate=2e-5,
-                                          per_device_train_batch_size=4,
-                                          per_device_eval_batch_size=4,
+                                          per_device_train_batch_size=8,
+                                          per_device_eval_batch_size=8,
                                           num_train_epochs=num_epochs,
                                           weight_decay=0.01,
                                           save_strategy="epoch",
