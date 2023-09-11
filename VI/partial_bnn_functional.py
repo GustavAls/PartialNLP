@@ -127,7 +127,7 @@ def train(network: nn.Module,
           device='cpu',
           epochs=50,
           save_path=None,
-          num_mc_samples = 25,
+          num_mc_samples = 200,
           early_stopping_patience = 1000):
     """
 
