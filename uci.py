@@ -545,8 +545,7 @@ if __name__ == "__main__":
     # plot_results(percentage_to_results)
     # breakpoint()
 
-    make_multiple_runs(dataset_class, args.data_path, args.output_path, args.num_runs, args.device, gap=True)
-    make_multiple_runs(dataset_class, args.data_path, args.output_path, args.num_runs, gap=False)
+    make_multiple_runs(dataset_class, args.data_path, args.output_path, args.num_runs, args.device, gap=args.gap)
 
     # dataset = dataset_class(data_dir=os.getcwd(),
     #                         test_split_type="gap" if args.gap else "random",
