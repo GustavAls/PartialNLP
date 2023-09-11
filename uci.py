@@ -294,7 +294,7 @@ def make_multiple_runs(dataset_class, data_path, model_path, num_runs, device='c
             device = 'cpu'
 
         train_args = {
-            'epochs': 10000,
+            'epochs': 30000,
             'device': device,
             'save_path': fin_path
         }
