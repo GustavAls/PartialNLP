@@ -266,7 +266,7 @@ def train_model_with_varying_stochasticity(untrained_model, dataloader, dataload
             save_path=save_path
         )
 
-def get_preds(model, dataloader, num_mc_samples = 100, device = 'cpu'):
+def get_preds(model, dataloader, num_mc_samples = 600, device = 'cpu'):
 
     predictions, labels = [], []
     with torch.no_grad():
