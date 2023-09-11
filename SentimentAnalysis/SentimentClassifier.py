@@ -16,16 +16,15 @@ import argparse
 
 class SentimentClassifier:
     def __init__(self, network_name, id2label, label2id, train_size=300, test_size=30):
-        self.tokenizer = AutoTokenizer.from_pretrained(network_name)
+        self._tokenizer = AutoTokenizer.from_pretrained(network_name)
         self.model = AutoModelForSequenceClassification.from_pretrained(network_name,
                                                                         num_labels=2,
                                                                         id2label=id2label,
                                                                         label2id=label2id)
-        self.collator = DataCollatorWithPadding(tokenizer=self.tokenizer)
+        self.model.save_pretrained(os.path.join(os.getcwd(), "model"))
+        self.collator = DataCollatorWithPadding(tokenizer=self._tokenizer)
         self.train_size = train_size
         self.test_size = test_size
-        self.model
-        breakpoint()
 
     def load_text_dataset(self, dataset_name="imdb"):
         data = load_dataset(dataset_name)
@@ -35,7 +34,7 @@ class SentimentClassifier:
         return train_data, test_data
 
     def tokenize(self, examples):
-        return self.tokenizer(examples["text"], truncation=True)
+        return self._tokenizer(examples["text"], truncation=True)
 
     @staticmethod
     def compute_metrics(eval_pred):
@@ -55,18 +54,21 @@ class SentimentClassifier:
 
         training_args = TrainingArguments(output_dir=output_path,
                                           learning_rate=2e-5,
-                                          per_device_train_batch_size=8,
-                                          per_device_eval_batch_size=8,
+                                          do_train=train,
+                                          per_device_train_batch_size=4,
+                                          per_device_eval_batch_size=4,
                                           num_train_epochs=num_epochs,
-                                          weight_decay=0.01,
+                                          evaluation_strategy="epoch",
                                           save_strategy="epoch",
-                                          evaluation_strategy="epoch")
+                                          load_best_model_at_end=True,
+                                          weight_decay=0.01)
+
         trainer = Trainer(
             model=self.model,
             args=training_args,
             train_dataset=tokenized_train,
             eval_dataset=tokenized_test,
-            tokenizer=self.tokenize,
+            tokenizer=self._tokenizer,
             data_collator=self.collator,
             compute_metrics=self.compute_metrics
         )
