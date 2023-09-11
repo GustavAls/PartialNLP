@@ -24,6 +24,8 @@ import os
 
 
 def bnn(model, mask=None):
+    if mask is None:
+        mask = {}
     const_bnn_prior_parameters = {
         "prior_mu": 0.0,
         "prior_sigma": 1.0,
@@ -197,7 +199,6 @@ def get_sigma(model, dataloader, vi = True, num_mc_samples = 25, device = 'cpu')
     targets = []
     rmse = lambda pred, target: ((pred - target)**2).mean()**0.5
     with torch.no_grad():
-
         for idx, (batch, target) in enumerate(dataloader):
             mc_output = []
             batch = batch.to(device)
@@ -210,9 +211,12 @@ def get_sigma(model, dataloader, vi = True, num_mc_samples = 25, device = 'cpu')
                 predictions.append(model(batch))
             targets.append(target)
 
-        targets = torch.stack(targets)
-        predictions = torch.stack(predictions)
-
+        if len(targets) > 1:
+            targets = torch.stack(targets)
+            predictions = torch.stack(predictions)
+        else:
+            targets = targets[0]
+            predictions = predictions[0]
     return rmse(predictions, targets)
 
 def evaluate_monte_carlo(model, dataloader, loss_fn, num_mc_samples = 25, device = 'cpu'):
@@ -262,6 +266,21 @@ def train_model_with_varying_stochasticity(untrained_model, dataloader, dataload
             save_path=save_path
         )
 
+def get_preds(model, dataloader, num_mc_samples = 100, device = 'cpu'):
+
+    predictions, labels = [], []
+    with torch.no_grad():
+        mc_output = []
+        for idx, (batch, label) in enumerate(dataloader):
+            for mc_run in range(num_mc_samples):
+                batch = batch.to(device)
+                output = model(batch)
+                mc_output.append(output)
+
+            predictions.append(torch.stack(mc_output).mean(0))
+            labels.append(label)
+
+    return predictions, labels
 
 def train_model_with_varying_stochasticity_scheme_two(
         uninitialised_model,
@@ -270,6 +289,7 @@ def train_model_with_varying_stochasticity_scheme_two(
         percentages,
         train_args,
         run_number = 0,
+        dataloader_test = None
 ):
 
     untrained_model = uninitialised_model
@@ -293,7 +313,6 @@ def train_model_with_varying_stochasticity_scheme_two(
         bnn(model, mask)
         # set_model_weights(model, model_, mask)
 
-
         save_path = os.path.join(train_args['save_path'], f"model_with_{percentage}_pct_stoch_run_{run_number}.pt")
         model = train(
             network=model,
@@ -305,3 +324,16 @@ def train_model_with_varying_stochasticity_scheme_two(
             epochs=train_args['epochs'],
             save_path=save_path
         )
+
+        predictions_train = get_preds(model, dataloader)
+        predictions_val = get_preds(model, dataloader_val)
+        predictions_test = get_preds(model, dataloader_test)
+        with open(
+                os.path.join(
+                    train_args['save_path'],
+                    f"model_with_{percentage}_pct_stoch_run_{run_number}_preds.pkl"),
+                'wb') as handle:
+            pickle.dump({'train': predictions_train, 'val': predictions_val,'test': predictions_test},
+                        handle,
+                        protocol=pickle.HIGHEST_PROTOCOL)
+

@@ -10,6 +10,7 @@ from transformers import (AutoTokenizer,
 from transformers.models.distilbert.modeling_distilbert import DistilBertForSequenceClassification
 import numpy as np
 import argparse
+from bayesian_torch.models import dnn_to_bnn
 # Heavily based on: https://huggingface.co/blog/sentiment-analysis-python, and
 # https://huggingface.co/docs/transformers/tasks/sequence_classification
 
@@ -24,7 +25,7 @@ class SentimentClassifier:
         self.collator = DataCollatorWithPadding(tokenizer=self.tokenizer)
         self.train_size = train_size
         self.test_size = test_size
-        self.model
+
         breakpoint()
 
     def load_text_dataset(self, dataset_name="imdb"):
