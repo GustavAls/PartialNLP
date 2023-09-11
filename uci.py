@@ -17,6 +17,8 @@ import jax.numpy as jnp
 import jax.nn
 from VI.partial_bnn_functional import *
 from jax import random
+import re
+import matplotlib.pyplot as plt
 
 
 def _gap_train_test_split(X, y, gap_column, test_size):
@@ -46,7 +48,7 @@ class UCIDataset():
             test_size: float = 0.2,
             val_fraction_of_train: float = 0.1,
             seed: int = 42,
-            gap_sampling = True,
+            gap_sampling=True,
             *args,
             **kwargs,
     ):
@@ -267,7 +269,7 @@ def evaluate_MAP_old(model, svi_results, X, y, rng_key, y_scale=1.0, y_loc=0.0):
     return float(log_likelihood), float(rmse)
 
 
-def make_multiple_runs(dataset_class, data_path, model_path, num_runs, device = 'cpu', gap = True):
+def make_multiple_runs(dataset_class, data_path, model_path, num_runs, device='cpu', gap=True):
     for run in range(num_runs):
         dataset = dataset_class(data_dir=data_path,
                                 test_split_type="gap" if gap else "random",
@@ -279,10 +281,11 @@ def make_multiple_runs(dataset_class, data_path, model_path, num_runs, device = 
         n_train, p = dataset.X_train.shape
         n_val = dataset.X_val.shape[0]
         out_dim = dataset.y_train.shape[1]
+        n_test = dataset.X_test.shape[0]
 
         if not os.path.exists(model_path):
             os.mkdir(model_path)
-        if not os.path.exists(npath := os.path.join(model_path,'UCI_models_gap' if gap else 'UCI_models')):
+        if not os.path.exists(npath := os.path.join(model_path, 'UCI_models_gap' if gap else 'UCI_models')):
             os.mkdir(npath)
         if not os.path.exists(fin_path := os.path.join(npath, dataset.dataset_name)):
             os.mkdir(fin_path)
@@ -291,7 +294,7 @@ def make_multiple_runs(dataset_class, data_path, model_path, num_runs, device = 
             device = 'cpu'
 
         train_args = {
-            'epochs': 2000,
+            'epochs': 10000,
             'device': device,
             'save_path': fin_path
         }
@@ -299,19 +302,130 @@ def make_multiple_runs(dataset_class, data_path, model_path, num_runs, device = 
         percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
         train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train)
         val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
+        test_dataloader = DataLoader(UCIDataloader(dataset.X_test, dataset.y_test), batch_size=n_test)
 
         train_model_with_varying_stochasticity_scheme_two(MapNN(p, 50, 2, out_dim, "leaky_relu"),
-                                                          train_dataloader,
-                                                          val_dataloader,
-                                                          percentages,
-                                                          train_args,
-                                                          run)
+                                                                  train_dataloader,
+                                                                  val_dataloader,
+                                                                  percentages,
+                                                                  train_args,
+                                                                  run,
+                                                                  dataloader_test=test_dataloader
+                                                                  )
 
         with open(os.path.join(fin_path, f'dataset_run_{run}.pkl'), 'wb') as handle:
             pickle.dump(dataset.__dict__, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
+def find_all_with_percentage(percentage, folder):
+    all_files = [file for file in os.listdir(folder) if 'model' in file and 'map' not in file]
+    pattern = r'(?<=\D)(\d+(\.\d+)?)'
+    all_files_with_percentage = []
+    for file in all_files:
+        match = re.findall(pattern, file)
+        if int(match[0][0]) == percentage:
+            all_files_with_percentage.append(file)
 
+    return all_files_with_percentage
+
+
+def gather_models_and_dataloader(model_and_data_folder) -> dict:
+    percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
+
+    percentage_to_model_and_data = {}
+    pattern = r'(?<=\D)(\d+(\.\d+)?)'
+
+    for percentage in percentages:
+        percentage_to_model_and_data[percentage] = {'models': [], 'data': []}
+        all_files_ = find_all_with_percentage(percentage, model_and_data_folder)
+        for file in all_files_:
+            matches = re.findall(pattern, file)
+            run = matches[1][0]
+            percentage_to_model_and_data[percentage]['models'].append(file)
+            percentage_to_model_and_data[percentage]['data'].append(
+                os.path.join(model_and_data_folder, f'dataset_run_{run}.pkl')
+            )
+
+    return percentage_to_model_and_data
+
+
+def evaluate_bnn(model, dataset, num_mc_samples=100, vi=True, device='cpu', datasize=(1, 1)):
+    predictions = []
+    targets = []
+    nll_loss = nn.GaussianNLLLoss()
+    mse_loss = nn.MSELoss()
+    dataloader_train = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=datasize[0])
+    dataloader_test = DataLoader(UCIDataloader(dataset.X_test, dataset.y_test), batch_size=datasize[1])
+    sigma = get_sigma(model, dataloader_train, vi=vi, num_mc_samples=num_mc_samples, device=device)
+
+    with torch.no_grad():
+        for idx, (batch, target) in enumerate(dataloader_test):
+            mc_output = []
+            batch = batch.to(device)
+            target = target.to(device)
+            if vi:
+                for _ in range(num_mc_samples):
+                    mc_output.append(model(batch))
+                predictions.append(torch.stack(mc_output).mean(0))
+            else:
+                predictions.append(model(batch))
+            targets.append(target)
+
+        targets = torch.stack(targets)
+        predictions = torch.stack(predictions)
+
+    nll = nll_loss(predictions, targets, sigma * torch.ones_like(predictions))
+    rmse = torch.sqrt(mse_loss(predictions, targets))
+
+    return -nll.item(), rmse.item()
+
+
+def open_model_and_data_loader(model_path, dataloader_path, dataset, data_path):
+    dataset.__dict__ = pickle.load(open(dataloader_path, 'rb'))
+    n_train, p = dataset.X_train.shape
+    n_val = dataset.X_val.shape[0]
+    n_test = dataset.X_test.shape[0]
+    out_dim = dataset.y_train.shape[1]
+
+    model = MapNN(p, 50, 2, out_dim, "leaky_relu")
+    if "map" not in os.path.basename(model_path):
+        bnn(model)
+
+    model.load_state_dict(torch.load(model_path))
+    return model, dataset, (n_train, n_test)
+
+
+def evaluate_multiple_runs(model_and_data_folder, dataset_class, data_path, gap=True):
+    percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
+    percentage_to_model_and_dataloaders = gather_models_and_dataloader(model_and_data_folder)
+    dataset = dataset_class(data_dir=data_path,
+                            test_split_type="gap" if gap else "random",
+                            test_size=0.1,
+                            gap_column='random',
+                            val_fraction_of_train=0.1,
+                            seed=np.random.randint(0, 1000))
+    percentage_to_results = {}
+    for percentage in percentages:
+        percentage_to_results[percentage] = {'nll': [], 'rmse': []}
+
+        for model_path, dataset_path in zip(
+                percentage_to_model_and_dataloaders[percentage]['models'],
+                percentage_to_model_and_dataloaders[percentage]['data']
+        ):
+            model, dataset, datasize = open_model_and_data_loader(
+                os.path.join(model_and_data_folder, model_path),
+                os.path.join(model_and_data_folder, dataset_path),
+                dataset,
+                data_path
+            )
+
+            nll, rmse = evaluate_bnn(
+                model, dataset, datasize=datasize
+            )
+            percentage_to_results[percentage]['nll'].append(nll)
+            percentage_to_results[percentage]['rmse'].append(rmse)
+
+    return percentage_to_results
 
 
 # def evaluate_MAP(model, X, y, y_scale=1.0, y_loc=0.0):
@@ -329,6 +443,25 @@ def make_multiple_runs(dataset_class, data_path, model_path, num_runs, device = 
 #     return float(log_likelihood), float(rmse)
 
 
+def plot_results(percentage_to_results, title=''):
+    fig, ax = plt.subplots(1, 1)
+    xvals = []
+    y_medians = []
+    iq_ranges = []
+
+    for key, val in percentage_to_results.items():
+        xvals.append(key)
+        lower, median, upper = np.quantile(val['nll'], [0.25, 0.5, 0.75])
+        y_medians.append(median)
+        iq_ranges.append((lower, upper))
+
+    for x, iq in zip(xvals, iq_ranges):
+        ax.vlines(x=x, ymin=iq[0], ymax=iq[1])
+    ax.plot(xvals, y_medians, 'ro')
+    ax.set_title(title)
+    plt.show()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some integers.")
     parser.add_argument("--seed", type=int)
@@ -336,9 +469,9 @@ if __name__ == "__main__":
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--num_epochs", type=int, default=2000)
     parser.add_argument("--dataset", type=str, default="boston")
-    parser.add_argument('--data_path', type = str, default=os.getcwd())
-    parser.add_argument("--gap", action="store_true", default=True)
-    parser.add_argument('--num_runs', type = int, default=15)
+    parser.add_argument('--data_path', type=str, default=os.getcwd())
+    parser.add_argument("--gap", type=bool, default=True)
+    parser.add_argument('--num_runs', type=int, default=15)
     parser.add_argument("--prior_variance", type=float,
                         default=0.1)  # 0.1 is good for yacht, but not for other datasets
 
@@ -355,9 +488,64 @@ if __name__ == "__main__":
     else:
         dataset_class = UCIYachtDataset
 
-    make_multiple_runs(dataset_class, args.data_path, args.output_path,args.num_runs, args.device, gap = True)
-    make_multiple_runs(dataset_class, args.data_path, args.output_path, args.num_runs, gap = False)
-    breakpoint()
+    # results_path = r'C:\Users\45292\Documents\Master\VI Simple\UCI\Models\UCI\Results'
+    # for path in os.listdir(results_path):
+    #     percentage_to_results = pickle.load(open(os.path.join(results_path, path), 'rb'))
+    #     plot_results(percentage_to_results, title=path)
+    #
+    # breakpoint()
+    # paths_normal = [
+    #     r'C:\Users\45292\Documents\Master\VI Simple\UCI\Models\UCI\boston_models\UCI_models\boston',
+    #     r'C:\Users\45292\Documents\Master\VI Simple\UCI\Models\UCI\energy_models\UCI_models\energy',
+    #     r'C:\Users\45292\Documents\Master\VI Simple\UCI\Models\UCI\yacht_models\UCI_models\yacht',
+    #
+    # ]
+    # paths_gap = [
+    #     r'C:\Users\45292\Documents\Master\VI Simple\UCI\Models\UCI\boston_models\UCI_models_gap\boston',
+    #     r'C:\Users\45292\Documents\Master\VI Simple\UCI\Models\UCI\energy_models\UCI_models_gap\energy',
+    #     r'C:\Users\45292\Documents\Master\VI Simple\UCI\Models\UCI\yacht_models\UCI_models_gap\yacht',
+    # ]
+    # for path in paths_normal:
+    #     dataset_name = os.path.basename(path)
+    #     if dataset_name == "yacht":
+    #         dataset_class = UCIYachtDataset
+    #     elif dataset_name == "energy":
+    #         dataset_class = UCIEnergyDataset
+    #     elif dataset_name == "concrete":
+    #         dataset_class = UCIConcreteDataset
+    #     elif dataset_name == "boston":
+    #         dataset_class = UCIBostonDataset
+    #     else:
+    #         dataset_class = UCIYachtDataset
+    #
+    #     percentage_to_results = evaluate_multiple_runs(path, dataset_class, args.data_path, False)
+    #     path_save = os.path.join(r'C:\Users\45292\Documents\Master\VI Simple\UCI\Models\UCI\Results',
+    #                         os.path.basename(path)+".pkl")
+    #     with open(path_save, 'wb') as handle:
+    #         pickle.dump(percentage_to_results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    #
+    # for path in paths_gap:
+    #     dataset_name = os.path.basename(path)
+    #     if dataset_name == "yacht":
+    #         dataset_class = UCIYachtDataset
+    #     elif dataset_name == "energy":
+    #         dataset_class = UCIEnergyDataset
+    #     elif dataset_name == "concrete":
+    #         dataset_class = UCIConcreteDataset
+    #     elif dataset_name == "boston":
+    #         dataset_class = UCIBostonDataset
+    #     else:
+    #         dataset_class = UCIYachtDataset
+    #     percentage_to_results = evaluate_multiple_runs(path, dataset_class, args.data_path, True)
+    #     path_save = os.path.join(r'C:\Users\45292\Documents\Master\VI Simple\UCI\Models\UCI\Results',
+    #                              os.path.basename(path) +"_gap" + ".pkl")
+    #     with open(path_save, 'wb') as handle:
+    #         pickle.dump(percentage_to_results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    #
+    # plot_results(percentage_to_results)
+    # breakpoint()
+
+    make_multiple_runs(dataset_class, args.data_path, args.output_path, args.num_runs, args.device, gap=args.gap)
 
     # dataset = dataset_class(data_dir=os.getcwd(),
     #                         test_split_type="gap" if args.gap else "random",
