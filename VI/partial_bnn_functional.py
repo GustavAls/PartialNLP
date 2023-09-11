@@ -127,7 +127,8 @@ def train(network: nn.Module,
           device='cpu',
           epochs=50,
           save_path=None,
-          num_mc_samples = 25):
+          num_mc_samples = 200,
+          early_stopping_patience = 1000):
     """
 
     :param network: (nn.Module) feed forward classification model
@@ -146,6 +147,7 @@ def train(network: nn.Module,
         current_loss = evaluate_monte_carlo(network, dataloader_val, loss_fn, num_mc_samples, device)
         print(f'"loss without training was {current_loss}')
 
+    patience = 0
     for epoch in trange(epochs, desc="Training MAP network"):
         network.train()
         for idx, (batch, target) in enumerate(dataloader_train):
@@ -169,6 +171,9 @@ def train(network: nn.Module,
                 if current_loss < best_loss:
                     best_loss = current_loss
                     best_model = deepcopy(network)
+                    patience = 0
+                else:
+                    patience += 1
                 continue
 
             with torch.no_grad():
@@ -183,6 +188,12 @@ def train(network: nn.Module,
                 if current_loss < best_loss:
                     best_loss = current_loss
                     best_model = deepcopy(network)
+                    patience = 0
+                else:
+                    patience += 1
+
+        if patience >= early_stopping_patience:
+            break
 
     if best_model is None:
         UserWarning("The model failed to improve, something went wrong")
