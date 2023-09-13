@@ -3,8 +3,8 @@ import argparse
 import numpy as np
 import pandas as pd
 import torch.distributions
-from MAP_baseline import trainer
-from MAP_baseline.MapNN import MapNN, MapNNV2
+
+from PartialNLP.MAP_baseline.MapNN import MapNN, MapNNV2
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
@@ -15,7 +15,7 @@ from numpyro.infer import MCMC, NUTS, Predictive, Trace_ELBO, autoguide, SVI
 import jax
 import jax.numpy as jnp
 import jax.nn
-from VI.partial_bnn_functional import *
+from PartialNLP.VI.partial_bnn_functional import *
 from jax import random
 import re
 import matplotlib.pyplot as plt

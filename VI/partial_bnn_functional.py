@@ -128,7 +128,7 @@ def train(network: nn.Module,
           save_path=None,
           num_mc_samples = 200,
           early_stopping_patience = 1000,
-          return_best_model = False):
+          return_best_model = True):
     """
 
     :param network: (nn.Module) feed forward classification model
@@ -198,9 +198,12 @@ def train(network: nn.Module,
     if best_model is None:
         UserWarning("The model failed to improve, something went wrong")
     else:
-
-        torch.save(best_model.state_dict(), save_path)
-        print(f"Model was saved to location {save_path}, terminated with MSELoss {best_loss}")
+        if save_path is not None:
+            if os.path.isdir(save_path):
+                print('You chose model not to be saved')
+            else:
+                torch.save(best_model.state_dict(), save_path)
+                print(f"Model was saved to location {save_path}, terminated with MSELoss {best_loss}")
     if return_best_model:
         return best_model
     else:
@@ -353,6 +356,8 @@ def get_preds(model, dataloader, num_mc_samples = 600, device = 'cpu'):
                 predictions.append(torch.stack(mc_output).mean(0))
                 labels.append(label)
 
+    predictions = [x.item() for y in predictions for x in y]
+    labels = [x.item() for y in labels for x in y]
     return predictions, labels
 
 
@@ -376,10 +381,15 @@ def train_model_with_varying_stochasticity_scheme_two(
         vi=False,
         device=train_args['device'],
         epochs=train_args['epochs'],
-        save_path=os.path.join(train_args['save_path'], f"map_model_run_{run_number}.pt")
+        save_path=None
     )
 
-
+    return_dict = {
+        'predictions_train': [get_preds(model_, dataloader, 0, device = train_args['device'])],
+        'predictions_val': [get_preds(model_, dataloader_val, 0, device = train_args['device'])],
+        'predictions_test': [get_preds(model_, dataloader_test, 0, device = train_args['device'])],
+        'models': [copy.deepcopy(model_)]
+    }
     for percentage in percentages:
         model = copy.deepcopy(untrained_model)
         model = model.to(train_args['device'])
@@ -396,24 +406,29 @@ def train_model_with_varying_stochasticity_scheme_two(
             mask=mask,
             device=train_args['device'],
             epochs=train_args['epochs'],
-            save_path=save_path
+            save_path=None
         )
 
-        predictions_train = get_preds(model, dataloader)
-        predictions_val = get_preds(model, dataloader_val)
-        predictions_test = get_preds(model, dataloader_test)
+        return_dict['predictions_train'].append(
+            get_preds(model, dataloader, train_args['num_mc_samples'],train_args['device'])
+        )
+        return_dict['predictions_val'].append(
+            get_preds(model, dataloader_val, train_args['num_mc_samples'],train_args['device'])
+        )
+        return_dict['predictions_test'].append(
+            get_preds(model, dataloader_test, train_args['num_mc_samples'],train_args['device'])
+        )
+        return_dict['models'].append(copy.deepcopy(model))
+        print('Training terminated with MSE', mse_(*return_dict['predictions_val'][-1]))
 
-        if train_args.get('save_model', False):
-            with open(
-                    os.path.join(
-                        train_args['save_path'],
-                        f"model_with_{percentage}_pct_stoch_run_{run_number}_preds.pkl"),
-                    'wb') as handle:
-                pickle.dump({'train': predictions_train, 'val': predictions_val,'test': predictions_test},
-                            handle,
-                            protocol=pickle.HIGHEST_PROTOCOL)
-        return model, (predictions_train, predictions_val, predictions_test)
+    return return_dict
 
+def mse_(predictions, labels):
+    if isinstance(predictions, list):
+        preds = np.array(predictions)
+    if isinstance(labels, list):
+        labs = np.array(labels)
+    return np.mean((preds - labs)**2)
 def train_partial_with_accumulated_stochasticity(untrained_model,
         dataloader,
         dataloader_val,
