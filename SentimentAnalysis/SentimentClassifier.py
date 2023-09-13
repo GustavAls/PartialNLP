@@ -16,16 +16,15 @@ import argparse
 
 class SentimentClassifier:
     def __init__(self, network_name, id2label, label2id, train_size=300, test_size=30):
-        self.tokenizer = AutoTokenizer.from_pretrained(network_name)
+        self._tokenizer = AutoTokenizer.from_pretrained(network_name)
         self.model = AutoModelForSequenceClassification.from_pretrained(network_name,
                                                                         num_labels=2,
                                                                         id2label=id2label,
                                                                         label2id=label2id)
-        self.collator = DataCollatorWithPadding(tokenizer=self.tokenizer)
+        self.model.save_pretrained(os.path.join(os.getcwd(), "model"))
+        self.collator = DataCollatorWithPadding(tokenizer=self._tokenizer)
         self.train_size = train_size
         self.test_size = test_size
-        self.model
-        breakpoint()
 
     def load_text_dataset(self, dataset_name="imdb"):
         data = load_dataset(dataset_name)
@@ -35,7 +34,7 @@ class SentimentClassifier:
         return train_data, test_data
 
     def tokenize(self, examples):
-        return self.tokenizer(examples["text"], truncation=True)
+        return self._tokenizer(examples["text"], truncation=True)
 
     @staticmethod
     def compute_metrics(eval_pred):
@@ -48,25 +47,28 @@ class SentimentClassifier:
         f1 = load_f1.compute(predictions=predictions, references=labels)["f1"]
         return {"accuracy": accuracy, "f1": f1}
 
-    def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, train=True):
+    def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, train=True):
         train_data, test_data = self.load_text_dataset(dataset_name=dataset_name)
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
 
         training_args = TrainingArguments(output_dir=output_path,
                                           learning_rate=2e-5,
-                                          per_device_train_batch_size=4,
-                                          per_device_eval_batch_size=4,
+                                          do_train=train,
+                                          per_device_train_batch_size=device_batch_size,
+                                          per_device_eval_batch_size=device_batch_size,
                                           num_train_epochs=num_epochs,
-                                          weight_decay=0.01,
+                                          evaluation_strategy="epoch",
                                           save_strategy="epoch",
-                                          evaluation_strategy="epoch")
+                                          load_best_model_at_end=True,
+                                          weight_decay=0.01)
+
         trainer = Trainer(
             model=self.model,
             args=training_args,
             train_dataset=tokenized_train,
             eval_dataset=tokenized_test,
-            tokenizer=self.tokenize,
+            tokenizer=self._tokenizer,
             data_collator=self.collator,
             compute_metrics=self.compute_metrics
         )
@@ -91,6 +93,7 @@ if __name__ == "__main__":
     parser.add_argument("--train", type=bool, default=True)
     parser.add_argument("--train_size", type=int, default=3000)
     parser.add_argument("--test_size", type=int, default=300)
+    parser.add_argument("--device_batch_size", type=int, default=12)
 
     args = parser.parse_args()
     torch.cuda.is_available()
@@ -101,10 +104,11 @@ if __name__ == "__main__":
                                                label2id=label2id,
                                                train_size=args.train_size,
                                                test_size=args.test_size)
-    sentiment_classifier.runner(args.output_path,
-                                args.train_batch_size,
-                                args.eval_batch_size,
-                                args.num_epochs,
-                                args.dataset_name,
+    sentiment_classifier.runner(output_path=args.output_path,
+                                train_bs=args.train_batch_size,
+                                eval_bs=args.eval_batch_size,
+                                num_epochs=args.num_epochs,
+                                dataset_name=args.dataset_name,
+                                device_batch_size=args.device_batch_size,
                                 train=args.train)
 
