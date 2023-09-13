@@ -26,13 +26,6 @@ numpyro.set_host_device_count(8)
 
 import argparse
 
-parser = argparse.ArgumentParser(description="Process some integers.")
-parser.add_argument("--seed", type=int)
-parser.add_argument("--dataset", type=str)
-parser.add_argument("--gap", action="store_true")
-parser.add_argument("--prior_variance", type=float, default=0.1) #0.1 is good for yacht, but not for other datasets
-parser.add_argument("--likelihood_scale", type=float, default=6.0) #6.0 is good for yacht, but not for other datasets
-
 
 def _gap_train_test_split(X, y, gap_column, test_size):
     n_data = X.shape[0]
@@ -487,22 +480,27 @@ def run_for_percentile(
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Process some integers.")
+    parser.add_argument("--seed", type=int)
+    parser.add_argument("--dataset", type=str, default="yacht")
+    parser.add_argument("--gap", default=False, action="store_true")
+    parser.add_argument("--output_path", type=str, default=None)
+    parser.add_argument("--data_path", type=str, default=None)
+    parser.add_argument("--prior_variance", type=float, default=0.1) #0.1 is good for yacht, but not for other datasets
+    parser.add_argument("--likelihood_scale", type=float, default=6.0) #6.0 is good for yacht, but not for other datasets
     args = parser.parse_args()
 
     if args.dataset == "yacht":
         dataset_class = UCIYachtDataset
     elif args.dataset == "energy":
         dataset_class = UCIEnergyDataset
-    elif args.dataset == "concrete":
-        dataset_class = UCIConcreteDataset
     elif args.dataset == "boston":
         dataset_class = UCIBostonDataset
 
     dataset = dataset_class(
-        "/data/uci_datasets",
-        gap_column="random",
+        args.data_path,
         seed=args.seed,
-        test_split_type="gap" if args.gap else "random",
+        test_split_type="random",
         test_size=0.1,
         val_fraction_of_train=0.1,
     )
@@ -631,11 +629,6 @@ if __name__ == "__main__":
         "all_results_scaled": [map_results, full_network_results],
     }
 
-    fname = f"/data/uci_subset_hmc/{args.dataset}_s{args.seed}_prior_var{args.prior_variance:.2f}_scale{args.likelihood_scale}"
-
-    if args.gap:
-        fname = f"{fname}_gap"
-
     import pickle
 
     for percentile in percentiles:
@@ -653,7 +646,7 @@ if __name__ == "__main__":
         )
         print(all_results["all_results_scaled"][-1])
 
-        pickle.dump(all_results, open(f"{fname}.pkl", "wb"))
+        pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled.pkl"), "wb"))
 
     for percentile in percentiles:
         print(f"Running for {percentile} of weights sampled, by maximum absolute value")
@@ -668,4 +661,4 @@ if __name__ == "__main__":
         )
         print(all_results["all_results_not_scaled"][-1])
 
-        pickle.dump(all_results, open(f"{fname}.pkl", "wb"))
+        pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_not_scaled.pkl"), "wb"))
