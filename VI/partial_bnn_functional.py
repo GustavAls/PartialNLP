@@ -402,14 +402,17 @@ def train_model_with_varying_stochasticity_scheme_two(
         predictions_train = get_preds(model, dataloader)
         predictions_val = get_preds(model, dataloader_val)
         predictions_test = get_preds(model, dataloader_test)
-        with open(
-                os.path.join(
-                    train_args['save_path'],
-                    f"model_with_{percentage}_pct_stoch_run_{run_number}_preds.pkl"),
-                'wb') as handle:
-            pickle.dump({'train': predictions_train, 'val': predictions_val,'test': predictions_test},
-                        handle,
-                        protocol=pickle.HIGHEST_PROTOCOL)
+
+        if train_args.get('save_model', False):
+            with open(
+                    os.path.join(
+                        train_args['save_path'],
+                        f"model_with_{percentage}_pct_stoch_run_{run_number}_preds.pkl"),
+                    'wb') as handle:
+                pickle.dump({'train': predictions_train, 'val': predictions_val,'test': predictions_test},
+                            handle,
+                            protocol=pickle.HIGHEST_PROTOCOL)
+        return model, (predictions_train, predictions_val, predictions_test)
 
 def train_partial_with_accumulated_stochasticity(untrained_model,
         dataloader,
