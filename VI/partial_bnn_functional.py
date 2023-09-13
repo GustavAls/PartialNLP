@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 import torch
 import torchvision
-from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn, get_kl_loss
+from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn, get_kl_loss, dnn_to_bnn_layer_wise
 import numpy as np
 import torch
 from torch.nn import MSELoss
@@ -21,7 +21,6 @@ import os
 from copy import deepcopy
 from tqdm import trange
 import os
-
 
 def bnn(model, mask=None):
     if mask is None:
@@ -128,7 +127,8 @@ def train(network: nn.Module,
           epochs=50,
           save_path=None,
           num_mc_samples = 200,
-          early_stopping_patience = 1000):
+          early_stopping_patience = 1000,
+          return_best_model = False):
     """
 
     :param network: (nn.Module) feed forward classification model
@@ -201,8 +201,10 @@ def train(network: nn.Module,
 
         torch.save(best_model.state_dict(), save_path)
         print(f"Model was saved to location {save_path}, terminated with MSELoss {best_loss}")
-
-    return best_model
+    if return_best_model:
+        return best_model
+    else:
+        return network
 
 def get_sigma(model, dataloader, vi = True, num_mc_samples = 25, device = 'cpu'):
 
@@ -246,6 +248,62 @@ def evaluate_monte_carlo(model, dataloader, loss_fn, num_mc_samples = 25, device
 
         return loss
 
+
+def train_model_with_layer_stochasticity(untrained_model, dataloader, dataloader_val, dataloader_test, train_args = None):
+    const_bnn_prior_parameters = {
+        "prior_mu": 0.0,
+        "prior_sigma": 1.0,
+        "posterior_mu_init": 0.0,
+        "posterior_rho_init": -3.0,
+        "type": "Reparameterization",  # Flipout or Reparameterization
+        "moped_enable": False,  # True to initialize mu/sigma from the pretrained dnn weights
+        "moped_delta": 0.5,
+    }
+
+    # map_model = copy.deepcopy(untrained_model)
+    # train(map_model,
+    #       dataloader,
+    #       dataloader_val,
+    #       vi=False,
+    #       epochs=5000,
+    #       save_path=r'C:\Users\45292\Documents\Master\VI Simple\Modular\meeting\map_solution.pt',
+    #       return_best_model=False)
+    #
+    # predictions_train = get_preds(map_model, dataloader, num_mc_samples=0)
+    # predictions_val = get_preds(map_model, dataloader_val, num_mc_samples=0)
+    # predictions_test = get_preds(map_model, dataloader_test, num_mc_samples=0)
+
+    # with open(
+    #         os.path.join(r'C:\Users\45292\Documents\Master\VI Simple\Modular\meeting_map.pkl')
+    #         , 'wb') as handle:
+    #     pickle.dump({'train': predictions_train, 'val': predictions_val, 'test': predictions_test},
+    #                 handle,
+    #                 protocol=pickle.HIGHEST_PROTOCOL)
+
+    for max_layers in range(1, 4):
+        model = copy.deepcopy(untrained_model)
+        model = model.to(train_args['device'])
+        dnn_to_bnn_layer_wise(model, const_bnn_prior_parameters, None, max_layers)
+
+        train(model,
+              dataloader,
+              dataloader_val,
+              vi = True,
+              epochs = 5000,
+              save_path=r'C:\Users\45292\Documents\Master\VI Simple\Modular\meeting\max_layer_'+str(max_layers) + ".pt",
+              return_best_model=False)
+
+        predictions_train = get_preds(model, dataloader)
+        predictions_val = get_preds(model, dataloader_val)
+        predictions_test = get_preds(model, dataloader_test)
+        with open(
+                os.path.join(r'C:\Users\45292\Documents\Master\VI Simple\Modular\meeting', f"layer_{max_layers}.pkl")
+                , 'wb') as handle:
+            pickle.dump({'train': predictions_train, 'val': predictions_val, 'test': predictions_test},
+                        handle,
+                        protocol=pickle.HIGHEST_PROTOCOL)
+
+
 def train_model_with_varying_stochasticity(untrained_model, dataloader, dataloader_val, percentages, train_args):
     model_ = train(
         untrained_model,
@@ -283,15 +341,20 @@ def get_preds(model, dataloader, num_mc_samples = 600, device = 'cpu'):
     with torch.no_grad():
         mc_output = []
         for idx, (batch, label) in enumerate(dataloader):
-            for mc_run in range(num_mc_samples):
-                batch = batch.to(device)
-                output = model(batch)
-                mc_output.append(output)
+            if num_mc_samples == 0:
+                predictions.append(model(batch))
+                labels.append(label)
+            else:
+                for mc_run in range(num_mc_samples):
+                    batch = batch.to(device)
+                    output = model(batch)
+                    mc_output.append(output)
 
-            predictions.append(torch.stack(mc_output).mean(0))
-            labels.append(label)
+                predictions.append(torch.stack(mc_output).mean(0))
+                labels.append(label)
 
     return predictions, labels
+
 
 def train_model_with_varying_stochasticity_scheme_two(
         uninitialised_model,
@@ -347,4 +410,149 @@ def train_model_with_varying_stochasticity_scheme_two(
             pickle.dump({'train': predictions_train, 'val': predictions_val,'test': predictions_test},
                         handle,
                         protocol=pickle.HIGHEST_PROTOCOL)
+
+def train_partial_with_accumulated_stochasticity(untrained_model,
+        dataloader,
+        dataloader_val,
+        percentages,
+        train_args,
+        run_number = 0,
+        dataloader_test = None):
+
+    model_ = train(
+        copy.deepcopy(untrained_model),
+        dataloader,
+        dataloader_val,
+        model_old=None,
+        vi=False,
+        device=train_args['device'],
+        epochs=50,
+        save_path=os.path.join(train_args['save_path'], f"map_model_run_{run_number}.pt")
+    )
+
+    const_bnn_prior_parameters = {
+        "prior_mu": 0.0,
+        "prior_sigma": 0.1,
+        "posterior_mu_init": 0.0,
+        "posterior_rho_init": -3.0,
+        "type": "Reparameterization",  # Flipout or Reparameterization
+        "moped_enable": True,  # True to initialize mu/sigma from the pretrained dnn weights
+        "moped_delta": 0.5,
+    }
+
+    for percentage in percentages:
+        param_mask = create_mask(model_, percentage)
+        model = copy.deepcopy(model_)
+        dnn_to_bnn(model, const_bnn_prior_parameters, mask = param_mask)
+
+        param_mask = extend_mask(model, param_mask)
+        random_init_mask_values(model, param_mask)
+        train_with_gradient_mask(model, dataloader, dataloader_val,
+                                 mask = param_mask,
+                                 device=train_args['device'],
+                                 epochs=train_args['epochs'],
+                                 save_path=os.path.join(train_args['save_path'],
+                                                        f'model_run_{run_number}_perc_{percentage}.pt'))
+
+        train_preds = get_preds(model, dataloader)
+        val_preds = get_preds(model, dataloader_val)
+        test_preds = get_preds(model, dataloader_test)
+        preds = {'train': train_preds, 'val': val_preds, 'test': test_preds}
+        path = os.path.join(r'C:\Users\45292\Documents\Master\VI Simple\UCI\Test',
+            f"results_{percentage}_run_{run_number}_{os.path.basename(train_args['save_path'])}.pkl")
+        with open(path, 'wb') as handle:
+            pickle.dump(preds, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+
+
+def apply_mask(model, mask):
+    for idx, (name, param) in enumerate(model.named_parameters()):
+        param.grad *= mask[name]
+
+def extend_mask(model, mask):
+
+    for name, param in model.named_parameters():
+        if 'weight' in name:
+            mask[name] = mask[name.split(".")[0]][0]
+        if 'bias' in name:
+            mask[name] = mask[name.split(".")[0]][1]
+    return mask
+
+def random_init_mask_values(model, mask):
+    for name, param in model.named_parameters():
+        param.requires_grad_(False)
+        param += -param * mask[name] + torch.randn(mask[name].shape)/100*mask[name]
+        param.requires_grad_(True)
+
+def deepcopies(batch, target, network):
+    return copy.deepcopy(batch), copy.deepcopy(target), copy.deepcopy(network)
+def train_with_gradient_mask(network: nn.Module,
+          dataloader_train,
+          dataloader_val,
+          mask=None,
+          device='cpu',
+          epochs=50,
+          save_path=None,
+          num_mc_samples = 200,
+          early_stopping_patience = 1000):
+    """
+
+    :param network: (nn.Module) feed forward classification model
+    :param dataloader_train: dataloader for the training cases, should output (inputs, labels)
+    :param dataloader_val: dataloader for the validation cases, should output (inputs, labels)
+    :return: The trained model (the best version of the trained model, from eval on validation set)
+    """
+
+    network.to(device)
+    optimizer = SGD(network.parameters(), lr=0.1)
+
+    loss_fn = nn.MSELoss()
+    best_loss = np.infty
+    best_model = None
+
+    current_loss = evaluate_monte_carlo(network, dataloader_val, loss_fn, num_mc_samples, device)
+    print(f'"loss without training was {current_loss}')
+
+    patience = 0
+    for epoch in trange(epochs, desc="Training MAP network"):
+        network.train()
+        for idx, (batch, target) in enumerate(dataloader_train):
+            optimizer.zero_grad()
+            batch = batch.to(device)
+            target = target.to(device)
+            output = network(batch)
+            loss = loss_fn(output, target)
+            kl = get_kl_loss(network)
+            loss += kl / batch.shape[0]
+            loss.backward()
+            nn.utils.clip_grad_norm_(network.parameters(), 1.0)
+            apply_mask(network, mask)
+            optimizer.step()
+            if torch.isnan(next(network.parameters())).sum() > 0:
+                breakpoint()
+
+        if epoch % 2 == 0:
+
+
+            current_loss = evaluate_monte_carlo(network, dataloader_val,loss_fn, num_mc_samples, device)
+            if current_loss < best_loss:
+                best_loss = current_loss
+                best_model = deepcopy(network)
+                patience = 0
+            else:
+                patience += 1
+            continue
+
+        if patience >= early_stopping_patience:
+            break
+
+    if best_model is None:
+        UserWarning("The model failed to improve, something went wrong")
+    else:
+
+        torch.save(best_model.state_dict(), save_path)
+        print(f"Model was saved to location {save_path}, terminated with MSELoss {best_loss}")
+
+    return best_model
 

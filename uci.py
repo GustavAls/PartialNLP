@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import torch.distributions
 from MAP_baseline import trainer
-from MAP_baseline.MapNN import MapNN
+from MAP_baseline.MapNN import MapNN, MapNNV2
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
@@ -294,17 +294,20 @@ def make_multiple_runs(dataset_class, data_path, model_path, num_runs, device='c
             device = 'cpu'
 
         train_args = {
-            'epochs': 30000,
+            'epochs': 1000,
             'device': device,
             'save_path': fin_path
         }
 
-        percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
+        percentages = [5, 8, 14, 23, 37, 61, 100]
         train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train)
         val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
         test_dataloader = DataLoader(UCIDataloader(dataset.X_test, dataset.y_test), batch_size=n_test)
 
-        train_model_with_varying_stochasticity_scheme_two(MapNN(p, 50, 2, out_dim, "leaky_relu"),
+        # train_partial_with_accumulated_stochasticity(MapNN(p, 50, 2, out_dim, "leaky_relu"),
+        #                                      train_dataloader,val_dataloader,test_dataloader, train_args)
+
+        train_partial_with_accumulated_stochasticity(MapNNV2(p, 35, 2, out_dim, "leaky_relu"),
                                                                   train_dataloader,
                                                                   val_dataloader,
                                                                   percentages,
@@ -488,6 +491,29 @@ if __name__ == "__main__":
     else:
         dataset_class = UCIYachtDataset
 
+    dataset = dataset_class(data_dir=args.data_path,
+                            test_split_type='random',
+                            test_size=0.1,
+                            gap_column='random',
+                            seed=np.random.randint(0, 1000),
+                            val_fraction_of_train=0.1)
+
+    n_train, p = dataset.X_train.shape
+    n_val = dataset.X_val.shape[0]
+    out_dim = dataset.y_train.shape[1]
+    n_test = dataset.X_test.shape[0]
+    unitialised_model = MapNNV2(p, 35, 4)
+    train_args = {
+        'epochs': 1000,
+        'device': 'cpu',
+        'save_path': None
+    }
+    train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train)
+    val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
+    test_dataloader = DataLoader(UCIDataloader(dataset.X_test, dataset.y_test), batch_size=n_test)
+    train_model_with_layer_stochasticity(unitialised_model,train_dataloader, val_dataloader, test_dataloader,
+                                         train_args)
+
     # results_path = r'C:\Users\45292\Documents\Master\VI Simple\UCI\Models\UCI\Results'
     # for path in os.listdir(results_path):
     #     percentage_to_results = pickle.load(open(os.path.join(results_path, path), 'rb'))
@@ -545,7 +571,7 @@ if __name__ == "__main__":
     # plot_results(percentage_to_results)
     # breakpoint()
 
-    make_multiple_runs(dataset_class, args.data_path, args.output_path, args.num_runs, args.device, gap=args.gap)
+    make_multiple_runs(dataset_class, args.data_path, args.output_path, args.num_runs, args.device, gap=False)
 
     # dataset = dataset_class(data_dir=os.getcwd(),
     #                         test_split_type="gap" if args.gap else "random",
