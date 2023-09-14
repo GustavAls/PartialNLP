@@ -21,11 +21,9 @@ def calculate_nll_vi(model, dataloader, sigma, num_mc_runs=600, device='cpu'):
         for mc_run in range(num_mc_runs):
             output = model(batch).squeeze(1)
             dist = MultivariateNormal(output, torch.eye(output.shape[0]) * sigma)
-
             mc_batch.append(dist.log_prob(label.squeeze(1)).item())
 
         mc_overall.append(np.mean(mc_batch))
-
     nll = -np.mean(mc_overall)
 
     return nll
