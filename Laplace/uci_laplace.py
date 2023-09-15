@@ -17,12 +17,32 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from laplace import Laplace
 from laplace.utils import LargestMagnitudeSubnetMask
-
 from uci import UCIDataloader, UCIDataset, UCIBostonDataset, UCIEnergyDataset, UCIYachtDataset
 
-def run_percentiles(mle_model, train_dataloader, dataset, percentages):
-    num_params = dataset.X_test.shape[1] * 50 + 50 * 50 + 50 * 1
 
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters())
+
+
+def calculate_nll(preds, labels, sigma):
+    results = []
+    for pred, label in zip(preds, labels):
+        dist = MultivariateNormal(pred.ravel(), torch.eye(pred.shape[0]) * sigma)
+        results.append(dist.log_prob(label.ravel()).item())
+
+    nll = -np.mean(results)
+    return nll
+
+def calculate_mse(preds, labels):
+
+    results = []
+    for pred, label in zip(preds, labels):
+        results.append((pred-label)**2)
+    mse = torch.mean(torch.cat(results, dim = 0)).item()
+    return mse
+
+def run_percentiles(mle_model, train_dataloader, dataset, percentages):
+    num_params = count_parameters(mle_model)
     val_nll = []
     test_nll = []
     val_mse = []
@@ -37,6 +57,7 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
                      hessian_structure='full',
                      subnetwork_indices=subnetwork_indices)
         la.fit(train_dataloader)
+        targets = torch.from_numpy(dataset.y_val).to(torch.float32)
         f_mu, f_var = la(torch.from_numpy(dataset.X_test).to(torch.float32))
         print("f_mu")
 
@@ -117,29 +138,3 @@ if __name__ == "__main__":
     print("Computed laplace preds")
 
 
-    # map_results = {
-    #     "prior_variance": args.prior_variance,
-    #     "test_rmse": test_rmse,
-    #     "test_ll": test_ll,
-    #     "val_rmse": val_rmse,
-    #     "val_ll": val_ll,
-    #     "train_rmse": train_rmse,
-    #     "train_ll": train_ll,
-    #     "runtime": end_time - start_time,
-    #     "num_params_sampled": 0,
-    #     "dataset": args.dataset,
-    #     "seed": args.seed,
-    #     "gap_split?": args.gap,
-    #     "name": "MAP",
-    # }
-    #
-    # print(map_results)
-    #
-    # all_results = {
-    #     "all_results_not_scaled": [map_results, map_results],
-    #     "all_results_scaled": [map_results, map_results],
-    # }
-    #
-    # file_name = os.path.join(args.output_path, "uci_results/map_" + args.dataset)
-    #
-    # pickle.dump(all_results, open(f"{file_name}.pkl", "wb"))

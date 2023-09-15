@@ -32,6 +32,7 @@ def parameters_to_vector(parameters) -> torch.Tensor:
         vec.append(param.view(-1))
     return torch.cat(vec)
 
+
 def calculate_nll(preds, labels, sigma):
     results = []
     for pred, label in zip(preds, labels):
@@ -41,12 +42,15 @@ def calculate_nll(preds, labels, sigma):
     nll = -np.mean(results)
     return nll
 
+
 def calculate_empirical_var(preds, labels):
     results = []
     for pred, label in zip(preds, labels):
         results.append(pred - label)
     empirical_variance = torch.var(torch.cat(results, dim = 0)).item()
     return empirical_variance
+
+
 def calculate_mse(preds, labels):
 
     results = []
@@ -54,6 +58,8 @@ def calculate_mse(preds, labels):
         results.append((pred-label)**2)
     mse = torch.mean(torch.cat(results, dim = 0)).item()
     return mse
+
+
 def evaluate_swag(model,dataloader, mask, swag_results, train_args, sigma = 1):
 
     theta_swa = swag_results["theta_swa"]
