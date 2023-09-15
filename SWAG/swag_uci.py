@@ -185,7 +185,7 @@ def make_multiple_runs_swag(dataset_class, data_path, num_runs, device='cpu', ga
         train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train//8)
         val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
         test_dataloader = DataLoader(UCIDataloader(dataset.X_test, dataset.y_test), batch_size=n_test)
-        untrained_model = MapNN(p, 35, 2, out_dim, "leaky_relu")
+        untrained_model = MapNN(p, 50, 2, out_dim, "leaky_relu")
 
         res = train_swag(
             untrained_model,
