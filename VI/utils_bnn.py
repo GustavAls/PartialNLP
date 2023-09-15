@@ -87,7 +87,7 @@ def make_multiple_runs_vi(dataset_class, data_path, num_runs, device='cpu', gap=
         val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
         test_dataloader = DataLoader(UCIDataloader(dataset.X_test, dataset.y_test), batch_size=n_test)
 
-        results_dict = train_model_with_varying_stochasticity_scheme_two(MapNN(p, 35, 2, out_dim, "leaky_relu"),
+        results_dict = train_model_with_varying_stochasticity_scheme_two(MapNN(p, 50, 2, out_dim, "leaky_relu"),
                                                                          train_dataloader,
                                                                          val_dataloader,
                                                                          percentages,
