@@ -125,8 +125,7 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
             output_path: (str) path to save the results
     """
     for run in range(num_runs):
-        # percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
-        percentages = [23, 37, 61, 100]
+        percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
         dataset = dataset_class(data_dir=data_path,
                                 test_split_type='random',
                                 test_size=0.1,
