@@ -125,7 +125,9 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
         nlls = []
         mses = []
         for lr in learning_rate_sweep:
-            swag_results = run_swag_partial(model, dataloader, lr, n_epochs=50, criterion=nn.MSELoss, mask=mask)
+            swag_results = run_swag_partial(
+                model, dataloader, lr, n_epochs =train_args['swag_epochs'], criterion=nn.MSELoss, mask=mask
+            )
             nll, mse, sigma = evaluate_swag(model,dataloader,mask, swag_results, train_args)
             nll, mse, sigma = evaluate_swag(model, dataloader_val, mask, swag_results, train_args, sigma = sigma)
             nlls.append(nll)
@@ -133,7 +135,9 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
 
         print("Best Validation MSE for percentage", percentage, 'was', np.min(nll))
         lr = learning_rate_sweep[np.argmin(nlls)]
-        swag_results = run_swag_partial(model, dataloader, lr, n_epochs=30, criterion=nn.MSELoss, mask=mask)
+        swag_results = run_swag_partial(
+            model, dataloader, lr, n_epochs=train_args['swag_epochs'], criterion=nn.MSELoss, mask=mask
+        )
         nll, mse, sigma = evaluate_swag(model, dataloader, mask, swag_results, train_args)
         nll, mse, sigma = evaluate_swag(model, dataloader_test, mask, swag_results, train_args, sigma=sigma)
         results_dict['nll_test'].append(nll)
@@ -210,6 +214,7 @@ if __name__ == '__main__':
     parser.add_argument("--num_epochs", type=int, default=20000)
     parser.add_argument("--dataset", type=str, default="boston")
     parser.add_argument('--data_path', type=str, default=os.getcwd())
+    parser.add_argument('--swag_epochs', type = str, default=50)
     parser.add_argument("--gap", type=bool, default=False)
     parser.add_argument('--num_runs', type=int, default=15)
 
@@ -231,7 +236,8 @@ if __name__ == '__main__':
         'device': args.device,
         'epochs': args.num_epochs,
         'save_path': args.output_path,
-        'learning_rate_sweep': np.logspace(-5, -2, 10, endpoint=True)[::-1]
+        'learning_rate_sweep': np.logspace(-5, -2, 10, endpoint=True)[::-1],
+        'swag_epochs': args.swag_epochs
     }
 
     make_multiple_runs_swag(dataset_class, args.data_path, args.num_runs, args.device, args.gap, train_args)
