@@ -19,7 +19,7 @@ def run_swag_partial(model:nn.Module,
                      n_epochs=10,
                      snapshots_per_epoch=4,
                      criterion = nn.CrossEntropyLoss,
-                     bnn_params=None):
+                     mask = None):
     """
 
     :param bnn_params: (key, value) = (str, [str,..]) where the key is the module, and the list contains the names of
@@ -34,11 +34,6 @@ def run_swag_partial(model:nn.Module,
     :param snapshots_per_epoch: how many in an epoch we want to save the  weights
     :return:
     """
-    if bnn_params is None:
-        UserWarning("bnn_params set to none, running full swag")
-        model.requires_grad_(True)
-    else:
-        utils_temp.set_gradient_parameters(model, bnn_params)
 
     batch_snapshot_freq = int(len(train_loader) / snapshots_per_epoch)
 
@@ -48,6 +43,12 @@ def run_swag_partial(model:nn.Module,
 
     mean = torch.zeros_like(utils_temp._parameter_vector(_model))
     sq_mean = torch.zeros_like(utils_temp._parameter_vector(_model))
+    if mask is None:
+        mask = torch.ones_like(mean)
+
+    mean = mean[mask]
+    sq_mean = sq_mean[mask]
+
     deviations = []
 
     n_snapshots = 0
@@ -63,9 +64,10 @@ def run_swag_partial(model:nn.Module,
         def snapshot(n_snapshots_lambda, model_lambda, mean_lambda, sq_mean_lambda, deviations_lambda, K):
 
             old_fac, new_fac = n_snapshots_lambda / (n_snapshots_lambda + 1), 1 / (n_snapshots_lambda + 1)
-            mean_lambda = mean_lambda * old_fac + utils_temp._parameter_vector(model_lambda) * new_fac
-            sq_mean_lambda = sq_mean_lambda * old_fac + utils_temp._parameter_vector(model_lambda) ** 2 * new_fac
-            deviation = utils_temp._parameter_vector(model_lambda) - mean_lambda
+
+            mean_lambda = mean_lambda * old_fac + utils_temp._parameter_vector(model_lambda)[mask] * new_fac
+            sq_mean_lambda = sq_mean_lambda * old_fac + utils_temp._parameter_vector(model_lambda)[mask] ** 2 * new_fac
+            deviation = utils_temp._parameter_vector(model_lambda)[mask] - mean_lambda
 
             if len(deviations_lambda) == K:
                 deviations_lambda.pop(0)
@@ -88,7 +90,7 @@ def run_swag_partial(model:nn.Module,
 
         average_losses.append(np.mean(epoch_losses))
 
-    D = torch.zeros((utils_temp._parameter_vector(model).numel(), K))
+    D = torch.zeros((utils_temp._parameter_vector(model)[mask].numel(), K))
     for i in range(K):
         D[:, i] = deviations[i]
 
@@ -163,7 +165,7 @@ def test_swag():
     dataset = TestData()
     dataloader = DataLoader(dataset, batch_size=10)
 
-    swag_res = run_swag_partial(model, dataloader, bnn_params=partial_dict,n_epochs=40, K = 10)
+    swag_res = run_swag_partial(model, dataloader,n_epochs=40, K = 10)
     breakpoint()
 
 
