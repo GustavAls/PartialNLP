@@ -6,13 +6,13 @@ import torch
 import numpy as np
 from torch.distributions.multivariate_normal import MultivariateNormal
 import os
-from partial_bnn_functional import *
-from PartialNLP.uci import UCIDataloader, UCIDataset, UCIBostonDataset, UCIEnergyDataset, UCIConcreteDataset, \
+from VI.partial_bnn_functional import *
+from uci import UCIDataloader, UCIDataset, UCIBostonDataset, UCIEnergyDataset, UCIConcreteDataset, \
     UCIYachtDataset
-from PartialNLP.MAP_baseline.MapNN import MapNN
+from MAP_baseline.MapNN import MapNN
 
 
-def calculate_nll_vi(model, dataloader, sigma, num_mc_runs=600, device='cpu'):
+def calculate_nll_mc(model, dataloader, sigma, num_mc_runs=600, device='cpu'):
     mc_overall = []
     for batch, label in dataloader:
         mc_batch = []
@@ -29,7 +29,7 @@ def calculate_nll_vi(model, dataloader, sigma, num_mc_runs=600, device='cpu'):
     return nll
 
 
-def calculate_mse_vi(model, dataloader, num_mc_runs=600, device='cpu'):
+def calculate_mse_mc(model, dataloader, num_mc_runs=600, device='cpu'):
     mc_overall = []
     for batch, label in dataloader:
         mc_batch = []
@@ -104,11 +104,11 @@ def make_multiple_runs_vi(dataset_class, data_path, num_runs, device='cpu', gap=
         )
         for model, train_, val_, test_ in zip(*results_dict_ordered):
             sigma = calculate_sigma(*train_)
-            results['val_nll'] = calculate_nll_vi(model, val_dataloader, sigma, train_args['num_mc_samples'], device)
-            results['val_mse'] = calculate_mse_vi(model, val_dataloader, train_args['num_mc_samples'], device)
+            results['val_nll'] = calculate_nll_mc(model, val_dataloader, sigma, train_args['num_mc_samples'], device)
+            results['val_mse'] = calculate_mse_mc(model, val_dataloader, train_args['num_mc_samples'], device)
 
-            results['test_nll'] = calculate_nll_vi(model, val_dataloader, sigma, train_args['num_mc_samples'], device)
-            results['test_mse'] = calculate_mse_vi(model, val_dataloader, train_args['num_mc_samples'], device)
+            results['test_nll'] = calculate_nll_mc(model, val_dataloader, sigma, train_args['num_mc_samples'], device)
+            results['test_mse'] = calculate_mse_mc(model, val_dataloader, train_args['num_mc_samples'], device)
 
         save_name = os.path.join(
             train_args['save_path'], f'results_{run}_{dataset_class.dataset_name}.pkl'
