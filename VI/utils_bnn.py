@@ -5,6 +5,8 @@ import torch.nn as nn
 import torch
 import numpy as np
 from torch.distributions.multivariate_normal import MultivariateNormal
+from torch.distributions.gamma import Gamma
+from torch.distributions.normal import Normal
 import os
 from partial_bnn_functional import *
 from PartialNLP.uci import UCIDataloader, UCIDataset, UCIBostonDataset, UCIEnergyDataset, UCIConcreteDataset, \
@@ -12,21 +14,35 @@ from PartialNLP.uci import UCIDataloader, UCIDataset, UCIBostonDataset, UCIEnerg
 from PartialNLP.MAP_baseline.MapNN import MapNN
 
 
-def calculate_nll_vi(model, dataloader, sigma, num_mc_runs=600, device='cpu'):
-    mc_overall = []
+def calculate_nll_vi(model, dataloader, sigma, y_scale, y_loc, num_mc_runs=100, device='cpu'):
     for batch, label in dataloader:
-        mc_batch = []
         batch = batch.to(device)
         label = label.to(device)
+        mc_matrix = torch.zeros((batch.shape[0], num_mc_runs))
         for mc_run in range(num_mc_runs):
-            output = model(batch).squeeze(1)
-            dist = MultivariateNormal(output, torch.eye(output.shape[0]) * sigma)
-            mc_batch.append(dist.log_prob(label.squeeze(1)).item())
+            output = model(batch).detach().flatten()
+            mc_matrix[:, mc_run] = output
 
-        mc_overall.append(np.mean(mc_batch))
-    nll = -np.mean(mc_overall)
-
+        nll = calculate_nll_third(label, mc_matrix,sigma, y_scale, y_loc)
     return nll
+
+def get_tau_by_conjugacy(x, alpha, beta):
+
+    mean_x = torch.mean(x)
+    n = len(x)
+    dist = Gamma(alpha + n/2, beta + 1/2 * torch.sum((x - mean_x)**2))
+    posterior_tau = torch.mean(dist.sample((1000,)))
+    return posterior_tau
+
+def calculate_nll_third(labels, mc_matrix, sigma, y_scale, y_loc):
+    results = []
+    for i in range(mc_matrix.shape[0]):
+        res_temp = []
+        for j in range(mc_matrix.shape[1]):
+            dist = Normal(mc_matrix[i,j]*y_scale + y_loc, np.sqrt(sigma)*y_scale)
+            res_temp.append(dist.log_prob(labels[i]*y_scale + y_loc).item())
+        results.append(np.mean(res_temp))
+    return np.mean(results)
 
 
 def calculate_mse_vi(model, dataloader, num_mc_runs=600, device='cpu'):
@@ -46,9 +62,10 @@ def calculate_mse_vi(model, dataloader, num_mc_runs=600, device='cpu'):
     return mse
 
 
-def calculate_sigma(predictions, labels):
+def calculate_sigma(predictions, labels, alpha = 3, beta = 1):
     residuals = np.array(predictions) - np.array(labels)
-    return np.var(residuals)
+    residuals = torch.from_numpy(residuals)
+    return get_tau_by_conjugacy(residuals,alpha,beta)
 
 
 def make_multiple_runs_vi(dataset_class, data_path, num_runs, device='cpu', gap=True, train_args=None):
@@ -64,7 +81,10 @@ def make_multiple_runs_vi(dataset_class, data_path, num_runs, device='cpu', gap=
         n_val = dataset.X_val.shape[0]
         out_dim = dataset.y_train.shape[1]
         n_test = dataset.X_test.shape[0]
-
+        train_args['y_scale'] = dataset.scl_Y.scale_
+        train_args['y_loc'] = dataset.scl_Y.mean_
+        y_scale = dataset.scl_Y.scale_
+        y_loc = dataset.scl_Y.mean_
         if device == 'cuda' and not torch.cuda.is_available():
             device = 'cpu'
 
@@ -104,11 +124,19 @@ def make_multiple_runs_vi(dataset_class, data_path, num_runs, device='cpu', gap=
         )
         for model, train_, val_, test_ in zip(*results_dict_ordered):
             sigma = calculate_sigma(*train_)
-            results['val_nll'] = calculate_nll_vi(model, val_dataloader, sigma, train_args['num_mc_samples'], device)
-            results['val_mse'] = calculate_mse_vi(model, val_dataloader, train_args['num_mc_samples'], device)
+            results['val_nll'] = calculate_nll_vi(
+                model, val_dataloader, sigma, y_scale, y_loc,train_args['num_mc_samples'], device
+            )
+            results['val_mse'] = calculate_mse_vi(
+                model, val_dataloader, train_args['num_mc_samples'], device
+            )
 
-            results['test_nll'] = calculate_nll_vi(model, val_dataloader, sigma, train_args['num_mc_samples'], device)
-            results['test_mse'] = calculate_mse_vi(model, val_dataloader, train_args['num_mc_samples'], device)
+            results['test_nll'] = calculate_nll_vi(
+                model, val_dataloader, sigma, y_scale, y_loc, train_args['num_mc_samples'], device
+            )
+            results['test_mse'] = calculate_mse_vi(
+                model, val_dataloader, train_args['num_mc_samples'], device
+            )
 
         save_name = os.path.join(
             train_args['save_path'], f'results_{run}_{dataset_class.dataset_name}.pkl'
@@ -144,7 +172,7 @@ if __name__ == '__main__':
         dataset_class = UCIYachtDataset
 
     train_args = {
-        'num_mc_samples': 600,
+        'num_mc_samples': 200,
         'device': args.device,
         'epochs': args.num_epochs,
         'save_path': args.output_path

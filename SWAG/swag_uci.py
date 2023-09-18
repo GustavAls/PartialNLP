@@ -7,13 +7,15 @@ import pickle
 import os
 from torch.utils.data import DataLoader
 from swag_temp import run_swag_partial
-from PartialNLP.VI.partial_bnn_functional import create_mask, train, create_non_parameter_mask
-from PartialNLP.MAP_baseline.MapNN import MapNN
-from PartialNLP.uci import UCIDataloader, UCIDataset, UCIBostonDataset, UCIEnergyDataset, UCIConcreteDataset, \
+from VI.partial_bnn_functional import create_mask, train, create_non_parameter_mask
+from MAP_baseline.MapNN import MapNN
+from uci import UCIDataloader, UCIDataset, UCIBostonDataset, UCIEnergyDataset, UCIConcreteDataset, \
     UCIYachtDataset
 from torch.distributions.multivariate_normal import MultivariateNormal
+from torch.distributions.normal import Normal
 import argparse
-
+import matplotlib.pyplot as plt
+from torch.distributions.gamma import Gamma
 
 def parameters_to_vector(parameters) -> torch.Tensor:
     r"""Convert parameters to one vector
@@ -36,10 +38,16 @@ def calculate_nll(preds, labels, sigma):
     results = []
     for pred, label in zip(preds, labels):
         dist = MultivariateNormal(pred.ravel(), torch.eye(pred.shape[0]) * sigma)
-        results.append(dist.log_prob(label.ravel()).item())
+        results.append(dist.log_prob(label.ravel()).item()/pred.shape[0])
 
     nll = -np.mean(results)
     return nll
+
+
+def calculate_nll_batch(preds, labels, sigma):
+    dist = MultivariateNormal(preds.ravel(), torch.eye(preds.shape[0]) * sigma)
+    ll = dist.log_prob(preds.ravel()).item()/preds.shape[0]
+    return -ll
 
 def calculate_empirical_var(preds, labels):
     results = []
@@ -54,24 +62,92 @@ def calculate_mse(preds, labels):
         results.append((pred-label)**2)
     mse = torch.mean(torch.cat(results, dim = 0)).item()
     return mse
+
+def calculate_mse_batch(preds, labels):
+    mse = torch.mean((preds - labels)**2).item()
+    return mse
+
+def calculate_nll_third(labels, mc_matrix, sigma, y_scale, y_loc):
+    results = []
+    for i in range(mc_matrix.shape[0]):
+        res_temp = []
+        for j in range(mc_matrix.shape[1]):
+            dist = Normal(mc_matrix[i,j]*y_scale + y_loc, np.sqrt(sigma)*y_scale)
+            res_temp.append(dist.log_prob(labels[i]*y_scale + y_loc).item())
+        results.append(np.mean(res_temp))
+    return np.mean(results)
+
+
+def get_tau_by_conjugacy(x, alpha, beta):
+
+    mean_x = torch.mean(x)
+    n = len(x)
+    dist = Gamma(alpha + n/2, beta + 1/2 * torch.sum((x - mean_x)**2))
+    posterior_tau = torch.mean(dist.sample((1000,)))
+    return posterior_tau
+
+
+def calculate_nll_fourth(labels, mc_matrix, sigma, y_scale, y_loc):
+    results = []
+    for i in range(mc_matrix.shape[0]):
+        dist = MultivariateNormal(mc_matrix[i], torch.eye(mc_matrix.shape[-1])*sigma*y_scale)
+        results.append(dist.log_prob(torch.tile(labels[i]*y_scale+y_loc, (mc_matrix.shape[-1], ))).item()/mc_matrix.shape[-1])
+    return np.mean(results)
+
+
+
+def get_swag_residuals(model, dataloader, mask,swag_results, train_args):
+    theta_swa = swag_results["theta_swa"]
+    sigma_diag = swag_results["sigma_diag"]
+    D = swag_results["D"]
+    K = swag_results["K"]
+    y_scale = train_args['y_scale']
+    y_loc = train_args['y_loc']
+    model_ = copy.deepcopy(model)
+    true_model_params = nn.utils.parameters_to_vector(model_.parameters()).clone()
+    num_mc_samples = train_args['num_mc_samples']
+    device = train_args['device']
+
+    mean_preds = []
+    all_labels = []
+    for batch, labels in dataloader:
+        batch, labels = batch.to(device), labels.to(device)
+
+        mc_matrix_res = torch.zeros((labels.shape[0], num_mc_samples))
+        for mc_run in range(num_mc_samples):
+            z1 = torch.normal(mean=torch.zeros((theta_swa.numel())), std=1.0).to(device)
+            z2 = torch.normal(mean=torch.zeros(K), std=1.0).to(device)
+
+            theta = theta_swa + 2 ** -0.5 * (sigma_diag ** 0.5 * z1) + (2 * (K - 1)) ** -0.5 * (
+                    D @ z2[:, None]).flatten()
+
+            true_model_params[mask] = theta
+            nn.utils.vector_to_parameters(true_model_params, model_.parameters())
+            preds = model_(batch)
+            mc_matrix_res[:, mc_run] = preds.flatten()
+        mean_preds.append(mc_matrix_res.mean(-1))
+        all_labels.append(labels)
+    residuals = torch.cat(mean_preds, dim = 0) - torch.cat(all_labels, dim = 0).flatten()
+    return residuals
+
+
 def evaluate_swag(model,dataloader, mask, swag_results, train_args, sigma = 1):
 
     theta_swa = swag_results["theta_swa"]
     sigma_diag = swag_results["sigma_diag"]
     D = swag_results["D"]
     K = swag_results["K"]
-
+    y_scale = train_args['y_scale']
+    y_loc = train_args['y_loc']
     model_ = copy.deepcopy(model)
-    true_model_params = nn.utils.parameters_to_vector(model.parameters())
+    true_model_params = nn.utils.parameters_to_vector(model_.parameters()).clone()
     num_mc_samples = train_args['num_mc_samples']
     device = train_args['device']
 
-    mc_overall_preds = []
-    mc_overall_labels = []
     for batch, labels in dataloader:
         batch, labels = batch.to(device), labels.to(device)
-        mc_batch = []
-        mc_labels = []
+        mc_matrix_preds = torch.zeros((batch.shape[0], num_mc_samples))
+
         for mc_run in range(num_mc_samples):
             z1 = torch.normal(mean=torch.zeros((theta_swa.numel())), std=1.0).to(device)
             z2 = torch.normal(mean=torch.zeros(K), std=1.0).to(device)
@@ -81,21 +157,38 @@ def evaluate_swag(model,dataloader, mask, swag_results, train_args, sigma = 1):
 
             true_model_params[mask] = theta
             nn.utils.vector_to_parameters(true_model_params, model_.parameters())
-            mc_batch.append(model_(batch))
-            mc_labels.append(labels)
+            preds = model_(batch)
+            mc_matrix_preds[:, mc_run] = preds.flatten()
 
-        mc_overall_preds.append(mc_batch)
-        mc_overall_labels.append(mc_labels)
+        mc_overall_nll = calculate_nll_third(labels, mc_matrix_preds, sigma, y_scale.item(),y_loc.item())
+        mse = calculate_mse_batch(mc_matrix_preds.mean(-1), labels.flatten())
+        # test = calculate_nll_fourth(labels, mc_matrix_preds, sigma, y_scale.item(), y_loc.item())
 
-    mc_overall_preds = [x for y in mc_overall_preds for x in y]
-    mc_overall_labels = [x for y in mc_overall_labels for x in y]
-
-    nll = calculate_nll(mc_overall_preds, mc_overall_labels, sigma)
-    mse = calculate_mse(mc_overall_preds, mc_overall_labels)
-    empirical_var = calculate_empirical_var(mc_overall_preds, mc_overall_labels)
-    return nll, mse, empirical_var
+    return np.mean(mc_overall_nll), mse
 
 
+def evaluate_map(model, dataloader, sigma, y_scale, y_loc):
+
+    for batch, label in dataloader:
+        preds = model(batch)
+
+    nll = calculate_nll_third(label, preds.detach(), sigma.item(), y_scale.item(), y_loc.item())
+    mse = torch.mean((label.flatten() - preds.flatten())**2)
+    return nll, mse
+
+def get_residuals(model, dataloader):
+    residuals = []
+    for batch, label in dataloader:
+        residuals.append(model(batch)-label)
+
+    return torch.cat(residuals, dim = 0)
+def get_empirical_var(model, dataloader):
+
+    residuals = []
+    for batch, label in dataloader:
+        residuals.append((model(batch)-label))
+
+    return torch.var(torch.cat(residuals, dim = 0)).item()
 
 def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, percentages, train_args):
 
@@ -107,7 +200,8 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
         vi=False,
         device=train_args['device'],
         epochs=train_args['epochs'],
-        save_path=None
+        save_path=None,
+        return_best_model=False
     )
 
     learning_rate_sweep = train_args['learning_rate_sweep']
@@ -118,38 +212,63 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
         'according_mse_val': []
     }
 
+    residuals = get_residuals(model_, dataloader)
+    precision = get_tau_by_conjugacy(residuals, 3, 1)
+    sigma = np.sqrt(1 / precision)
+    y_scale = train_args['y_scale']
+    y_loc = train_args['y_loc']
+    nll, mse =  evaluate_map(model_, dataloader_val, sigma,
+                             y_scale, y_loc)
+    results_dict['best_nll_val'].append(nll)
+    results_dict['according_mse_val'].append(mse)
+    nll, mse =  evaluate_map(model_, dataloader_test, sigma,
+                             y_scale, y_loc)
+    results_dict['nll_test'].append(nll)
+    results_dict['mse_test'].append(mse)
+
     for percentage in percentages:
         mask = create_non_parameter_mask(model_, percentage)
         mask = mask.bool()
         model = copy.deepcopy(model_)
         nlls = []
         mses = []
+        residuals = get_residuals(model, dataloader)
+        precision = get_tau_by_conjugacy(residuals, 3, 1)
+        sigma = np.sqrt(1 / precision)
+        print("sigma without swag", sigma)
+        sigmas = []
         for lr in learning_rate_sweep:
             swag_results = run_swag_partial(
                 model, dataloader, lr, n_epochs =train_args['swag_epochs'], criterion=nn.MSELoss, mask=mask
             )
-            nll, mse, sigma = evaluate_swag(model,dataloader,mask, swag_results, train_args)
-            nll, mse, sigma = evaluate_swag(model, dataloader_val, mask, swag_results, train_args, sigma = sigma)
+            residuals = get_swag_residuals(model, dataloader, mask, swag_results, train_args)
+            precision = get_tau_by_conjugacy(residuals, 3, 1)
+            sigma = np.sqrt(1 / precision)
+            sigmas.append(sigma)
+            nll, mse = evaluate_swag(model, dataloader_val, mask, swag_results, train_args, sigma = sigma)
             nlls.append(nll)
             mses.append(mse)
 
-        print("Best Validation MSE for percentage", percentage, 'was', np.min(nll))
+        print("Best Validation nll for percentage", percentage, 'was', np.min(nll),'with sigma', sigma)
         lr = learning_rate_sweep[np.argmin(nlls)]
         swag_results = run_swag_partial(
             model, dataloader, lr, n_epochs=train_args['swag_epochs'], criterion=nn.MSELoss, mask=mask
         )
-        nll, mse, sigma = evaluate_swag(model, dataloader, mask, swag_results, train_args)
-        nll, mse, sigma = evaluate_swag(model, dataloader_test, mask, swag_results, train_args, sigma=sigma)
+        nll, mse = evaluate_swag(model, dataloader_test, mask, swag_results, train_args, sigma=sigmas[np.argmin(nlls)])
         results_dict['nll_test'].append(nll)
         results_dict['mse_test'].append(mse)
         results_dict['best_nll_val'].append(np.min(nlls))
         results_dict['according_mse_val'].append(mses[np.argmin(nlls)])
 
+    plt.figure()
+    plt.plot(range(len(results_dict['nll_test'])), results_dict['nll_test'])
+    plt.show(block=False)
     return results_dict
 
 
 def make_multiple_runs_swag(dataset_class, data_path, num_runs, device='cpu', gap=True, train_args=None):
 
+    results_all = []
     for run in range(num_runs):
         dataset = dataset_class(data_dir=data_path,
                                 test_split_type="gap" if gap else "random",
@@ -157,6 +276,9 @@ def make_multiple_runs_swag(dataset_class, data_path, num_runs, device='cpu', ga
                                 gap_column='random',
                                 val_fraction_of_train=0.1,
                                 seed=np.random.randint(0, 1000))
+
+        train_args['y_scale'] = dataset.scl_Y.scale_
+        train_args['y_loc'] = dataset.scl_Y.mean_
 
         n_train, p = dataset.X_train.shape
         n_val = dataset.X_val.shape[0]
@@ -166,6 +288,7 @@ def make_multiple_runs_swag(dataset_class, data_path, num_runs, device='cpu', ga
             device = 'cpu'
 
         percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
+        percentages = [i * 10 for i in range(1,11)]
 
         results = {
             'percentages': percentages,
@@ -185,7 +308,7 @@ def make_multiple_runs_swag(dataset_class, data_path, num_runs, device='cpu', ga
         train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train//8)
         val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
         test_dataloader = DataLoader(UCIDataloader(dataset.X_test, dataset.y_test), batch_size=n_test)
-        untrained_model = MapNN(p, 50, 2, out_dim, "leaky_relu")
+        untrained_model = MapNN(p, 35, 2, out_dim, "leaky_relu")
 
         res = train_swag(
             untrained_model,
@@ -195,15 +318,36 @@ def make_multiple_runs_swag(dataset_class, data_path, num_runs, device='cpu', ga
             percentages,
             train_args
         )
-        results['val_nll'] = res['best_nll_val']
-        results['val_mse'] = res['according_mse_val']
-        results['test_nll'] = res['nll_test']
-        results['test_mse'] = res['mse_test']
+        results['val_nll'] += res['best_nll_val']
+        results['val_mse'] += res['according_mse_val']
+        results['test_nll'] += res['nll_test']
+        results['test_mse'] += res['mse_test']
 
         save_name = os.path.join(train_args['save_path'],
                                  f'results_swag_run_{run}.pkl')
         with open(save_name, 'wb') as handle:
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        results_all.append(results)
+    return results_all
+
+def plot_stuff(percentages, res):
+    percentages = [0] + percentages
+    import seaborn as sns
+    import pandas as pd
+    df = pd.DataFrame()
+    df['percentages'] = res.shape[0]*percentages
+    df['nll'] = res.flatten() * (-1)
+    plt.figure()
+    sns.pointplot(errorbar=lambda x: np.percentile(x, [25, 75]),
+                  data=df, x="percentages", y="nll",
+                  join=False,
+                  markers="d", scale=.5, errwidth=0.5, estimator=np.median)
+    plt.show(block = False)
+    plt.figure()
+    sns.pointplot(data=df, x="percentages", y="nll",
+                  join=False,
+                  markers="d", scale=.5, errwidth=0.5)
+    plt.show(block=False)
 
 if __name__ == '__main__':
 
@@ -232,12 +376,16 @@ if __name__ == '__main__':
         dataset_class = UCIYachtDataset
 
     train_args = {
-        'num_mc_samples': 600,
+        'num_mc_samples': 100,
         'device': args.device,
         'epochs': args.num_epochs,
         'save_path': args.output_path,
-        'learning_rate_sweep': np.logspace(-5, -2, 10, endpoint=True)[::-1],
+        'learning_rate_sweep': np.logspace(-5, -2, 4, endpoint=True),
         'swag_epochs': args.swag_epochs
     }
 
-    make_multiple_runs_swag(dataset_class, args.data_path, args.num_runs, args.device, args.gap, train_args)
+    results = []
+
+    results = make_multiple_runs_swag(dataset_class, args.data_path, args.num_runs, args.device, args.gap, train_args)
+
+    breakpoint()
