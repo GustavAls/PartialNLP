@@ -56,7 +56,7 @@ class MapNN(nn.Module):
     """
     MAP neural network
     """
-    def __init__(self, input_size: int, width: int, size: int, output_size: int = 1, non_linearity: str = "silu"):
+    def __init__(self, input_size: int, width: int, output_size: int = 1, non_linearity: str = "silu"):
         """
         Initialize network
         Args:
@@ -64,6 +64,7 @@ class MapNN(nn.Module):
         """
         # Superclass constructor
         super().__init__()
+        self.output_size = output_size
         self.layers = nn.Sequential()
         self.non_linearity = get_nonlinearity_from_string(non_linearity)
         self.linear1 = nn.Linear(in_features=input_size, out_features=width)

@@ -12,8 +12,9 @@ def train(network: nn.Module,
           dataloader_train,
           dataloader_val,
           device = 'cpu',
-          epochs = 50,
-          save_path = None):
+          epochs = 20000,
+          save_path = None,
+          early_stopping_patience = 1000):
 
     """
 
@@ -24,12 +25,12 @@ def train(network: nn.Module,
     """
 
     network.to(device)
-    # optimizer = SGD(network.parameters(), lr=0.1)
     optimizer = Adam(network.parameters(), lr=0.01)
 
     loss_fn = MSELoss()
     best_loss = np.infty
     best_model = None
+    patience = 0
     for epoch in trange(epochs, desc="Training MAP network"):
         network.train()
         for idx, (batch, target) in enumerate(dataloader_train):
@@ -53,11 +54,16 @@ def train(network: nn.Module,
             if current_loss < best_loss:
                 best_loss = current_loss
                 best_model = deepcopy(network)
+                patience = 0
+            else:
+                patience += 1
+        if patience >= early_stopping_patience:
+            break
 
     if best_model is None:
         UserWarning("The model failed to improve, something went wrong")
     else:
-        torch.save(best_model.state_dict(), save_path)
+        torch.save(best_model.state_dict(), save_path + "\\map.pt")
         print(f"Model was saved to location {save_path}, terminated with MSELoss {best_loss}")
 
     return best_model
