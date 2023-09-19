@@ -16,6 +16,8 @@ from torch.distributions.normal import Normal
 import argparse
 import matplotlib.pyplot as plt
 from torch.distributions.gamma import Gamma
+import seaborn as sns
+import pandas as pd
 
 def parameters_to_vector(parameters) -> torch.Tensor:
     r"""Convert parameters to one vector
@@ -82,7 +84,7 @@ def get_tau_by_conjugacy(x, alpha, beta):
 
     mean_x = torch.mean(x)
     n = len(x)
-    dist = Gamma(alpha + n/2, beta + 1/2 * torch.sum((x - mean_x)**2))
+    dist = Gamma(alpha + n/2, beta + 1/2 * torch.sum((x - mean_x)))
     posterior_tau = torch.mean(dist.sample((1000,)))
     return posterior_tau
 
@@ -213,7 +215,7 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
     }
 
     residuals = get_residuals(model_, dataloader)
-    precision = get_tau_by_conjugacy(residuals, 3, 1)
+    precision = get_tau_by_conjugacy(residuals, 3, 5)
     sigma = np.sqrt(1 / precision)
     y_scale = train_args['y_scale']
     y_loc = train_args['y_loc']
@@ -233,7 +235,7 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
         nlls = []
         mses = []
         residuals = get_residuals(model, dataloader)
-        precision = get_tau_by_conjugacy(residuals, 3, 1)
+        precision = get_tau_by_conjugacy(residuals, 1, 1)
         sigma = np.sqrt(1 / precision)
         print("sigma without swag", sigma)
         sigmas = []
@@ -242,7 +244,7 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
                 model, dataloader, lr, n_epochs =train_args['swag_epochs'], criterion=nn.MSELoss, mask=mask
             )
             residuals = get_swag_residuals(model, dataloader, mask, swag_results, train_args)
-            precision = get_tau_by_conjugacy(residuals, 3, 1)
+            precision = get_tau_by_conjugacy(residuals, 3, 5)
             sigma = np.sqrt(1 / precision)
             sigmas.append(sigma)
             nll, mse = evaluate_swag(model, dataloader_val, mask, swag_results, train_args, sigma = sigma)
@@ -250,15 +252,15 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
             mses.append(mse)
 
         print("Best Validation nll for percentage", percentage, 'was', np.min(nll),'with sigma', sigma)
-        lr = learning_rate_sweep[np.argmin(nlls)]
+        lr = learning_rate_sweep[np.argmax(nlls)]
         swag_results = run_swag_partial(
             model, dataloader, lr, n_epochs=train_args['swag_epochs'], criterion=nn.MSELoss, mask=mask
         )
-        nll, mse = evaluate_swag(model, dataloader_test, mask, swag_results, train_args, sigma=sigmas[np.argmin(nlls)])
+        nll, mse = evaluate_swag(model, dataloader_test, mask, swag_results, train_args, sigma=sigmas[np.argmax(nlls)])
         results_dict['nll_test'].append(nll)
         results_dict['mse_test'].append(mse)
-        results_dict['best_nll_val'].append(np.min(nlls))
-        results_dict['according_mse_val'].append(mses[np.argmin(nlls)])
+        results_dict['best_nll_val'].append(np.max(nlls))
+        results_dict['according_mse_val'].append(mses[np.argmax(nlls)])
 
     plt.figure()
     plt.plot(range(len(results_dict['nll_test'])), results_dict['nll_test'])
@@ -308,7 +310,7 @@ def make_multiple_runs_swag(dataset_class, data_path, num_runs, device='cpu', ga
         train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train//8)
         val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
         test_dataloader = DataLoader(UCIDataloader(dataset.X_test, dataset.y_test), batch_size=n_test)
-        untrained_model = MapNN(p, 35, 2, out_dim, "leaky_relu")
+        untrained_model = MapNN(p, 50, out_dim, "leaky_relu")
 
         res = train_swag(
             untrained_model,
@@ -345,9 +347,34 @@ def plot_stuff(percentages, res):
     plt.show(block = False)
     plt.figure()
     sns.pointplot(data=df, x="percentages", y="nll",
-                  join=False,
+                  join=False, errorbar=('ci', 50),
                   markers="d", scale=.5, errwidth=0.5)
     plt.show(block=False)
+
+
+def plot_series(percentages, res):
+    fig, ax = plt.subplots(1,1)
+    perc = [0] + percentages
+    rs = res - res.mean(-1)[:, None]
+    rs *= -1
+
+    runs = np.zeros_like(rs)
+    for i in range(runs.shape[0]):
+        runs[i] = i + 1
+    df = pd.DataFrame()
+    df['runs'] = runs.flatten()
+    df['nll'] = rs.flatten()
+    df['percentages'] = runs.shape[0] * perc
+    sns.lineplot(data=df, x='percentages', y='nll', errorbar=None, ax = ax, linewidth = 2, legend=False)
+    sns.lineplot(data=df, x = 'percentages', y = 'nll',
+                 hue ='runs', style = 'runs', alpha = 0.4, ax = ax, legend=False,
+                 palette = sns.color_palette(['black']))
+    for line in ax.lines[1:]:
+        line.set(linestyle = '-.')
+    ax.lines[0].set_label('Mean')
+    ax.legend()
+    plt.show()
+
 
 if __name__ == '__main__':
 
@@ -380,7 +407,7 @@ if __name__ == '__main__':
         'device': args.device,
         'epochs': args.num_epochs,
         'save_path': args.output_path,
-        'learning_rate_sweep': np.logspace(-5, -2, 4, endpoint=True),
+        'learning_rate_sweep': np.logspace(-5, -1, 4, endpoint=True),
         'swag_epochs': args.swag_epochs
     }
 

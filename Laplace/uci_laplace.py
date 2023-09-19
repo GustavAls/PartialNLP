@@ -1,3 +1,4 @@
+import copy
 import sys, os, time, requests
 import argparse
 import numpy as np
@@ -12,8 +13,8 @@ from laplace import Laplace
 from laplace.utils import LargestMagnitudeSubnetMask
 from uci import UCIDataloader, UCIDataset, UCIBostonDataset, UCIEnergyDataset, UCIYachtDataset
 from torch.nn import MSELoss
-
-
+from torch.distributions import Gamma
+from laplace.curvature import AsdlGGN
 def count_parameters(model):
     """Count the number of parameters in a model.
         Args:
@@ -24,7 +25,7 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters())
 
 
-def calculate_mse(preds, labels, var, num_mc_runs=600):
+def calculate_mse(preds, labels):
     """Calculate the mean squared error of the predictions.
         Args:
             preds: (np.array) predictions of the model
@@ -33,19 +34,11 @@ def calculate_mse(preds, labels, var, num_mc_runs=600):
             mse: (float) mean squared error
     """
     mse_loss = MSELoss()
-    results = []
-    for (pred, label) in zip(preds, labels):
-        mse_batch = []
-        dist = Normal(pred, np.sqrt(var))
-        samples = dist.sample((num_mc_runs,))
-        for sample in samples:
-            mse_batch.append(mse_loss(sample, label))
-        results.append(np.mean(mse_batch))
-    mse = np.mean(results)
-    return mse
+    base_pred = mse_loss(preds, labels)
+    print("Loss using means is equal to", base_pred)
+    return base_pred
 
-
-def calculate_nll(preds, labels, var, y_scale, y_loc, num_mc_runs=600):
+def calculate_nll(preds, labels, var, y_scale, y_loc):
     """Calculate the negative log likelihood of the predictions.
         Args:
             preds: (np.array) predictions of the model
@@ -55,16 +48,41 @@ def calculate_nll(preds, labels, var, y_scale, y_loc, num_mc_runs=600):
             nll: (float) negative log likelihood
     """
     results = []
-    for (pred, label) in zip(preds, labels):
-        log_likelihood = []
-        for mc_run in range(num_mc_runs):
-            dist = Normal((y_scale * pred) + y_loc, torch.sqrt(var) * y_scale)
-            log_prob = dist.log_prob(y_loc + (label * y_scale))
-            log_likelihood.append(log_prob)
-        results.append(torch.mean(torch.cat(log_likelihood, dim=0)).item())
-
-    nll = -np.mean(results)
+    scales = torch.sqrt(var)
+    for pred, scale, label in zip(preds, scales, labels):
+        dist = Normal(pred*y_scale + y_loc, scale*y_scale)
+        results.append(dist.log_prob(label))
+    nll = -1 * np.mean(results)
     return nll
+
+def calculate_precision_from_prior(residuals, alpha = 3, beta = 5):
+    """
+
+    :param residuals: torch.tensor of form (predictions - labels)
+    :param alpha: (float) Parameter in gamma distribution
+    :param beta: (float) Parameter in gamma distribution
+    :return: mean of the conjugate distribution p(tau | x) ~ Gamma()
+    """
+
+    residuals = residuals.flatten()
+    mean_r = torch.mean(residuals)
+    n = len(residuals)
+    dist = Gamma(alpha + n/2, beta + 1/2 * torch.sum((residuals - mean_r)))
+    posterior_tau = torch.mean(dist.sample((1000,)))
+    return posterior_tau
+
+def calculate_variance(model, batch, labels, alpha = 3, beta = 5):
+    preds, _ = model(batch)
+
+    residuals = preds.flatten() - labels.flatten()
+
+    precision = calculate_precision_from_prior(residuals, alpha, beta)
+    variance = 1/precision
+    return variance
+
+def predict(val_data, model):
+    return model(val_data)
+
 
 
 def run_percentiles(mle_model, train_dataloader, dataset, percentages):
@@ -80,17 +98,19 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
             val_mse: (list) list of validation mean squared errors
             test_mse: (list) list of test mean squared errors
     """
+
     num_params = count_parameters(mle_model)
     val_nll = []
     test_nll = []
     val_mse = []
     test_mse = []
     for p in percentages:
-        subnetwork_mask = LargestMagnitudeSubnetMask(mle_model, n_params_subnet=int((p / 100) * num_params))
+        ml_model = copy.deepcopy(mle_model)
+        subnetwork_mask = LargestMagnitudeSubnetMask(ml_model, n_params_subnet=int((p / 100) * num_params))
         subnetwork_indices = subnetwork_mask.select()
 
         # Define and fit subnetwork LA using the specified subnetwork indices
-        la = Laplace(mle_model, 'regression',
+        la = Laplace(ml_model, 'regression',
                      subset_of_weights='subnetwork',
                      hessian_structure='full',
                      subnetwork_indices=subnetwork_indices)
@@ -98,17 +118,25 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
 
         y_scale = torch.from_numpy(dataset.scl_Y.scale_)
         y_loc = torch.from_numpy(dataset.scl_Y.mean_)
+        batch, labels = next(iter(train_dataloader))
 
+        sigma_noise = calculate_variance(la, batch, labels, alpha = 3, beta = 1)
         val_targets = torch.from_numpy(dataset.y_val).to(torch.float32)
-        val_pred_mu, val_pred_var = la(torch.from_numpy(dataset.X_val).to(torch.float32))
+        val_preds_mu, val_preds_var = la(torch.from_numpy(dataset.X_val).to(torch.float32))
+        val_preds_sigma = val_preds_var.squeeze().sqrt()
+        predictive_std_val = torch.sqrt(val_preds_sigma**2 + sigma_noise)
 
         test_targets = torch.from_numpy(dataset.y_test).to(torch.float32)
-        test_pred_mu, test_pred_var = la(torch.from_numpy(dataset.X_test).to(torch.float32))
+        test_preds_mu, test_preds_var = la(torch.from_numpy(dataset.X_test).to(torch.float32))
+        test_preds_sigma = test_preds_var.squeeze().sqrt()
+        predictive_std_test = torch.sqrt(test_preds_sigma ** 2 + sigma_noise)
+        val_targets = val_targets.flatten()
+        test_targets = test_targets.flatten()
 
-        val_mse.append(calculate_mse(val_pred_mu, val_targets, torch.mean(val_pred_var), 600))
-        val_nll.append(calculate_nll(val_pred_mu, val_targets, torch.mean(val_pred_var), y_scale, y_loc))
-        test_mse.append(calculate_mse(test_pred_mu, test_targets, torch.mean(test_pred_var), 600))
-        test_nll.append(calculate_nll(test_pred_mu, test_targets, torch.mean(test_pred_var), y_scale, y_loc))
+        val_mse.append(calculate_mse(val_preds_mu.flatten(), val_targets))
+        val_nll.append(calculate_nll(val_preds_mu.flatten(), val_targets, predictive_std_val, y_scale, y_loc))
+        test_mse.append(calculate_mse(test_preds_mu.flatten(), test_targets))
+        test_nll.append(calculate_nll(test_preds_mu.flatten(), test_targets, predictive_std_test, y_scale, y_loc))
         print("Percentile: ", p, "Val MSE: ", val_mse[-1], "Test MSE: ", test_mse[-1])
         print("Percentile: ", p, "Val NLL: ", val_nll[-1], "Test NLL: ", test_nll[-1])
     return val_nll, test_nll, val_mse, test_mse
@@ -124,6 +152,7 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
             num_epochs: (int) number of epochs to train
             output_path: (str) path to save the results
     """
+    all_res = []
     for run in range(num_runs):
         percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
         dataset = dataset_class(data_dir=data_path,
@@ -146,7 +175,7 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
         train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train)
         val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
 
-        trainer.train(network=mle_model, dataloader_train=train_dataloader, dataloader_val=val_dataloader, **train_args)
+        mle_model = trainer.train(network=mle_model, dataloader_train=train_dataloader, dataloader_val=val_dataloader, **train_args)
         val_nll, test_nll, val_mse, test_mse = run_percentiles(mle_model, train_dataloader, dataset, percentages)
 
         save_name = os.path.join(output_path, f'results_{run}_{dataset_class.dataset_name}.pkl')
@@ -166,6 +195,8 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
         with open(save_name, 'wb') as handle:
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+        all_res.append(results)
+    return all_res
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some integers.")
@@ -187,8 +218,8 @@ if __name__ == "__main__":
     else:
         dataset_class = UCIYachtDataset
 
-    multiple_runs(args.data_path, dataset_class, args.num_runs, args.device, args.num_epochs, args.output_path)
-
+    results = multiple_runs(args.data_path, dataset_class, args.num_runs, args.device, args.num_epochs, args.output_path)
+    breakpoint()
     print("Laplace experiments finished!")
 
 
