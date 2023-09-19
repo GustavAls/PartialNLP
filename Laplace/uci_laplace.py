@@ -52,7 +52,7 @@ def calculate_nll(preds, labels, var, y_scale, y_loc):
     for pred, scale, label in zip(preds, scales, labels):
         dist = Normal(pred*y_scale + y_loc, scale*y_scale)
         results.append(dist.log_prob(label))
-    nll = -1 * np.mean(results)
+    nll = -1 * sum(results) / len(results)
     return nll
 
 def calculate_precision_from_prior(residuals, alpha = 3, beta = 5):
@@ -219,7 +219,6 @@ if __name__ == "__main__":
         dataset_class = UCIYachtDataset
 
     results = multiple_runs(args.data_path, dataset_class, args.num_runs, args.device, args.num_epochs, args.output_path)
-    breakpoint()
     print("Laplace experiments finished!")
 
 
