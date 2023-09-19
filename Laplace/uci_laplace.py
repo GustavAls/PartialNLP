@@ -175,7 +175,7 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
         train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train)
         val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
 
-        mle_model = trainer.train(network=mle_model, dataloader_train=train_dataloader, dataloader_val=val_dataloader, **train_args)
+        mle_model = train(network=mle_model, dataloader_train=train_dataloader, dataloader_val=val_dataloader, **train_args)
         val_nll, test_nll, val_mse, test_mse = run_percentiles(mle_model, train_dataloader, dataset, percentages)
 
         save_name = os.path.join(output_path, f'results_{run}_{dataset_class.dataset_name}.pkl')
