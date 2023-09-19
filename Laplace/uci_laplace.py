@@ -4,7 +4,7 @@ import argparse
 import numpy as np
 import pandas as pd
 import torch.distributions
-from MAP_baseline import trainer
+from MAP_baseline.trainer import train
 from MAP_baseline.MapNN import MapNN
 from torch.utils.data import Dataset, DataLoader
 import pickle
