@@ -477,7 +477,7 @@ if __name__ == "__main__":
     parser.add_argument("--gap", default=False, action="store_true")
     parser.add_argument("--output_path", type=str, default=None)
     parser.add_argument("--data_path", type=str, default=None)
-    parser.add_argument("--num_runs", type=int, default=15)
+    parser.add_argument("--run", type=int, default=15)
     parser.add_argument("--prior_variance", type=float, default=0.1) #0.1 is good for yacht, but not for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=6.0) #6.0 is good for yacht, but not for other datasets
     args = parser.parse_args()
@@ -490,154 +490,153 @@ if __name__ == "__main__":
         dataset_class = UCIBostonDataset
 
 
-    for run in range(args.num_runs):
-        rand_seed = np.random.randint(0, 10000)
-        dataset = dataset_class(
-            args.data_path,
-            seed=rand_seed,
-            test_split_type="random",
-            test_size=0.1,
-            val_fraction_of_train=0.1,
-        )
-        ### Train MAP Solution
-        optimizer = numpyro.optim.Adam(0.01)
-        rng_key = random.PRNGKey(0)
+    rand_seed = np.random.randint(0, 10000)
+    dataset = dataset_class(
+        args.data_path,
+        seed=rand_seed,
+        test_split_type="random",
+        test_size=0.1,
+        val_fraction_of_train=0.1,
+    )
+    ### Train MAP Solution
+    optimizer = numpyro.optim.Adam(0.01)
+    rng_key = random.PRNGKey(0)
 
-        model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
+    model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
 
-        svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
-        start_time = time.time()
-        svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
-        end_time = time.time()
+    svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
+    start_time = time.time()
+    svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
+    end_time = time.time()
 
-        train_ll, train_rmse = evaluate_MAP(
-            model,
-            svi_results,
-            dataset.X_train,
-            dataset.y_train,
-            rng_key,
-            y_scale=dataset.scl_Y.scale_,
-            y_loc=dataset.scl_Y.mean_,
-        )
-        val_ll, val_rmse = evaluate_MAP(
-            model,
-            svi_results,
-            dataset.X_val,
-            dataset.y_val,
-            rng_key,
-            y_scale=dataset.scl_Y.scale_,
-            y_loc=dataset.scl_Y.mean_,
-        )
-        test_ll, test_rmse = evaluate_MAP(
-            model,
-            svi_results,
-            dataset.X_test,
-            dataset.y_test,
-            rng_key,
-            y_scale=dataset.scl_Y.scale_,
-            y_loc=dataset.scl_Y.mean_,
-        )
+    train_ll, train_rmse = evaluate_MAP(
+        model,
+        svi_results,
+        dataset.X_train,
+        dataset.y_train,
+        rng_key,
+        y_scale=dataset.scl_Y.scale_,
+        y_loc=dataset.scl_Y.mean_,
+    )
+    val_ll, val_rmse = evaluate_MAP(
+        model,
+        svi_results,
+        dataset.X_val,
+        dataset.y_val,
+        rng_key,
+        y_scale=dataset.scl_Y.scale_,
+        y_loc=dataset.scl_Y.mean_,
+    )
+    test_ll, test_rmse = evaluate_MAP(
+        model,
+        svi_results,
+        dataset.X_test,
+        dataset.y_test,
+        rng_key,
+        y_scale=dataset.scl_Y.scale_,
+        y_loc=dataset.scl_Y.mean_,
+    )
 
-        map_results = {
-            "prior_variance": args.prior_variance,
-            "test_rmse": test_rmse,
-            "test_ll": test_ll,
-            "val_rmse": val_rmse,
-            "val_ll": val_ll,
-            "train_rmse": train_rmse,
-            "train_ll": train_ll,
-            "runtime": end_time - start_time,
-            "num_params_sampled": 0,
-            "dataset": args.dataset,
-            "seed": rand_seed,
-            "gap_split?": args.gap,
-            "name": "MAP",
-        }
+    map_results = {
+        "prior_variance": args.prior_variance,
+        "test_rmse": test_rmse,
+        "test_ll": test_ll,
+        "val_rmse": val_rmse,
+        "val_ll": val_ll,
+        "train_rmse": train_rmse,
+        "train_ll": train_ll,
+        "runtime": end_time - start_time,
+        "num_params_sampled": 0,
+        "dataset": args.dataset,
+        "seed": rand_seed,
+        "gap_split?": args.gap,
+        "name": "MAP",
+    }
 
-        print(map_results)
+    print(map_results)
 
-        ### Train Full HMC results
-        model = lambda X, y=None: one_d_bnn(
-            X, y, prior_variance=args.prior_variance, scale=args.likelihood_scale
-        )
-        # nuts_kernel = NUTS(model, max_tree_depth=15)
-        # mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
+    ### Train Full HMC results
+    model = lambda X, y=None: one_d_bnn(
+        X, y, prior_variance=args.prior_variance, scale=args.likelihood_scale
+    )
+    # nuts_kernel = NUTS(model, max_tree_depth=15)
+    # mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
 
-        nuts_kernel = NUTS(model, max_tree_depth=5)
-        mcmc = MCMC(nuts_kernel, num_warmup=1, num_samples=2, num_chains=1)
-        rng_key = random.PRNGKey(0)
+    nuts_kernel = NUTS(model, max_tree_depth=5)
+    mcmc = MCMC(nuts_kernel, num_warmup=1, num_samples=2, num_chains=1)
+    rng_key = random.PRNGKey(0)
 
-        start_time = time.time()
-        mcmc.run(rng_key, dataset.X_train, dataset.y_train)
-        end_time = time.time()
+    start_time = time.time()
+    mcmc.run(rng_key, dataset.X_train, dataset.y_train)
+    end_time = time.time()
 
-        train_ll, train_rmse = evaluate_samples(
-            one_d_bnn,
-            rng_key,
-            dataset.X_train,
-            dataset.y_train,
-            mcmc.get_samples(),
-            y_scale=dataset.scl_Y.scale_,
-            y_loc=dataset.scl_Y.mean_,
-        )
-        val_ll, val_rmse = evaluate_samples(
-            one_d_bnn,
-            rng_key,
-            dataset.X_val,
-            dataset.y_val,
-            mcmc.get_samples(),
-            y_scale=dataset.scl_Y.scale_,
-            y_loc=dataset.scl_Y.mean_,
-        )
-        test_ll, test_rmse = evaluate_samples(
-            one_d_bnn,
-            rng_key,
-            dataset.X_test,
-            dataset.y_test,
-            mcmc.get_samples(),
-            y_scale=dataset.scl_Y.scale_,
-            y_loc=dataset.scl_Y.mean_,
-        )
+    train_ll, train_rmse = evaluate_samples(
+        one_d_bnn,
+        rng_key,
+        dataset.X_train,
+        dataset.y_train,
+        mcmc.get_samples(),
+        y_scale=dataset.scl_Y.scale_,
+        y_loc=dataset.scl_Y.mean_,
+    )
+    val_ll, val_rmse = evaluate_samples(
+        one_d_bnn,
+        rng_key,
+        dataset.X_val,
+        dataset.y_val,
+        mcmc.get_samples(),
+        y_scale=dataset.scl_Y.scale_,
+        y_loc=dataset.scl_Y.mean_,
+    )
+    test_ll, test_rmse = evaluate_samples(
+        one_d_bnn,
+        rng_key,
+        dataset.X_test,
+        dataset.y_test,
+        mcmc.get_samples(),
+        y_scale=dataset.scl_Y.scale_,
+        y_loc=dataset.scl_Y.mean_,
+    )
 
-        full_network_results = {
-            "prior_variance": args.prior_variance,
-            "test_rmse": test_rmse,
-            "test_ll": test_ll,
-            "val_rmse": val_rmse,
-            "val_ll": val_ll,
-            "train_rmse": train_rmse,
-            "train_ll": train_ll,
-            "runtime": end_time - start_time,
-            "num_params_sampled": 2951,
-            "dataset": args.dataset,
-            "seed": rand_seed,
-            "gap_split?": args.gap,
-            "name": "full_network",
-            "scale": args.likelihood_scale,
-        }
+    full_network_results = {
+        "prior_variance": args.prior_variance,
+        "test_rmse": test_rmse,
+        "test_ll": test_ll,
+        "val_rmse": val_rmse,
+        "val_ll": val_ll,
+        "train_rmse": train_rmse,
+        "train_ll": train_ll,
+        "runtime": end_time - start_time,
+        "num_params_sampled": 2951,
+        "dataset": args.dataset,
+        "seed": rand_seed,
+        "gap_split?": args.gap,
+        "name": "full_network",
+        "scale": args.likelihood_scale,
+    }
 
-        print(full_network_results)
+    print(full_network_results)
 
-        percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
-        MAP_params = svi_results.params
+    percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
+    MAP_params = svi_results.params
 
-        all_results = {"map_results": map_results, "full_network_results": full_network_results}
+    all_results = {"map_results": map_results, "full_network_results": full_network_results}
 
-        pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{run}.pkl"), "wb"))
-        for percentile in percentiles:
-            print(f"Running for {percentile} of weights sampled scaled, by maximum absolute value")
+    pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "wb"))
+    for percentile in percentiles:
+        print(f"Running for {percentile} of weights sampled scaled, by maximum absolute value")
 
-            all_results[f"{percentile}"] = (
-                run_for_percentile(
-                    dataset,
-                    percentile,
-                    MAP_params,
-                    prior_variance_scaled=True,
-                    scale=args.likelihood_scale,
-                )
+        all_results[f"{percentile}"] = (
+            run_for_percentile(
+                dataset,
+                percentile,
+                MAP_params,
+                prior_variance_scaled=True,
+                scale=args.likelihood_scale,
             )
-            print(all_results[f"{percentile}"])
-            pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{run}.pkl"), "wb"))
+        )
+        print(all_results[f"{percentile}"])
+        pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "wb"))
 
     # Not scaled is redundant for us
     # for percentile in percentiles:
