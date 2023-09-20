@@ -125,7 +125,7 @@ class UCIDataset:
     @property
     def file_path(self):
         return os.path.join(
-            self.data_dir, "uci_datasets", self.dataset_name, self.filename
+            self.data_dir, "../uci_datasets", self.dataset_name, self.filename
         )
 
     def download(self):

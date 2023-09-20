@@ -290,7 +290,7 @@ def make_multiple_runs_swag(dataset_class, data_path, num_runs, device='cpu', ga
             device = 'cpu'
 
         percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
-        percentages = [i * 10 for i in range(1,11)]
+        # percentages = [i * 10 for i in range(1,11)]
 
         results = {
             'percentages': percentages,
