@@ -40,7 +40,7 @@ if __name__ == '__main__':
     nll_not_scaled_energy = [-e['test_ll'] for e in energy_results_not_scaled['all_results_not_scaled']]
     nll_not_scaled_yacht = [-y['test_ll'] for y in yacht_results_not_scaled['all_results_not_scaled']]
 
-    # plot_nll_results([], nll_scaled_energy, nll_scaled_yacht)
+    plot_nll_results(nll_scaled_boston, nll_scaled_energy, nll_scaled_yacht)
     plot_nll_results(nll_not_scaled_boston, nll_not_scaled_energy, nll_not_scaled_yacht)
     breakpoint()
 

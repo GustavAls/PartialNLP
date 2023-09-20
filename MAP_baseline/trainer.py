@@ -63,7 +63,7 @@ def train(network: nn.Module,
     if best_model is None:
         UserWarning("The model failed to improve, something went wrong")
     else:
-        torch.save(best_model.state_dict(), save_path + "\\map.pt")
+        torch.save(best_model.state_dict(), os.path.join(save_path, "map.pt"))
         print(f"Model was saved to location {save_path}, terminated with MSELoss {best_loss}")
 
     return best_model
