@@ -639,7 +639,6 @@ if __name__ == "__main__":
             print(all_results[f"{percentile}"])
             pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{run}.pkl"), "wb"))
 
-    result = pickle.load(open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{0}.pkl"), "rb"))
     print(result)
     # Not scaled is redundant for us
     # for percentile in percentiles:
