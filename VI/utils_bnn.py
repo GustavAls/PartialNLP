@@ -9,9 +9,9 @@ from torch.distributions.gamma import Gamma
 from torch.distributions.normal import Normal
 import os
 from partial_bnn_functional import *
-from PartialNLP.uci import UCIDataloader, UCIDataset, UCIBostonDataset, UCIEnergyDataset, UCIConcreteDataset, \
+from uci import UCIDataloader, UCIDataset, UCIBostonDataset, UCIEnergyDataset, UCIConcreteDataset, \
     UCIYachtDataset
-from PartialNLP.MAP_baseline.MapNN import MapNN
+from MAP_baseline.MapNN import MapNN
 
 
 def calculate_nll_vi(model, dataloader, sigma, y_scale, y_loc, num_mc_runs=100, device='cpu'):

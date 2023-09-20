@@ -1,29 +1,21 @@
 import sys, os, time, requests
-
 sys.path.append(os.getcwd())
-
 from functools import partial
-
 import numpy as np
 import pandas as pd
-
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-
 import numpyro
 import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS, Predictive, Trace_ELBO, autoguide, SVI
-
 from numpyro.infer.initialization import init_to_uniform
-
+import pickle
 import jax
 import jax.numpy as jnp
 import jax.nn
 from jax import random
-
 numpyro.set_platform("cpu")
 numpyro.set_host_device_count(8)
-
 import argparse
 
 
@@ -125,7 +117,7 @@ class UCIDataset:
     @property
     def file_path(self):
         return os.path.join(
-            self.data_dir, "uci_datasets", self.dataset_name, self.filename
+            self.data_dir, "../uci_datasets", self.dataset_name, self.filename
         )
 
     def download(self):
@@ -406,7 +398,7 @@ def run_for_percentile(
     MAP_params,
     prior_variance=0.8,
     prior_variance_scaled=True,
-    scale=1.0,
+    scale=1.0
 ):
     sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
     prior_variance_used = (
@@ -469,7 +461,7 @@ def run_for_percentile(
         "runtime": end_time - start_time,
         "num_params_sampled": np.array([t.sum() for t in sample_mask_tuple]).sum(),
         "dataset": args.dataset,
-        "seed": args.seed,
+        "seed": rand_seed,
         "gap_split?": args.gap,
         "prior_variance_scaled": True,
         "name": f"percent_sampled_{percentile:.2f}",
@@ -481,11 +473,11 @@ def run_for_percentile(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some integers.")
-    parser.add_argument("--seed", type=int)
     parser.add_argument("--dataset", type=str, default="yacht")
     parser.add_argument("--gap", default=False, action="store_true")
     parser.add_argument("--output_path", type=str, default=None)
     parser.add_argument("--data_path", type=str, default=None)
+    parser.add_argument("--num_runs", type=int, default=15)
     parser.add_argument("--prior_variance", type=float, default=0.1) #0.1 is good for yacht, but not for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=6.0) #6.0 is good for yacht, but not for other datasets
     args = parser.parse_args()
@@ -497,168 +489,168 @@ if __name__ == "__main__":
     elif args.dataset == "boston":
         dataset_class = UCIBostonDataset
 
-    dataset = dataset_class(
-        args.data_path,
-        seed=args.seed,
-        test_split_type="random",
-        test_size=0.1,
-        val_fraction_of_train=0.1,
-    )
 
-    ### Train MAP Solution
-    optimizer = numpyro.optim.Adam(0.01)
-    rng_key = random.PRNGKey(1)
-
-    model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
-
-    svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
-    start_time = time.time()
-    svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
-    end_time = time.time()
-
-    train_ll, train_rmse = evaluate_MAP(
-        model,
-        svi_results,
-        dataset.X_train,
-        dataset.y_train,
-        rng_key,
-        y_scale=dataset.scl_Y.scale_,
-        y_loc=dataset.scl_Y.mean_,
-    )
-    val_ll, val_rmse = evaluate_MAP(
-        model,
-        svi_results,
-        dataset.X_val,
-        dataset.y_val,
-        rng_key,
-        y_scale=dataset.scl_Y.scale_,
-        y_loc=dataset.scl_Y.mean_,
-    )
-    test_ll, test_rmse = evaluate_MAP(
-        model,
-        svi_results,
-        dataset.X_test,
-        dataset.y_test,
-        rng_key,
-        y_scale=dataset.scl_Y.scale_,
-        y_loc=dataset.scl_Y.mean_,
-    )
-
-    map_results = {
-        "prior_variance": args.prior_variance,
-        "test_rmse": test_rmse,
-        "test_ll": test_ll,
-        "val_rmse": val_rmse,
-        "val_ll": val_ll,
-        "train_rmse": train_rmse,
-        "train_ll": train_ll,
-        "runtime": end_time - start_time,
-        "num_params_sampled": 0,
-        "dataset": args.dataset,
-        "seed": args.seed,
-        "gap_split?": args.gap,
-        "name": "MAP",
-    }
-
-    print(map_results)
-
-    ### Train Full HMC results
-    model = lambda X, y=None: one_d_bnn(
-        X, y, prior_variance=args.prior_variance, scale=args.likelihood_scale
-    )
-    nuts_kernel = NUTS(model, max_tree_depth=15)
-    mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
-    rng_key = random.PRNGKey(0)
-
-    start_time = time.time()
-    mcmc.run(rng_key, dataset.X_train, dataset.y_train)
-    end_time = time.time()
-
-    train_ll, train_rmse = evaluate_samples(
-        one_d_bnn,
-        rng_key,
-        dataset.X_train,
-        dataset.y_train,
-        mcmc.get_samples(),
-        y_scale=dataset.scl_Y.scale_,
-        y_loc=dataset.scl_Y.mean_,
-    )
-    val_ll, val_rmse = evaluate_samples(
-        one_d_bnn,
-        rng_key,
-        dataset.X_val,
-        dataset.y_val,
-        mcmc.get_samples(),
-        y_scale=dataset.scl_Y.scale_,
-        y_loc=dataset.scl_Y.mean_,
-    )
-    test_ll, test_rmse = evaluate_samples(
-        one_d_bnn,
-        rng_key,
-        dataset.X_test,
-        dataset.y_test,
-        mcmc.get_samples(),
-        y_scale=dataset.scl_Y.scale_,
-        y_loc=dataset.scl_Y.mean_,
-    )
-
-    full_network_results = {
-        "prior_variance": args.prior_variance,
-        "test_rmse": test_rmse,
-        "test_ll": test_ll,
-        "val_rmse": val_rmse,
-        "val_ll": val_ll,
-        "train_rmse": train_rmse,
-        "train_ll": train_ll,
-        "runtime": end_time - start_time,
-        "num_params_sampled": 2951,
-        "dataset": args.dataset,
-        "seed": args.seed,
-        "gap_split?": args.gap,
-        "name": "full_network",
-        "scale": args.likelihood_scale,
-    }
-
-    print(full_network_results)
-
-    percentiles = list(np.logspace(-1, 1.996, 15))
-    MAP_params = svi_results.params
-
-    all_results = {
-        "all_results_not_scaled": [map_results, full_network_results],
-        "all_results_scaled": [map_results, full_network_results],
-    }
-
-    import pickle
-
-    for percentile in percentiles:
-        print(
-            f"Running for {percentile} of weights sampled scaled, by maximum absolute value"
+    for run in range(args.num_runs):
+        rand_seed = np.random.randint(0, 10000)
+        dataset = dataset_class(
+            args.data_path,
+            seed=rand_seed,
+            test_split_type="random",
+            test_size=0.1,
+            val_fraction_of_train=0.1,
         )
-        all_results["all_results_scaled"].append(
-            run_for_percentile(
-                dataset,
-                percentile,
-                MAP_params,
-                prior_variance_scaled=True,
-                scale=args.likelihood_scale,
+        ### Train MAP Solution
+        optimizer = numpyro.optim.Adam(0.01)
+        rng_key = random.PRNGKey(0)
+
+        model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
+
+        svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
+        start_time = time.time()
+        svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
+        end_time = time.time()
+
+        train_ll, train_rmse = evaluate_MAP(
+            model,
+            svi_results,
+            dataset.X_train,
+            dataset.y_train,
+            rng_key,
+            y_scale=dataset.scl_Y.scale_,
+            y_loc=dataset.scl_Y.mean_,
+        )
+        val_ll, val_rmse = evaluate_MAP(
+            model,
+            svi_results,
+            dataset.X_val,
+            dataset.y_val,
+            rng_key,
+            y_scale=dataset.scl_Y.scale_,
+            y_loc=dataset.scl_Y.mean_,
+        )
+        test_ll, test_rmse = evaluate_MAP(
+            model,
+            svi_results,
+            dataset.X_test,
+            dataset.y_test,
+            rng_key,
+            y_scale=dataset.scl_Y.scale_,
+            y_loc=dataset.scl_Y.mean_,
+        )
+
+        map_results = {
+            "prior_variance": args.prior_variance,
+            "test_rmse": test_rmse,
+            "test_ll": test_ll,
+            "val_rmse": val_rmse,
+            "val_ll": val_ll,
+            "train_rmse": train_rmse,
+            "train_ll": train_ll,
+            "runtime": end_time - start_time,
+            "num_params_sampled": 0,
+            "dataset": args.dataset,
+            "seed": rand_seed,
+            "gap_split?": args.gap,
+            "name": "MAP",
+        }
+
+        print(map_results)
+
+        ### Train Full HMC results
+        model = lambda X, y=None: one_d_bnn(
+            X, y, prior_variance=args.prior_variance, scale=args.likelihood_scale
+        )
+        # nuts_kernel = NUTS(model, max_tree_depth=15)
+        # mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
+
+        nuts_kernel = NUTS(model, max_tree_depth=5)
+        mcmc = MCMC(nuts_kernel, num_warmup=1, num_samples=2, num_chains=1)
+        rng_key = random.PRNGKey(0)
+
+        start_time = time.time()
+        mcmc.run(rng_key, dataset.X_train, dataset.y_train)
+        end_time = time.time()
+
+        train_ll, train_rmse = evaluate_samples(
+            one_d_bnn,
+            rng_key,
+            dataset.X_train,
+            dataset.y_train,
+            mcmc.get_samples(),
+            y_scale=dataset.scl_Y.scale_,
+            y_loc=dataset.scl_Y.mean_,
+        )
+        val_ll, val_rmse = evaluate_samples(
+            one_d_bnn,
+            rng_key,
+            dataset.X_val,
+            dataset.y_val,
+            mcmc.get_samples(),
+            y_scale=dataset.scl_Y.scale_,
+            y_loc=dataset.scl_Y.mean_,
+        )
+        test_ll, test_rmse = evaluate_samples(
+            one_d_bnn,
+            rng_key,
+            dataset.X_test,
+            dataset.y_test,
+            mcmc.get_samples(),
+            y_scale=dataset.scl_Y.scale_,
+            y_loc=dataset.scl_Y.mean_,
+        )
+
+        full_network_results = {
+            "prior_variance": args.prior_variance,
+            "test_rmse": test_rmse,
+            "test_ll": test_ll,
+            "val_rmse": val_rmse,
+            "val_ll": val_ll,
+            "train_rmse": train_rmse,
+            "train_ll": train_ll,
+            "runtime": end_time - start_time,
+            "num_params_sampled": 2951,
+            "dataset": args.dataset,
+            "seed": rand_seed,
+            "gap_split?": args.gap,
+            "name": "full_network",
+            "scale": args.likelihood_scale,
+        }
+
+        print(full_network_results)
+
+        percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
+        MAP_params = svi_results.params
+
+        all_results = {"map_results": map_results, "full_network_results": full_network_results}
+
+        pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{run}.pkl"), "wb"))
+        for percentile in percentiles:
+            print(f"Running for {percentile} of weights sampled scaled, by maximum absolute value")
+
+            all_results[f"{percentile}"] = (
+                run_for_percentile(
+                    dataset,
+                    percentile,
+                    MAP_params,
+                    prior_variance_scaled=True,
+                    scale=args.likelihood_scale,
+                )
             )
-        )
-        print(all_results["all_results_scaled"][-1])
+            print(all_results[f"{percentile}"])
+            pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{run}.pkl"), "wb"))
 
-        pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled.pkl"), "wb"))
-
-    for percentile in percentiles:
-        print(f"Running for {percentile} of weights sampled, by maximum absolute value")
-        all_results["all_results_not_scaled"].append(
-            run_for_percentile(
-                dataset,
-                percentile,
-                MAP_params,
-                prior_variance_scaled=False,
-                scale=args.likelihood_scale,
-            )
-        )
-        print(all_results["all_results_not_scaled"][-1])
-
-        pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_not_scaled.pkl"), "wb"))
+    # Not scaled is redundant for us
+    # for percentile in percentiles:
+    #     print(f"Running for {percentile} of weights sampled, by maximum absolute value")
+    #     all_results["all_results_not_scaled"].append(
+    #         run_for_percentile(
+    #             dataset,
+    #             percentile,
+    #             MAP_params,
+    #             prior_variance_scaled=False,
+    #             scale=args.likelihood_scale,
+    #         )
+    #     )
+    #     print(all_results["all_results_not_scaled"][-1])
+    #
+    #     pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_not_scaled.pkl"), "wb"))
