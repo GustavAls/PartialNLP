@@ -122,6 +122,7 @@ def make_multiple_runs_vi(dataset_class, data_path, num_runs, device='cpu', gap=
             results_dict['predictions_val'],
             results_dict['predictions_test']
         )
+
         for model, train_, val_, test_ in zip(*results_dict_ordered):
             sigma = calculate_sigma(*train_)
             sigma = 1/sigma

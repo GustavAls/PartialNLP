@@ -1,5 +1,4 @@
 import copy
-
 import numpy as np
 import torch
 import torch.nn as nn
@@ -18,7 +17,7 @@ import matplotlib.pyplot as plt
 from torch.distributions.gamma import Gamma
 import seaborn as sns
 import pandas as pd
-
+import ast
 def parameters_to_vector(parameters) -> torch.Tensor:
     r"""Convert parameters to one vector
 
@@ -96,7 +95,16 @@ def calculate_nll_fourth(labels, mc_matrix, sigma, y_scale, y_loc):
         results.append(dist.log_prob(torch.tile(labels[i]*y_scale+y_loc, (mc_matrix.shape[-1], ))).item()/mc_matrix.shape[-1])
     return np.mean(results)
 
+def calculate_nll_fifth(labels, mc_matrix, sigma, y_scale, y_loc):
 
+    results = []
+    mc_matrix = mc_matrix.detach()
+    for i in range(mc_matrix.shape[0]):
+        variance = mc_matrix[i].var()
+        posterior_sigma = np.sqrt(variance + sigma)
+        dist = Normal(mc_matrix[i].mean()*y_scale + y_loc, posterior_sigma*y_scale)
+        results.append(dist.log_prob(labels[i]*y_scale + y_loc))
+    return np.mean(results)
 
 def get_swag_residuals(model, dataloader, mask,swag_results, train_args):
     theta_swa = swag_results["theta_swa"]
@@ -207,6 +215,7 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
     )
 
     learning_rate_sweep = train_args['learning_rate_sweep']
+    bayes_var = train_args['bayes_var']
     results_dict = {
         'nll_test': [],
         'mse_test': [],
@@ -215,8 +224,13 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
     }
 
     residuals = get_residuals(model_, dataloader)
-    precision = get_tau_by_conjugacy(residuals, 3, 5)
-    sigma = np.sqrt(1 / precision)
+    if bayes_var:
+        precision = get_tau_by_conjugacy(residuals, 3, 5)
+        sigma = np.sqrt(1 / precision)
+    else:
+        residuals = residuals.detach()
+        sigma = residuals.std()
+
     y_scale = train_args['y_scale']
     y_loc = train_args['y_loc']
     nll, mse =  evaluate_map(model_, dataloader_val, sigma,
@@ -244,8 +258,12 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
                 model, dataloader, lr, n_epochs =train_args['swag_epochs'], criterion=nn.MSELoss, mask=mask
             )
             residuals = get_swag_residuals(model, dataloader, mask, swag_results, train_args)
-            precision = get_tau_by_conjugacy(residuals, 3, 5)
-            sigma = np.sqrt(1 / precision)
+            if bayes_var:
+                precision = get_tau_by_conjugacy(residuals, 3, 5)
+                sigma = np.sqrt(1 / precision)
+            else:
+                sigma = residuals.detach().std()
+
             sigmas.append(sigma)
             nll, mse = evaluate_swag(model, dataloader_val, mask, swag_results, train_args, sigma = sigma)
             nlls.append(nll)
@@ -385,9 +403,10 @@ if __name__ == '__main__':
     parser.add_argument("--num_epochs", type=int, default=20000)
     parser.add_argument("--dataset", type=str, default="boston")
     parser.add_argument('--data_path', type=str, default=os.getcwd())
-    parser.add_argument('--swag_epochs', type = str, default=50)
+    parser.add_argument('--swag_epochs', type = int, default=50)
     parser.add_argument("--gap", type=bool, default=False)
     parser.add_argument('--num_runs', type=int, default=15)
+    parser.add_argument('--bayes_var', type = ast.literal_eval, default=True)
 
     args = parser.parse_args()
 
@@ -402,13 +421,15 @@ if __name__ == '__main__':
     else:
         dataset_class = UCIYachtDataset
 
+
     train_args = {
         'num_mc_samples': 100,
         'device': args.device,
         'epochs': args.num_epochs,
         'save_path': args.output_path,
         'learning_rate_sweep': np.logspace(-5, -1, 4, endpoint=True),
-        'swag_epochs': args.swag_epochs
+        'swag_epochs': args.swag_epochs,
+        'bayes_var': args.bayes_var
     }
 
     results = []

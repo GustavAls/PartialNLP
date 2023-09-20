@@ -14,7 +14,7 @@ from laplace.utils import LargestMagnitudeSubnetMask
 from uci import UCIDataloader, UCIDataset, UCIBostonDataset, UCIEnergyDataset, UCIYachtDataset
 from torch.nn import MSELoss
 from torch.distributions import Gamma
-from laplace.curvature import AsdlGGN
+
 def count_parameters(model):
     """Count the number of parameters in a model.
         Args:
@@ -48,10 +48,10 @@ def calculate_nll(preds, labels, var, y_scale, y_loc):
             nll: (float) negative log likelihood
     """
     results = []
-    scales = torch.sqrt(var)
+    scales = var
     for pred, scale, label in zip(preds, scales, labels):
         dist = Normal(pred*y_scale + y_loc, scale*y_scale)
-        results.append(dist.log_prob(label))
+        results.append(dist.log_prob(label*y_scale + y_loc))
     nll = -1 * np.mean(results)
     return nll
 
@@ -67,7 +67,7 @@ def calculate_precision_from_prior(residuals, alpha = 3, beta = 5):
     residuals = residuals.flatten()
     mean_r = torch.mean(residuals)
     n = len(residuals)
-    dist = Gamma(alpha + n/2, beta + 1/2 * torch.sum((residuals - mean_r)))
+    dist = Gamma(alpha + n/2, beta + 1/2 * torch.sum((residuals - 0)**2))
     posterior_tau = torch.mean(dist.sample((1000,)))
     return posterior_tau
 
@@ -77,7 +77,7 @@ def calculate_variance(model, batch, labels, alpha = 3, beta = 5):
     residuals = preds.flatten() - labels.flatten()
 
     precision = calculate_precision_from_prior(residuals, alpha, beta)
-    variance = 1/precision
+    variance = 1/precision.sqrt()
     return variance
 
 def predict(val_data, model):
@@ -104,6 +104,11 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
     test_nll = []
     val_mse = []
     test_mse = []
+    batch, labels = next(iter(train_dataloader))
+
+
+    # sigma_noise = (mle_model(batch) - labels).detach().std()
+
     for p in percentages:
         ml_model = copy.deepcopy(mle_model)
         subnetwork_mask = LargestMagnitudeSubnetMask(ml_model, n_params_subnet=int((p / 100) * num_params))
@@ -115,30 +120,42 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
                      hessian_structure='full',
                      subnetwork_indices=subnetwork_indices)
         la.fit(train_dataloader)
-
+        la.optimize_prior_precision(method = 'marglik', val_loader = UCIDataloader(dataset.X_val, dataset.y_val))
         y_scale = torch.from_numpy(dataset.scl_Y.scale_)
         y_loc = torch.from_numpy(dataset.scl_Y.mean_)
-        batch, labels = next(iter(train_dataloader))
 
-        sigma_noise = calculate_variance(la, batch, labels, alpha = 3, beta = 1)
+        sigma_noise = calculate_variance(la, batch, labels, alpha=3, beta=1)
+        # sigma_noise = la(batch)[1].mean().sqrt()
+
         val_targets = torch.from_numpy(dataset.y_val).to(torch.float32)
         val_preds_mu, val_preds_var = la(torch.from_numpy(dataset.X_val).to(torch.float32))
         val_preds_sigma = val_preds_var.squeeze().sqrt()
-        predictive_std_val = torch.sqrt(val_preds_sigma**2 + sigma_noise)
+        predictive_var_val = torch.sqrt(val_preds_sigma**2 + sigma_noise**2)
 
         test_targets = torch.from_numpy(dataset.y_test).to(torch.float32)
         test_preds_mu, test_preds_var = la(torch.from_numpy(dataset.X_test).to(torch.float32))
         test_preds_sigma = test_preds_var.squeeze().sqrt()
-        predictive_std_test = torch.sqrt(test_preds_sigma ** 2 + sigma_noise)
+        predictive_var_test = torch.sqrt(test_preds_sigma**2 + sigma_noise**2)
+        # predictive_var_test = torch.sqrt(test_preds_sigma)
         val_targets = val_targets.flatten()
         test_targets = test_targets.flatten()
 
+        if p == percentages[0]:
+            val_mse.append(calculate_mse(val_preds_mu.flatten(), val_targets))
+            val_nll.append(calculate_nll(val_preds_mu.flatten(), val_targets,
+                                         (val_targets.shape[0], ), y_scale, y_loc))
+            test_mse.append(calculate_mse(test_preds_mu.flatten(), test_targets))
+            test_nll.append(calculate_nll(test_preds_mu.flatten(),
+                                          test_targets,
+                                          torch.tile(sigma_noise, (test_targets.shape[0], )), y_scale, y_loc))
+
         val_mse.append(calculate_mse(val_preds_mu.flatten(), val_targets))
-        val_nll.append(calculate_nll(val_preds_mu.flatten(), val_targets, predictive_std_val, y_scale, y_loc))
+        val_nll.append(calculate_nll(val_preds_mu.flatten(), val_targets, predictive_var_val, y_scale, y_loc))
         test_mse.append(calculate_mse(test_preds_mu.flatten(), test_targets))
-        test_nll.append(calculate_nll(test_preds_mu.flatten(), test_targets, predictive_std_test, y_scale, y_loc))
+        test_nll.append(calculate_nll(test_preds_mu.flatten(), test_targets, predictive_var_test, y_scale, y_loc))
         print("Percentile: ", p, "Val MSE: ", val_mse[-1], "Test MSE: ", test_mse[-1])
         print("Percentile: ", p, "Val NLL: ", val_nll[-1], "Test NLL: ", test_nll[-1])
+        breakpoint()
     return val_nll, test_nll, val_mse, test_mse
 
 
@@ -175,7 +192,7 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
         train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train)
         val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
 
-        mle_model = trainer.train(network=mle_model, dataloader_train=train_dataloader, dataloader_val=val_dataloader, **train_args)
+        mle_model = train(network=mle_model, dataloader_train=train_dataloader, dataloader_val=val_dataloader, **train_args)
         val_nll, test_nll, val_mse, test_mse = run_percentiles(mle_model, train_dataloader, dataset, percentages)
 
         save_name = os.path.join(output_path, f'results_{run}_{dataset_class.dataset_name}.pkl')
