@@ -639,7 +639,6 @@ if __name__ == "__main__":
             print(all_results[f"{percentile}"])
             pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{run}.pkl"), "wb"))
 
-    print(result)
     # Not scaled is redundant for us
     # for percentile in percentiles:
     #     print(f"Running for {percentile} of weights sampled, by maximum absolute value")
