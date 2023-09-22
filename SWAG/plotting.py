@@ -69,11 +69,11 @@ def read_data_swag(path):
     return percentages, test_nll, test_mse
 
 if __name__ == '__main__':
-    path = r'C:\Users\45292\Documents\Master\Swag Simple\UCI\Results Full\UCI_SWAG\yacht_models'
+    path = r'C:\Users\45292\Documents\Master\Swag Simple\UCI\No Bayes\UCI_SWAG_nobayes\energy_models'
     percentages, test_nll, test_mse = read_data_swag(path)
     plot_series(percentages, test_nll)
     plot_stuff(percentages, test_nll)
-
-    plot_series(percentages, test_mse)
-    plot_stuff(percentages, test_mse)
+    #
+    # plot_series(percentages, test_mse)
+    # plot_stuff(percentages, test_mse)
     breakpoint()

@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import pickle
 import os
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from swag_temp import run_swag_partial
 from VI.partial_bnn_functional import create_mask, train, create_non_parameter_mask
 from MAP_baseline.MapNN import MapNN
@@ -393,6 +393,47 @@ def plot_series(percentages, res):
     ax.legend()
     plt.show()
 
+class MAPLoss(nn.Module):
+    def __init__(self, prior_mu, prior_sigma):
+        super(MAPLoss, self).__init__()
+        self.prior_mu = prior_mu
+        self.prior_sigma = prior_sigma
+        self.likelihood = nn.MSELoss()
+        self.dist = Normal(self.prior_mu, self.prior_sigma)
+    def forward(self, pred, target, w):
+        out = self.likelihood(pred, target) - self.dist.log_prob(w).mean()
+        return out
+
+class DataForFun(Dataset):
+    def __init__(self):
+
+        alpha = np.random.normal(0,1, (5, 1))
+        beta = np.random.normal(10, 1, (1,))
+        self.X = np.random.uniform(0, 10, size = (100, 5))
+        self.y = self.X@alpha + beta
+
+    def __len__(self):
+        return len(self.X)
+    def __getitem__(self, item):
+        inp = torch.from_numpy(self.X[item]).float()
+        label = torch.from_numpy(self.y[item]).float()
+        return inp, label
+
+class TestModelMulti(nn.Module):
+    def __init__(self):
+        super(TestModelMulti, self).__init__()
+
+        self.module_one = nn.Linear(5, 10)
+        self.module_two = nn.Linear(10,10)
+        self.activation = nn.ReLU()
+        self.last_layer = nn.Linear(10, 2)
+    def forward(self, x):
+        out = self.module_one(x)
+        out = self.activation(out)
+        out = self.module_two(out)
+        out = self.activation(out)
+        out = self.last_layer(out)
+        return out
 
 if __name__ == '__main__':
 
@@ -407,7 +448,8 @@ if __name__ == '__main__':
     parser.add_argument("--gap", type=bool, default=False)
     parser.add_argument('--num_runs', type=int, default=15)
     parser.add_argument('--bayes_var', type = ast.literal_eval, default=True)
-
+    parser.add_argument('--prior_mu', type=int, default=0)
+    parser.add_argument('--prior_sigma', type=int, default=1)
     args = parser.parse_args()
 
     if args.dataset == "yacht":
@@ -429,7 +471,8 @@ if __name__ == '__main__':
         'save_path': args.output_path,
         'learning_rate_sweep': np.logspace(-5, -1, 4, endpoint=True),
         'swag_epochs': args.swag_epochs,
-        'bayes_var': args.bayes_var
+        'bayes_var': args.bayes_var,
+        'loss': MAPLoss(args.prior_mu, args.prior_sigma)
     }
 
     results = []
