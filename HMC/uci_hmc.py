@@ -559,11 +559,9 @@ if __name__ == "__main__":
     model = lambda X, y=None: one_d_bnn(
         X, y, prior_variance=args.prior_variance, scale=args.likelihood_scale
     )
-    # nuts_kernel = NUTS(model, max_tree_depth=15)
-    # mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
+    nuts_kernel = NUTS(model, max_tree_depth=15)
+    mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
 
-    nuts_kernel = NUTS(model, max_tree_depth=5)
-    mcmc = MCMC(nuts_kernel, num_warmup=1, num_samples=2, num_chains=1)
     rng_key = random.PRNGKey(0)
 
     start_time = time.time()
@@ -617,16 +615,22 @@ if __name__ == "__main__":
 
     print(full_network_results)
 
-    percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
+    # Halfway done training, so we have to do some creative bookkeeping
+    if args.dataset == "energy":
+        percentiles = [8, 14, 23, 37, 61, 100]
+    else:
+        percentiles = []
+
     MAP_params = svi_results.params
-
-    all_results = {"map_results": map_results, "full_network_results": full_network_results}
-
-    pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "wb"))
+    # all_results = {"map_results": map_results, "full_network_results": full_network_results}
+    updated_results = pickle.load(open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "rb"))
+    # All dataset full networks were computed with test HMC chain, so we fix this
+    updated_results["full_network_results"] = full_network_results
+    pickle.dump(updated_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "wb"))
     for percentile in percentiles:
         print(f"Running for {percentile} of weights sampled scaled, by maximum absolute value")
 
-        all_results[f"{percentile}"] = (
+        updated_results[f"{percentile}"] = (
             run_for_percentile(
                 dataset,
                 percentile,
@@ -635,8 +639,8 @@ if __name__ == "__main__":
                 scale=args.likelihood_scale,
             )
         )
-        print(all_results[f"{percentile}"])
-        pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "wb"))
+        print(updated_results[f"{percentile}"])
+        pickle.dump(updated_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "wb"))
 
     # Not scaled is redundant for us
     # for percentile in percentiles:
