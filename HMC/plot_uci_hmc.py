@@ -24,15 +24,15 @@ def plot_nll_results(nll_scaled_boston = [], nll_scaled_energy = [], nll_scaled_
     plt.show()
 
 if __name__ == '__main__':
-    # boston_results = pickle.load(open(r'C:\Users\Gustav\Desktop\MasterThesis\UCI_HMC\boston_models\boston_scaled.pkl', 'rb'))
-    energy_results = pickle.load(open(r'C:\Users\Gustav\Desktop\MasterThesis\energy_scaled_run_1.pkl', 'rb'))
-    # yacht_results = pickle.load(open(r'C:\Users\Gustav\Desktop\MasterThesis\UCI_HMC\yacht_models\yacht_scaled.pkl', 'rb'))
+    boston_results = pickle.load(open(r'C:\Users\Gustav\Desktop\MasterThesis\UCI_HMC\boston_models\boston_scaled_run_0.pkl', 'rb'))
+    # energy_results = pickle.load(open(r'C:\Users\Gustav\Desktop\MasterThesis\UCI_HMC\energy_models\energy_scaled.pkl', 'rb'))
+    yacht_results = pickle.load(open(r'C:\Users\Gustav\Desktop\MasterThesis\UCI_HMC\yacht_models\yacht_scaled_run_0.pkl', 'rb'))
 
 
     # nll_scaled_boston = [-b['test_ll'] for b in boston_results['all_results_scaled']]
-    nll_scaled_energy = [-e['test_ll'] for e in energy_results['all_results_scaled']]
+    # nll_scaled_energy = [-e['test_ll'] for e in energy_results['all_results_scaled']]
     # nll_scaled_yacht = [-y['test_ll'] for y in yacht_results['all_results_scaled']]
 
-    plot_nll_results([], nll_scaled_energy, [])
+    # plot_nll_results([], nll_scaled_energy, [])
     breakpoint()
 

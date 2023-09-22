@@ -619,7 +619,7 @@ if __name__ == "__main__":
     if args.dataset == "energy":
         percentiles = [8, 14, 23, 37, 61, 100]
     else:
-        percentiles = []
+        percentiles = [61, 100]
 
     MAP_params = svi_results.params
     # all_results = {"map_results": map_results, "full_network_results": full_network_results}
