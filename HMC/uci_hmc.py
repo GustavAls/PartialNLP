@@ -556,89 +556,90 @@ if __name__ == "__main__":
     print(map_results)
 
     ### Train Full HMC results
-    model = lambda X, y=None: one_d_bnn(
-        X, y, prior_variance=args.prior_variance, scale=args.likelihood_scale
-    )
-    nuts_kernel = NUTS(model, max_tree_depth=15)
-    mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
-
-    rng_key = random.PRNGKey(0)
-
-    start_time = time.time()
-    mcmc.run(rng_key, dataset.X_train, dataset.y_train)
-    end_time = time.time()
-
-    train_ll, train_rmse = evaluate_samples(
-        one_d_bnn,
-        rng_key,
-        dataset.X_train,
-        dataset.y_train,
-        mcmc.get_samples(),
-        y_scale=dataset.scl_Y.scale_,
-        y_loc=dataset.scl_Y.mean_,
-    )
-    val_ll, val_rmse = evaluate_samples(
-        one_d_bnn,
-        rng_key,
-        dataset.X_val,
-        dataset.y_val,
-        mcmc.get_samples(),
-        y_scale=dataset.scl_Y.scale_,
-        y_loc=dataset.scl_Y.mean_,
-    )
-    test_ll, test_rmse = evaluate_samples(
-        one_d_bnn,
-        rng_key,
-        dataset.X_test,
-        dataset.y_test,
-        mcmc.get_samples(),
-        y_scale=dataset.scl_Y.scale_,
-        y_loc=dataset.scl_Y.mean_,
-    )
-
-    full_network_results = {
-        "prior_variance": args.prior_variance,
-        "test_rmse": test_rmse,
-        "test_ll": test_ll,
-        "val_rmse": val_rmse,
-        "val_ll": val_ll,
-        "train_rmse": train_rmse,
-        "train_ll": train_ll,
-        "runtime": end_time - start_time,
-        "num_params_sampled": 2951,
-        "dataset": args.dataset,
-        "seed": rand_seed,
-        "gap_split?": args.gap,
-        "name": "full_network",
-        "scale": args.likelihood_scale,
-    }
-
-    print(full_network_results)
+    #     model = lambda X, y=None: one_d_bnn(
+    #     X, y, prior_variance=args.prior_variance, scale=args.likelihood_scale
+    # )
+    # nuts_kernel = NUTS(model, max_tree_depth=15)
+    # mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
+    #
+    # rng_key = random.PRNGKey(0)
+    #
+    # start_time = time.time()
+    # mcmc.run(rng_key, dataset.X_train, dataset.y_train)
+    # end_time = time.time()
+    #
+    # train_ll, train_rmse = evaluate_samples(
+    #     one_d_bnn,
+    #     rng_key,
+    #     dataset.X_train,
+    #     dataset.y_train,
+    #     mcmc.get_samples(),
+    #     y_scale=dataset.scl_Y.scale_,
+    #     y_loc=dataset.scl_Y.mean_,
+    # )
+    # val_ll, val_rmse = evaluate_samples(
+    #     one_d_bnn,
+    #     rng_key,
+    #     dataset.X_val,
+    #     dataset.y_val,
+    #     mcmc.get_samples(),
+    #     y_scale=dataset.scl_Y.scale_,
+    #     y_loc=dataset.scl_Y.mean_,
+    # )
+    # test_ll, test_rmse = evaluate_samples(
+    #     one_d_bnn,
+    #     rng_key,
+    #     dataset.X_test,
+    #     dataset.y_test,
+    #     mcmc.get_samples(),
+    #     y_scale=dataset.scl_Y.scale_,
+    #     y_loc=dataset.scl_Y.mean_,
+    # )
+    #
+    # full_network_results = {
+    #     "prior_variance": args.prior_variance,
+    #     "test_rmse": test_rmse,
+    #     "test_ll": test_ll,
+    #     "val_rmse": val_rmse,
+    #     "val_ll": val_ll,
+    #     "train_rmse": train_rmse,
+    #     "train_ll": train_ll,
+    #     "runtime": end_time - start_time,
+    #     "num_params_sampled": 2951,
+    #     "dataset": args.dataset,
+    #     "seed": rand_seed,
+    #     "gap_split?": args.gap,
+    #     "name": "full_network",
+    #     "scale": args.likelihood_scale,
+    # }
+    #
+    # print(full_network_results)
 
     # Halfway done training, so we have to do some creative bookkeeping
-    if args.dataset == "energy":
-        percentiles = [23, 37, 61, 100]
+    percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
 
     MAP_params = svi_results.params
     # all_results = {"map_results": map_results, "full_network_results": full_network_results}
     updated_results = pickle.load(open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "rb"))
+
     # All dataset full networks were computed with test HMC chain, so we fix this
     # updated_results["full_network_results"] = full_network_results
     pickle.dump(updated_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "wb"))
     for percentile in percentiles:
-        print(f"Running for {percentile} of weights sampled scaled, by maximum absolute value")
+        if str(percentile) not in updated_results.keys():
+            print(f"Running for {percentile} of weights sampled scaled, by maximum absolute value")
 
-        updated_results[f"{percentile}"] = (
-            run_for_percentile(
-                dataset,
-                percentile,
-                MAP_params,
-                prior_variance_scaled=True,
-                scale=args.likelihood_scale,
+            updated_results[f"{percentile}"] = (
+                run_for_percentile(
+                    dataset,
+                    percentile,
+                    MAP_params,
+                    prior_variance_scaled=True,
+                    scale=args.likelihood_scale,
+                )
             )
-        )
-        print(updated_results[f"{percentile}"])
-        pickle.dump(updated_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "wb"))
+            print(updated_results[f"{percentile}"])
+            pickle.dump(updated_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "wb"))
 
     # Not scaled is redundant for us
     # for percentile in percentiles:
