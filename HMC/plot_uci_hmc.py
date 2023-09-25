@@ -15,7 +15,7 @@ from sklearn.model_selection import train_test_split
 path = r"C:\Users\Gustav\Desktop\MasterThesis\UCI_HMC"
 datasets = ["yacht", "energy", "boston"]
 
-all_results_df_list_scaled = {}
+all_results_df_list_scaled = []
 
 for root, dirs, files in os.walk(path):
     for f in files:
@@ -23,30 +23,30 @@ for root, dirs, files in os.walk(path):
             if dataset in f:
                 d = pickle.load(open(os.path.join(root, f), "rb"))
                 file_name = f.split(".")[0]
-                all_results_df_list_scaled[f"{file_name}"] = d
+                all_results_df_list_scaled.extend(d)
+#
+# for run in all_results_df_list_scaled:
+#     for percentile in all_results_df_list_scaled[run]:
+#         all_results_df_list_scaled[run][percentile]["test_nll"] = -all_results_df_list_scaled[run][percentile]["test_ll"]
 
-all_results_df_scaled = pd.DataFrame(all_results_df_list_scaled)
-main_df = all_results_df_scaled
+main_df = pd.DataFrame(all_results_df_list_scaled)
 main_df["test_nll"] = - main_df["test_ll"]
 
 plt.rcParams["font.family"] = "Times New Roman"
-
 custom_colors = ['tab:gray']
 custom_colors.extend([sns.color_palette('colorblind')[1]] * 8)
 custom_colors.append(sns.color_palette('colorblind')[0])
-
 plt.figure(figsize=(6.75, 1.75), dpi=450)
 
 
 def create_subplot_df(main_df, gap=False, dataset="yacht"):
-    subplot_df = main_df[
-        (main_df["gap_split?"] == gap) &
-        (main_df["dataset"] == dataset)
-        ]
+    subplot_df = main_df[(main_df["dataset"] == dataset)]
 
-    num_params = np.sort(subplot_df["num_params_sampled"].unique())
 
-    num_param_ticks = ["0\nMAP", "1", "2",
+    subplot_df = main_df
+    num_params = np.sort(subplot_df["2"]["num_params_sampled"].unique())
+
+    num_param_ticks = ["0\nMAP", "0.1", "0.2", "0.3", "0.4", "0.7", "1", "2",
                        "3", "5", "8", "14", "23", "37", "61", "99", "100\nFull\nnetwork"]
 
     num_params, labels = list(zip(*[(num_params[i], num_param_ticks[i]) for i in [0, 6, 7, 9, 10, 11, 12, 13, 14, 16]]))
