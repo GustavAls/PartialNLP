@@ -617,15 +617,13 @@ if __name__ == "__main__":
 
     # Halfway done training, so we have to do some creative bookkeeping
     if args.dataset == "energy":
-        percentiles = [8, 14, 23, 37, 61, 100]
-    else:
-        percentiles = [61, 100]
+        percentiles = [23, 37, 61, 100]
 
     MAP_params = svi_results.params
     # all_results = {"map_results": map_results, "full_network_results": full_network_results}
     updated_results = pickle.load(open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "rb"))
     # All dataset full networks were computed with test HMC chain, so we fix this
-    updated_results["full_network_results"] = full_network_results
+    # updated_results["full_network_results"] = full_network_results
     pickle.dump(updated_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "wb"))
     for percentile in percentiles:
         print(f"Running for {percentile} of weights sampled scaled, by maximum absolute value")

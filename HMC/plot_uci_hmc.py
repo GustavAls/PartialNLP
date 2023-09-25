@@ -25,7 +25,7 @@ def plot_nll_results(nll_scaled_boston = [], nll_scaled_energy = [], nll_scaled_
 
 if __name__ == '__main__':
     boston_results = pickle.load(open(r'C:\Users\Gustav\Desktop\MasterThesis\UCI_HMC\boston_models\boston_scaled_run_0.pkl', 'rb'))
-    # energy_results = pickle.load(open(r'C:\Users\Gustav\Desktop\MasterThesis\UCI_HMC\energy_models\energy_scaled.pkl', 'rb'))
+    energy_results = pickle.load(open(r'C:\Users\Gustav\Desktop\MasterThesis\UCI_HMC\energy_models\energy_scaled_run_1.pkl', 'rb'))
     yacht_results = pickle.load(open(r'C:\Users\Gustav\Desktop\MasterThesis\UCI_HMC\yacht_models\yacht_scaled_run_0.pkl', 'rb'))
 
 
