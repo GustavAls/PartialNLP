@@ -479,6 +479,7 @@ if __name__ == "__main__":
     parser.add_argument("--output_path", type=str, default=None)
     parser.add_argument("--data_path", type=str, default=None)
     parser.add_argument("--run", type=int, default=15)
+    parser.add_argument("--percentile_pr_cpu", type=ast.literal_eval, default=False)
     parser.add_argument("--scale_prior",  type=ast.literal_eval, default=False)
     parser.add_argument("--update_run", type=ast.literal_eval, default=False)
     parser.add_argument("--prior_variance", type=float, default=0.1) #0.1 is good for yacht, but not for other datasets
@@ -619,21 +620,23 @@ if __name__ == "__main__":
     print(full_network_results)
 
     # Halfway done training, so we have to do some creative bookkeeping
+
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
+    percentiles = percentiles[args.run % len(percentiles)] if args.percentil_pr_cpu else percentiles
+    run = args.run // len(percentiles) if args.percentile_pr_cpu else args.run
 
     MAP_params = svi_results.params
     if args.update_run:
-        all_results = pickle.load(open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "rb"))
+        all_results = pickle.load(open(os.path.join(args.output_path, f"{args.dataset}_not_scaled_run_{run}.pkl"), "rb"))
     else:
         all_results = {"map_results": map_results, "full_network_results": full_network_results}
 
     # All dataset full networks were computed with test HMC chain, so we fix this
     # updated_results["full_network_results"] = full_network_results
-    pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "wb"))
+    pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_not_scaled_run_{run}.pkl"), "wb"))
     for percentile in percentiles:
         if str(percentile) not in all_results.keys():
             print(f"Running for {percentile} of weights sampled scaled, by maximum absolute value")
-
             all_results[f"{percentile}"] = (
                 run_for_percentile(
                     dataset,
@@ -644,7 +647,7 @@ if __name__ == "__main__":
                 )
             )
             print(all_results[f"{percentile}"])
-            pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "wb"))
+            pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_not_scaled_run_{run}.pkl"), "wb"))
 
     # Not scaled is redundant for us
     # for percentile in percentiles:
