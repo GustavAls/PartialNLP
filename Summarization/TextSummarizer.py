@@ -1,3 +1,5 @@
+import os
+
 import evaluate
 import numpy as np
 import torch
@@ -10,6 +12,7 @@ from transformers import (AutoModelForSeq2SeqLM,
                           AutoTokenizer)
 
 # Based on: https://huggingface.co/docs/transformers/tasks/summarization
+
 
 class TextSummarizer:
     def __init__(self, checkpoint: str = "t5-small", prefix: str = "summarize: "):
@@ -53,8 +56,8 @@ class TextSummarizer:
             output_dir=output_path,
             evaluation_strategy="epoch",
             learning_rate=2e-5,
-            per_device_train_batch_size=8,
-            per_device_eval_batch_size=8,
+            per_device_train_batch_size=device_batch_size,
+            per_device_eval_batch_size=device_batch_size,
             weight_decay=0.01,
             save_total_limit=3,
             num_train_epochs=num_epochs,
@@ -85,10 +88,10 @@ if __name__ == "__main__":
         description="Run training and or evaluation of Text summarizer Classifier"
     )
 
-    parser.add_argument("--output_path", type=str, default=None)
+    parser.add_argument("--output_path", type=str, default=os.getcwd())
     parser.add_argument("--num_epochs", type=int, default=50)
     parser.add_argument("--dataset_name", type=str, default="billsum")
-    parser.add_argument("--device_batch_size", type=int, default=12)
+    parser.add_argument("--device_batch_size", type=int, default=2)
     parser.add_argument("--train", type=bool, default=True)
 
     args = parser.parse_args()

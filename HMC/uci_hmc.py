@@ -1,3 +1,4 @@
+import ast
 import sys, os, time, requests
 sys.path.append(os.getcwd())
 from functools import partial
@@ -478,6 +479,8 @@ if __name__ == "__main__":
     parser.add_argument("--output_path", type=str, default=None)
     parser.add_argument("--data_path", type=str, default=None)
     parser.add_argument("--run", type=int, default=15)
+    parser.add_argument("--scale_prior",  type=ast.literal_eval, default=False)
+    parser.add_argument("--update_run", type=ast.literal_eval, default=False)
     parser.add_argument("--prior_variance", type=float, default=0.1) #0.1 is good for yacht, but not for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=6.0) #6.0 is good for yacht, but not for other datasets
     args = parser.parse_args()
@@ -555,15 +558,13 @@ if __name__ == "__main__":
 
     print(map_results)
 
-    ### Train Full HMC results
+    ## Train Full HMC results
     model = lambda X, y=None: one_d_bnn(
-        X, y, prior_variance=args.prior_variance, scale=args.likelihood_scale
+    X, y, prior_variance=args.prior_variance, scale=args.likelihood_scale
     )
-    # nuts_kernel = NUTS(model, max_tree_depth=15)
-    # mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
+    nuts_kernel = NUTS(model, max_tree_depth=15)
+    mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
 
-    nuts_kernel = NUTS(model, max_tree_depth=5)
-    mcmc = MCMC(nuts_kernel, num_warmup=1, num_samples=2, num_chains=1)
     rng_key = random.PRNGKey(0)
 
     start_time = time.time()
@@ -617,26 +618,33 @@ if __name__ == "__main__":
 
     print(full_network_results)
 
+    # Halfway done training, so we have to do some creative bookkeeping
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
+
     MAP_params = svi_results.params
+    if args.update_run:
+        all_results = pickle.load(open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "rb"))
+    else:
+        all_results = {"map_results": map_results, "full_network_results": full_network_results}
 
-    all_results = {"map_results": map_results, "full_network_results": full_network_results}
-
+    # All dataset full networks were computed with test HMC chain, so we fix this
+    # updated_results["full_network_results"] = full_network_results
     pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "wb"))
     for percentile in percentiles:
-        print(f"Running for {percentile} of weights sampled scaled, by maximum absolute value")
+        if str(percentile) not in all_results.keys():
+            print(f"Running for {percentile} of weights sampled scaled, by maximum absolute value")
 
-        all_results[f"{percentile}"] = (
-            run_for_percentile(
-                dataset,
-                percentile,
-                MAP_params,
-                prior_variance_scaled=True,
-                scale=args.likelihood_scale,
+            all_results[f"{percentile}"] = (
+                run_for_percentile(
+                    dataset,
+                    percentile,
+                    MAP_params,
+                    prior_variance_scaled=args.scale_prior,
+                    scale=args.likelihood_scale,
+                )
             )
-        )
-        print(all_results[f"{percentile}"])
-        pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "wb"))
+            print(all_results[f"{percentile}"])
+            pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "wb"))
 
     # Not scaled is redundant for us
     # for percentile in percentiles:
