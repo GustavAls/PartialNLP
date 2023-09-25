@@ -315,8 +315,8 @@ def make_size_ramping(data_path, dataset_class, num_runs, device, num_epochs, ou
                     'width': width,
                     'depth': depth
                 }
-                with open(save_name, 'wb') as handle:
-                    pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+                # with open(save_name, 'wb') as handle:
+                #     pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
                 print("nll for percentages", percentages, 'for width', width, 'and depth', depth, 'was ', test_nll)
                 all_res.append(results)
     return all_res
@@ -345,6 +345,8 @@ if __name__ == "__main__":
     if args.size_ramping:
         results = make_size_ramping(args.data_path, dataset_class, args.num_runs, args.device, args.num_epochs,
                             args.output_path)
+        with open(os.path.join(args.output_path, f'results_ramping_{args.dataset}.pkl'), 'wb') as handle:
+            pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
     else:
         results = multiple_runs(args.data_path, dataset_class, args.num_runs, args.device, args.num_epochs,
                             args.output_path)
