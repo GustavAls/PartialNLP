@@ -1,3 +1,4 @@
+import ast
 import copy
 import sys, os, time, requests
 import argparse
@@ -5,13 +6,13 @@ import numpy as np
 import pandas as pd
 import torch.distributions
 from MAP_baseline.trainer import train
-from MAP_baseline.MapNN import MapNN
+from MAP_baseline.MapNN import MapNN, MapNNRamping
 from torch.utils.data import Dataset, DataLoader
 import pickle
 from torch.distributions import Normal
 from laplace import Laplace
 from laplace.utils import LargestMagnitudeSubnetMask
-from uci import UCIDataloader, UCIDataset, UCIBostonDataset, UCIEnergyDataset, UCIYachtDataset
+from uci import UCIDataloader, UCIDataset, UCIBostonDataset, UCIEnergyDataset, UCIYachtDataset, UCIWineDataset
 from torch.nn import MSELoss
 from torch.distributions import Gamma
 
@@ -103,7 +104,7 @@ def calculate_nll_potential_final(f_mu, f_std, labels, sigma, num_samples=100, y
 
 
 def find_best_prior(ml_model, subnetwork_indices, train_dataloader, val_loader, y_scale, y_loc):
-    prior_precision_sweep = np.logspace(0, 5, num=10, endpoint=True)
+    prior_precision_sweep = np.logspace(-5, 5, num=20, endpoint=True)
     batch, label = next(iter(val_loader))
     results = []
     for prior in prior_precision_sweep:
@@ -257,6 +258,69 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
     return all_res
 
 
+def make_size_ramping(data_path, dataset_class, num_runs, device, num_epochs, output_path):
+    all_res = []
+    widths = [i for i in range(30, 110, 10)]
+    depths = [1,2,3]
+    percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
+    for run in range(num_runs):
+        dataset = dataset_class(data_dir=data_path,
+                                test_split_type='random',
+                                test_size=0.1,
+                                seed=np.random.randint(0, 1000),
+                                val_fraction_of_train=0.1)
+        n_train, p = dataset.X_train.shape
+        n_val = dataset.X_val.shape[0]
+        out_dim = dataset.y_train.shape[1]
+        train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train)
+        val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
+        for depth in depths:
+            for width in widths:
+                mle_model = MapNNRamping(
+                    input_size=p,
+                    width=width,
+                    output_size=out_dim,
+                    num_hidden_layers=depth,
+                    non_linearity="leaky_relu",
+                )
+
+                train_args = {
+                    'device': device,
+                    'epochs': num_epochs,
+                    'save_path': output_path,
+                    'early_stopping_patience': 1000
+                }
+
+                mle_model = train(network=mle_model, dataloader_train=train_dataloader, dataloader_val=val_dataloader,
+                                  **train_args)
+
+                val_nll, test_nll, val_mse, test_mse = run_percentiles(mle_model, train_dataloader, dataset,
+                                                                       percentages)
+
+                save_name = os.path.join(output_path, f'results_{run}_depth_{depth}_width_{width}_{dataset_class.dataset_name}.pkl')
+
+                results = {
+                    'percentages': percentages,
+                    'x_train': dataset.X_train,
+                    'y_train': dataset.y_train,
+                    'y_val': dataset.y_val,
+                    'x_val': dataset.X_val,
+                    'x_test': dataset.X_test,
+                    'y_test': dataset.y_test,
+                    'val_nll': val_nll,
+                    'test_nll': test_nll,
+                    'val_mse': val_mse,
+                    'test_mse': test_mse,
+                    'run': run,
+                    'width': width,
+                    'depth': depth
+                }
+                with open(save_name, 'wb') as handle:
+                    pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+                print("nll for percentages", percentages, 'for width', width, 'and depth', depth, 'was ', test_nll)
+                all_res.append(results)
+    return all_res
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some integers.")
     parser.add_argument("--output_path", type=str, default=os.getcwd())
@@ -265,7 +329,7 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=str, default="boston")
     parser.add_argument('--data_path', type=str, default=os.getcwd())
     parser.add_argument('--num_runs', type=int, default=15)
-
+    parser.add_argument('--size_ramping', type=ast.literal_eval, default=False)
     args = parser.parse_args()
 
     if args.dataset == "yacht":
@@ -274,10 +338,16 @@ if __name__ == "__main__":
         dataset_class = UCIEnergyDataset
     elif args.dataset == "boston":
         dataset_class = UCIBostonDataset
+    elif args.dataset == 'wine':
+        dataset_class = UCIWineDataset
     else:
         dataset_class = UCIYachtDataset
-
-    results = multiple_runs(args.data_path, dataset_class, args.num_runs, args.device, args.num_epochs,
+    if args.size_ramping:
+        results = make_size_ramping(args.data_path, dataset_class, args.num_runs, args.device, args.num_epochs,
                             args.output_path)
+    else:
+        results = multiple_runs(args.data_path, dataset_class, args.num_runs, args.device, args.num_epochs,
+                            args.output_path)
+
     breakpoint()
     print("Laplace experiments finished!")

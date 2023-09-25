@@ -434,8 +434,12 @@ def train_model_with_varying_stochasticity_scheme_two(
 def mse_(predictions, labels):
     if isinstance(predictions, list):
         preds = np.array(predictions)
+    else:
+        preds = predictions
     if isinstance(labels, list):
         labs = np.array(labels)
+    else:
+        labs = labels
     return np.mean((preds - labs)**2)
 def train_partial_with_accumulated_stochasticity(untrained_model,
         dataloader,
