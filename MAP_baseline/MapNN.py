@@ -52,6 +52,27 @@ class MapNNV2(nn.Module):
         output = self.out(output)
         return output
 
+
+class MapNNRamping(nn.Module):
+
+    def __init__(self, input_size, width, output_size, num_hidden_layers, non_linearity = 'silu'):
+        super(MapNNRamping, self).__init__()
+        self.output_size = output_size
+        self.input_size = input_size
+        self.width = width
+        self.num_hidden_layers = num_hidden_layers
+        self.non_linearity = get_nonlinearity_from_string(non_linearity)
+
+        self.layers = [nn.Linear(self.input_size, self.width), nn.LeakyReLU()]
+
+        for i in range(self.num_hidden_layers):
+            self.layers.append(nn.Linear(self.width, self.width))
+            self.layers.append(nn.LeakyReLU())
+        self.layers += [nn.Linear(self.width, self.output_size)]
+
+        self.layers = nn.Sequential(*self.layers)
+    def forward(self, x):
+        return self.layers(x)
 class MapNN(nn.Module):
     """
     MAP neural network

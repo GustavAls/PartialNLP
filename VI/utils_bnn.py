@@ -88,7 +88,7 @@ def make_multiple_runs_vi(dataset_class, data_path, num_runs, device='cpu', gap=
         if device == 'cuda' and not torch.cuda.is_available():
             device = 'cpu'
 
-        percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
+        percentages = [1, 61, 100]
         results = {
             'percentages': percentages,
             'x_train': dataset.X_train,
@@ -146,7 +146,7 @@ def make_multiple_runs_vi(dataset_class, data_path, num_runs, device='cpu', gap=
         )
         with open(save_name, 'wb') as handle:
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
+        print(results['test_nll'])
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Process some integers.")

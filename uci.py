@@ -133,6 +133,19 @@ class UCIDataset():
             print(f"{self.dataset_name} Dataset already downloaded; skipping download.")
 
 
+class UCIWineDataset(UCIDataset):
+    url = None
+    filename = "winequality-white.csv"
+    dataset_name = 'wine'
+
+    def load_from_filepath(self):
+        df = pd.read_csv(self.file_path, sep = ";")
+        Xall = df.values
+        Xall = Xall[:, [i for i in range(Xall.shape[-1])][:-3]+[-1, -2]]
+        X = Xall[:, :-1 ]
+        y = Xall[:, -1][:, None]
+        return X, y
+
 class UCIYachtDataset(UCIDataset):
     url = "https://archive.ics.uci.edu/ml/machine-learning-databases/00243/yacht_hydrodynamics.data"
     filename = "yacht.data"
