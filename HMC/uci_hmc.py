@@ -482,8 +482,8 @@ if __name__ == "__main__":
     parser.add_argument("--percentile_pr_cpu", type=ast.literal_eval, default=False)
     parser.add_argument("--scale_prior",  type=ast.literal_eval, default=False)
     parser.add_argument("--update_run", type=ast.literal_eval, default=False)
-    parser.add_argument("--prior_variance", type=float, default=0.1) #0.1 is good for yacht, but not for other datasets
-    parser.add_argument("--likelihood_scale", type=float, default=6.0) #6.0 is good for yacht, but not for other datasets
+    parser.add_argument("--prior_variance", type=float, default=1.0) #0.1 is good for yacht, but not for other datasets
+    parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, but not for other datasets
     args = parser.parse_args()
 
     if args.dataset == "yacht":
@@ -622,8 +622,9 @@ if __name__ == "__main__":
     # Halfway done training, so we have to do some creative bookkeeping
 
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
-    percentiles = percentiles[args.run % len(percentiles)] if args.percentil_pr_cpu else percentiles
-    run = args.run // len(percentiles) if args.percentile_pr_cpu else args.run
+    # percentiles = percentiles[args.run % len(percentiles)] if args.percentil_pr_cpu else percentiles
+    # run = args.run // len(percentiles) if args.percentile_pr_cpu else args.run
+    run = args.run
 
     MAP_params = svi_results.params
     if args.update_run:
@@ -631,8 +632,6 @@ if __name__ == "__main__":
     else:
         all_results = {"map_results": map_results, "full_network_results": full_network_results}
 
-    # All dataset full networks were computed with test HMC chain, so we fix this
-    # updated_results["full_network_results"] = full_network_results
     pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_not_scaled_run_{run}.pkl"), "wb"))
     for percentile in percentiles:
         if str(percentile) not in all_results.keys():
