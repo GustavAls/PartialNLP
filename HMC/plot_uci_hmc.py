@@ -12,18 +12,19 @@ import requests
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 
-path = r"C:\Users\Gustav\Desktop\MasterThesis\UCI_HMC"
+path = r"C:\Users\Gustav\Desktop\MasterThesisResults\UCI_HMC_no_scale"
 datasets = ["yacht", "energy", "boston"]
 
-all_results_df_list_scaled = []
+all_results_df_list_scaled = {}
 
 for root, dirs, files in os.walk(path):
     for f in files:
         for dataset in datasets:
             if dataset in f:
-                d = pickle.load(open(os.path.join(root, f), "rb"))
+                if ".pkl" in f:
+                    d = pickle.load(open(os.path.join(root, f), "rb"))
                 file_name = f.split(".")[0]
-                all_results_df_list_scaled.extend(d)
+                all_results_df_list_scaled[file_name] = d
 #
 # for run in all_results_df_list_scaled:
 #     for percentile in all_results_df_list_scaled[run]:
