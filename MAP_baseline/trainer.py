@@ -14,7 +14,8 @@ def train(network: nn.Module,
           device = 'cpu',
           epochs = 20000,
           save_path = None,
-          early_stopping_patience = 1000):
+          early_stopping_patience = 1000,
+          loss_fn = None):
 
     """
 
@@ -27,7 +28,6 @@ def train(network: nn.Module,
     network.to(device)
     optimizer = Adam(network.parameters(), lr=0.01)
 
-    loss_fn = MSELoss()
     best_loss = np.infty
     best_model = None
     patience = 0

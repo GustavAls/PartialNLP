@@ -5,6 +5,8 @@ import argparse
 import numpy as np
 import pandas as pd
 import torch.distributions
+import tqdm
+
 from MAP_baseline.trainer import train
 from MAP_baseline.MapNN import MapNN, MapNNRamping
 from torch.utils.data import Dataset, DataLoader
@@ -15,6 +17,7 @@ from laplace.utils import LargestMagnitudeSubnetMask
 from uci import UCIDataloader, UCIDataset, UCIBostonDataset, UCIEnergyDataset, UCIYachtDataset, UCIWineDataset
 from torch.nn import MSELoss
 from torch.distributions import Gamma
+import misc.likelihood_losses as ll_losses
 
 
 def count_parameters(model):
@@ -104,10 +107,10 @@ def calculate_nll_potential_final(f_mu, f_std, labels, sigma, num_samples=100, y
 
 
 def find_best_prior(ml_model, subnetwork_indices, train_dataloader, val_loader, y_scale, y_loc):
-    prior_precision_sweep = np.logspace(-5, 5, num=20, endpoint=True)
+    prior_precision_sweep = np.logspace(-3, 5, num=20, endpoint=True)
     batch, label = next(iter(val_loader))
     results = []
-    for prior in prior_precision_sweep:
+    for prior in tqdm.tqdm(prior_precision_sweep):
         la = Laplace(copy.deepcopy(ml_model), 'regression',
                      subset_of_weights='subnetwork',
                      hessian_structure='full',
@@ -148,16 +151,11 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
         subnetwork_mask = LargestMagnitudeSubnetMask(ml_model, n_params_subnet=int((p / 100) * num_params))
         subnetwork_indices = subnetwork_mask.select()
 
-        counter = 0
-        while counter < 50:
-            try:
-                best_prior = find_best_prior(mle_model, subnetwork_indices, train_dataloader,
-                                             DataLoader(UCIDataloader(dataset.X_val, dataset.y_val, ),
-                                                        batch_size=dataset.X_val.shape[0]),
-                                             y_scale=y_scale, y_loc=y_loc)
-                break
-            except:
-                counter += 1
+        best_prior = find_best_prior(mle_model, subnetwork_indices, train_dataloader,
+                                     DataLoader(UCIDataloader(dataset.X_val, dataset.y_val, ),
+                                                batch_size=dataset.X_val.shape[0]),
+                                     y_scale=y_scale, y_loc=y_loc)
+
 
         # Define and fit subnetwork LA using the specified subnetwork indices
         la = Laplace(ml_model, 'regression',
@@ -186,10 +184,10 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
         if p == percentages[0]:
             val_mse.append(calculate_mse(val_preds_mu.flatten(), val_targets))
             val_nll.append(calculate_nll(
-                val_preds_mu.flatten(), val_targets, torch.tile(sigma_noise, (len(val_targets),)), y_scale, y_loc))
+                val_preds_mu.flatten(), val_targets, torch.tile(torch.sqrt(sigma_noise), (len(val_targets),)), y_scale, y_loc))
             test_mse.append(calculate_mse(val_preds_mu.flatten(), val_targets))
             test_nll.append(calculate_nll(
-                test_preds_mu.flatten(), test_targets, torch.tile(sigma_noise, (len(test_targets),)), y_scale, y_loc))
+                test_preds_mu.flatten(), test_targets, torch.tile(torch.sqrt(sigma_noise), (len(test_targets),)), y_scale, y_loc))
 
         val_mse.append(calculate_mse(val_preds_mu.flatten(), val_targets))
         val_nll.append(calculate_nll(val_preds_mu.flatten(), val_targets, predictive_std_val, y_scale, y_loc))
@@ -200,7 +198,7 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
     return val_nll, test_nll, val_mse, test_mse
 
 
-def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output_path):
+def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output_path, **kwargs):
     """Run the Laplace approximation for different subnetworks.
         Args:
             data_path: (str) path to the data
@@ -224,11 +222,19 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
         out_dim = dataset.y_train.shape[1]
 
         mle_model = MapNN(input_size=p, width=50, output_size=out_dim, non_linearity="leaky_relu")
+
+        if issubclass(loss := kwargs.get('loss', MSELoss), ll_losses.BaseMAPLoss):
+            kwargs['model'] = mle_model
+            loss_fn = loss(**kwargs)
+        else:
+            loss_fn = loss()
+
         train_args = {
             'device': device,
             'epochs': num_epochs,
             'save_path': output_path,
-            'early_stopping_patience': 1000
+            'early_stopping_patience': 1000,
+            'loss_fn': loss_fn
         }
         train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train)
         val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
@@ -258,10 +264,10 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
     return all_res
 
 
-def make_size_ramping(data_path, dataset_class, num_runs, device, num_epochs, output_path):
+def make_size_ramping(data_path, dataset_class, num_runs, device, num_epochs, output_path, **kwargs):
     all_res = []
     widths = [i for i in range(30, 110, 10)]
-    depths = [1,2,3]
+    depths = [1, 2, 3]
     percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
     for run in range(num_runs):
         dataset = dataset_class(data_dir=data_path,
@@ -284,11 +290,18 @@ def make_size_ramping(data_path, dataset_class, num_runs, device, num_epochs, ou
                     non_linearity="leaky_relu",
                 )
 
+                if issubclass(loss := kwargs.get('loss_fn', MSELoss), ll_losses.BaseMAPLoss):
+                    kwargs['model'] = mle_model
+                    loss_fn = loss(**kwargs)
+                else:
+                    loss_fn = loss()
+
                 train_args = {
                     'device': device,
                     'epochs': num_epochs,
                     'save_path': output_path,
-                    'early_stopping_patience': 1000
+                    'early_stopping_patience': 1000,
+                    'loss_fn': loss_fn
                 }
 
                 mle_model = train(network=mle_model, dataloader_train=train_dataloader, dataloader_val=val_dataloader,
@@ -297,7 +310,8 @@ def make_size_ramping(data_path, dataset_class, num_runs, device, num_epochs, ou
                 val_nll, test_nll, val_mse, test_mse = run_percentiles(mle_model, train_dataloader, dataset,
                                                                        percentages)
 
-                save_name = os.path.join(output_path, f'results_{run}_depth_{depth}_width_{width}_{dataset_class.dataset_name}.pkl')
+                save_name = os.path.join(output_path,
+                                         f'results_{run}_depth_{depth}_width_{width}_{dataset_class.dataset_name}.pkl')
 
                 results = {
                     'percentages': percentages,
@@ -321,6 +335,7 @@ def make_size_ramping(data_path, dataset_class, num_runs, device, num_epochs, ou
                 all_res.append(results)
     return all_res
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some integers.")
     parser.add_argument("--output_path", type=str, default=os.getcwd())
@@ -330,6 +345,11 @@ if __name__ == "__main__":
     parser.add_argument('--data_path', type=str, default=os.getcwd())
     parser.add_argument('--num_runs', type=int, default=15)
     parser.add_argument('--size_ramping', type=ast.literal_eval, default=False)
+    parser.add_argument('--get_map', type=ast.literal_eval, default=True)
+    parser.add_argument('--prior_precision', type=float, default=1)
+
+    # TODO implement initialisation corresponding to prior precision
+
     args = parser.parse_args()
 
     if args.dataset == "yacht":
@@ -342,14 +362,18 @@ if __name__ == "__main__":
         dataset_class = UCIWineDataset
     else:
         dataset_class = UCIYachtDataset
+
+    loss_arguments = {'loss': ll_losses.GLLGP_loss if args.get_map else MSELoss,
+                      'prior_sigma': 1/args.prior_precision}
+
     if args.size_ramping:
         results = make_size_ramping(args.data_path, dataset_class, args.num_runs, args.device, args.num_epochs,
-                            args.output_path)
+                                    args.output_path, **loss_arguments)
         with open(os.path.join(args.output_path, f'results_ramping_{args.dataset}.pkl'), 'wb') as handle:
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
     else:
         results = multiple_runs(args.data_path, dataset_class, args.num_runs, args.device, args.num_epochs,
-                            args.output_path)
+                                args.output_path, **loss_arguments)
 
     breakpoint()
     print("Laplace experiments finished!")
