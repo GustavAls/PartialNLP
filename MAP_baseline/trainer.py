@@ -15,7 +15,7 @@ def train(network: nn.Module,
           epochs = 20000,
           save_path = None,
           early_stopping_patience = 1000,
-          loss_fn = None):
+          loss_fn = MSELoss):
 
     """
 
