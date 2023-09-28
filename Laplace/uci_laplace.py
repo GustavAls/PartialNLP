@@ -146,6 +146,8 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
     test_mse = []
     y_scale = torch.from_numpy(dataset.scl_Y.scale_)
     y_loc = torch.from_numpy(dataset.scl_Y.mean_)
+    # Base case needed, for when find_best_prior does not converge
+    best_prior = 1.0
     for p in percentages:
         ml_model = copy.deepcopy(mle_model)
         subnetwork_mask = LargestMagnitudeSubnetMask(ml_model, n_params_subnet=int((p / 100) * num_params))
