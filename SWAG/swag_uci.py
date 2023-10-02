@@ -296,6 +296,8 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
 def make_multiple_runs_swag(dataset_class, data_path, num_runs, device='cpu', gap=True, train_args=None):
 
     results_all = []
+
+    loss_kwargs = train_args['loss']
     for run in range(num_runs):
         dataset = dataset_class(data_dir=data_path,
                                 test_split_type="gap" if gap else "random",
@@ -338,7 +340,7 @@ def make_multiple_runs_swag(dataset_class, data_path, num_runs, device='cpu', ga
         test_dataloader = DataLoader(UCIDataloader(dataset.X_test, dataset.y_test), batch_size=n_test)
 
         untrained_model = MapNN(p, 50, out_dim, "leaky_relu")
-        loss_kwargs = train_args['loss']
+
         if issubclass(loss := loss_kwargs.get('loss', MSELoss), ll.BaseMAPLossSwag):
             loss_kwargs['model'] = untrained_model
             loss_fn = loss(**loss_kwargs)
