@@ -18,6 +18,8 @@ from torch.distributions.gamma import Gamma
 import seaborn as sns
 import pandas as pd
 import ast
+import misc.likelihood_losses as ll
+from torch.nn import MSELoss
 def parameters_to_vector(parameters) -> torch.Tensor:
     r"""Convert parameters to one vector
 
@@ -211,7 +213,8 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
         device=train_args['device'],
         epochs=train_args['epochs'],
         save_path=None,
-        return_best_model=False
+        return_best_model=False,
+        criterion=train_args['loss']
     )
 
     learning_rate_sweep = train_args['learning_rate_sweep']
@@ -235,6 +238,7 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
     y_loc = train_args['y_loc']
     nll, mse =  evaluate_map(model_, dataloader_val, sigma,
                              y_scale, y_loc)
+
     results_dict['best_nll_val'].append(nll)
     results_dict['according_mse_val'].append(mse)
     nll, mse =  evaluate_map(model_, dataloader_test, sigma,
@@ -254,9 +258,12 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
         print("sigma without swag", sigma)
         sigmas = []
         for lr in learning_rate_sweep:
-            swag_results = run_swag_partial(
-                model, dataloader, lr, n_epochs =train_args['swag_epochs'], criterion=nn.MSELoss, mask=mask
-            )
+            try:
+                swag_results = run_swag_partial(
+                    model, dataloader, lr, n_epochs =train_args['swag_epochs'], criterion=train_args['loss'], mask=mask
+                )
+            except:
+                breakpoint()
             residuals = get_swag_residuals(model, dataloader, mask, swag_results, train_args)
             if bayes_var:
                 precision = get_tau_by_conjugacy(residuals, 3, 5)
@@ -272,7 +279,7 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
         print("Best Validation nll for percentage", percentage, 'was', np.min(nll),'with sigma', sigma)
         lr = learning_rate_sweep[np.argmax(nlls)]
         swag_results = run_swag_partial(
-            model, dataloader, lr, n_epochs=train_args['swag_epochs'], criterion=nn.MSELoss, mask=mask
+            model, dataloader, lr, n_epochs=train_args['swag_epochs'], criterion=train_args['loss'], mask=mask
         )
         nll, mse = evaluate_swag(model, dataloader_test, mask, swag_results, train_args, sigma=sigmas[np.argmax(nlls)])
         results_dict['nll_test'].append(nll)
@@ -325,10 +332,20 @@ def make_multiple_runs_swag(dataset_class, data_path, num_runs, device='cpu', ga
 
         }
 
+
         train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train//8)
         val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
         test_dataloader = DataLoader(UCIDataloader(dataset.X_test, dataset.y_test), batch_size=n_test)
+
         untrained_model = MapNN(p, 50, out_dim, "leaky_relu")
+        loss_kwargs = train_args['loss']
+        if issubclass(loss := loss_kwargs.get('loss', MSELoss), ll.BaseMAPLossSwag):
+            loss_kwargs['model'] = untrained_model
+            loss_fn = loss(**loss_kwargs)
+        else:
+            loss_fn = loss()
+
+        train_args['loss'] = loss_fn
 
         res = train_swag(
             untrained_model,
@@ -449,7 +466,8 @@ if __name__ == '__main__':
     parser.add_argument('--num_runs', type=int, default=15)
     parser.add_argument('--bayes_var', type = ast.literal_eval, default=True)
     parser.add_argument('--prior_mu', type=int, default=0)
-    parser.add_argument('--prior_sigma', type=int, default=1)
+    parser.add_argument('--prior_precision', type=float, default=1)
+    parser.add_argument('--get_map', type = ast.literal_eval, default=True)
     args = parser.parse_args()
 
     if args.dataset == "yacht":
@@ -463,17 +481,20 @@ if __name__ == '__main__':
     else:
         dataset_class = UCIYachtDataset
 
+    loss_arguments = {'loss': ll.GLLGP_loss_swag if args.get_map else MSELoss,
+                      'prior_sigma': 1/args.prior_precision}
 
     train_args = {
         'num_mc_samples': 100,
         'device': args.device,
         'epochs': args.num_epochs,
         'save_path': args.output_path,
-        'learning_rate_sweep': np.logspace(-5, -1, 4, endpoint=True),
+        'learning_rate_sweep': np.logspace(-2, -1, 10, endpoint=True),
         'swag_epochs': args.swag_epochs,
         'bayes_var': args.bayes_var,
-        'loss': MAPLoss(args.prior_mu, args.prior_sigma)
+        'loss': loss_arguments
     }
+
 
     results = []
 
