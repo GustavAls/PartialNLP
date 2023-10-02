@@ -21,6 +21,7 @@ import os
 from copy import deepcopy
 from tqdm import trange
 import os
+import misc.likelihood_losses as ll
 
 def bnn(model, mask=None):
     if mask is None:
@@ -136,7 +137,8 @@ def train(network: nn.Module,
           save_path=None,
           num_mc_samples = 200,
           early_stopping_patience = 1000,
-          return_best_model = True):
+          return_best_model = True,
+          criterion = None):
     """
 
     :param network: (nn.Module) feed forward classification model
@@ -148,7 +150,10 @@ def train(network: nn.Module,
     network.to(device)
     optimizer = SGD(network.parameters(), lr=0.1)
 
-    loss_fn = nn.MSELoss()
+    if criterion is None:
+        loss_fn = nn.MSELoss()
+    else:
+        loss_fn = criterion
     best_loss = np.infty
     best_model = None
     if vi:
@@ -163,7 +168,12 @@ def train(network: nn.Module,
             batch = batch.to(device)
             target = target.to(device)
             output = network(batch)
-            loss = loss_fn(output, target)
+
+            if isinstance(loss_fn, ll.BaseMAPLossSwag):
+                loss = loss_fn(output, target, network)
+            else:
+                loss = loss_fn(output, target)
+
             if vi:
                 kl = get_kl_loss(network)
                 loss += kl / batch.shape[0]
@@ -190,7 +200,10 @@ def train(network: nn.Module,
                 for idx, (batch, target) in enumerate(dataloader_val):
                     batch = batch.to(device)
                     output = network(batch)
-                    current_loss += loss_fn(output, target.to(device))
+                    if isinstance(loss_fn, ll.BaseMAPLossSwag):
+                        current_loss += loss_fn(output, target.to(device), network)
+                    else:
+                        loss_fn(output, target.to(device))
                 current_loss /= len(dataloader_val)
 
                 if current_loss < best_loss:

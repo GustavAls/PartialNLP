@@ -5,6 +5,36 @@ from torch.distributions import Normal
 from MAP_baseline.MapNN import MapNN
 
 
+class BaseMAPLossSwag(nn.Module):
+
+    def __init__(self, **kwargs):
+        super(BaseMAPLossSwag, self).__init__()
+        self.likelihood = None
+        self.prior = None
+
+    def prior_probability(self, model):
+        return self.prior.log_prob(self.parameter_vector(model))
+
+    def forward(self, predictions, labels, model):
+        return self.likelihood(predictions, labels) - self.prior_probability(model).mean()
+
+    def parameter_vector(self, model):
+        return nn.utils.parameters_to_vector(model.parameters())
+
+
+
+class GLLGP_loss_swag(BaseMAPLossSwag):
+    """
+    Loss for Gaussian Likelihood (GLL) with a Gaussian Prior (GP) on model weights
+    """
+
+    def __init__(self, prior_mu=0, prior_sigma=1, **kwargs):
+        super().__init__()
+        self.prior_mu = prior_mu
+        self.prior_sigma = prior_sigma
+        self.likelihood = nn.MSELoss()
+        self.prior = Normal(self.prior_mu, self.prior_sigma)
+
 class BaseMAPLoss(nn.Module):
 
     def __init__(self, model, **kwargs):

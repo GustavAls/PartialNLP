@@ -2,6 +2,7 @@ import ast
 import sys, os, time, requests
 sys.path.append(os.getcwd())
 from functools import partial
+import torch
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
@@ -18,6 +19,7 @@ from jax import random
 numpyro.set_platform("cpu")
 numpyro.set_host_device_count(8)
 import argparse
+from torch.distributions import Normal
 
 
 def _gap_train_test_split(X, y, gap_column, test_size):
@@ -251,6 +253,27 @@ def evaluate_samples(model, rng_key, X, y, samples, y_scale=1.0, y_loc=0.0):
 
     return float(log_likelihood), float(rmse)
 
+def evaluate_samples_properly(model, rng_key, X, y, samples, y_scale = 1.0, y_loc = 0.0):
+    sigma_obs = (1.0 / jnp.sqrt(samples["prec_obs"])).mean()
+
+    predictive = Predictive(model, samples)(rng_key, X=X)
+
+    def calculate_nll_third(labels, mc_matrix):
+        results = []
+        for i in range(mc_matrix.shape[0]):
+            res_temp = []
+            for j in range(mc_matrix.shape[1]):
+                dist = Normal(mc_matrix[i, j] * y_scale.item() + y_loc.item(), sigma_obs.item() * y_scale.item())
+                res_temp.append(dist.log_prob(torch.tensor([labels[i] * y_scale.item() + y_loc.item()])).item())
+            results.append(np.mean(res_temp))
+        return np.mean(results)
+
+    predictive_mean = np.array(predictive['mean']).squeeze(-1)
+    y = y.squeeze(-1)
+
+    likelihood = calculate_nll_third(y, predictive_mean)
+    return likelihood
+
 
 def evaluate_MAP(model, svi_results, X, y, rng_key, y_scale=1.0, y_loc=0.0):
     predictive = Predictive(
@@ -416,7 +439,7 @@ def run_for_percentile(
     )
 
     nuts_kernel = NUTS(mixed_bnn, max_tree_depth=15)
-    mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
+    mcmc = MCMC(nuts_kernel, num_warmup=50, num_samples=75, num_chains=1)
     rng_key = random.PRNGKey(0)
 
     start_time = time.time()
@@ -510,7 +533,7 @@ if __name__ == "__main__":
 
     svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
     start_time = time.time()
-    svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
+    svi_results = svi.run(rng_key, 10000, X=dataset.X_train, y=dataset.y_train)
     end_time = time.time()
 
     train_ll, train_rmse = evaluate_MAP(
@@ -565,7 +588,7 @@ if __name__ == "__main__":
         X, y, prior_variance=args.prior_variance, scale=args.likelihood_scale
         )
         nuts_kernel = NUTS(model, max_tree_depth=15)
-        mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
+        mcmc = MCMC(nuts_kernel, num_warmup=50, num_samples=75, num_chains=1)
 
         rng_key = random.PRNGKey(0)
 

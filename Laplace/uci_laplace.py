@@ -79,13 +79,20 @@ def calculate_precision_from_prior(residuals, alpha=3, beta=5):
     return posterior_tau
 
 
-def calculate_variance(model, batch, labels, alpha=3, beta=5):
-    preds, _ = model(batch)
+def calculate_variance(model, batch, labels, alpha=3, beta=5, beta_prior = True):
+    try:
+        preds, _ = model(batch)
+    except:
+        preds = model(batch)
 
     residuals = preds.flatten() - labels.flatten()
 
-    precision = calculate_precision_from_prior(residuals, alpha, beta)
-    variance = 1 / precision
+    if beta_prior:
+        precision = calculate_precision_from_prior(residuals, alpha, beta)
+        variance = 1 / precision
+    else:
+        variance = residuals.detach().var()
+
     return variance
 
 
@@ -106,7 +113,7 @@ def calculate_nll_potential_final(f_mu, f_std, labels, sigma, num_samples=100, y
     return -1 * np.mean(results)
 
 
-def find_best_prior(ml_model, subnetwork_indices, train_dataloader, val_loader, y_scale, y_loc):
+def find_best_prior(ml_model, subnetwork_indices, train_dataloader, val_loader, y_scale, y_loc, sigma_noise = 0):
     prior_precision_sweep = np.logspace(-3, 5, num=20, endpoint=True)
     batch, label = next(iter(val_loader))
     results = []
@@ -120,7 +127,8 @@ def find_best_prior(ml_model, subnetwork_indices, train_dataloader, val_loader, 
         la.fit(train_dataloader)
         f_mu, f_var = la(batch)
         f_var = f_var.detach().squeeze().sqrt()
-        results.append(calculate_nll(f_mu.flatten(), label.flatten(), f_var, y_scale, y_loc))
+        results.append(calculate_nll(f_mu.flatten(),
+                                     label.flatten(), torch.sqrt(f_var**2 + sigma_noise), y_scale, y_loc))
 
     return prior_precision_sweep[np.argmin(results)]
 
@@ -152,11 +160,14 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
         ml_model = copy.deepcopy(mle_model)
         subnetwork_mask = LargestMagnitudeSubnetMask(ml_model, n_params_subnet=int((p / 100) * num_params))
         subnetwork_indices = subnetwork_mask.select()
+        batch, labels = next(iter(train_dataloader))
+
+        sigma_noise = calculate_variance(ml_model, batch, labels, alpha=3, beta=1, beta_prior = False)
 
         best_prior = find_best_prior(mle_model, subnetwork_indices, train_dataloader,
                                      DataLoader(UCIDataloader(dataset.X_val, dataset.y_val, ),
                                                 batch_size=dataset.X_val.shape[0]),
-                                     y_scale=y_scale, y_loc=y_loc)
+                                     y_scale=y_scale, y_loc=y_loc, sigma_noise = sigma_noise)
 
 
         # Define and fit subnetwork LA using the specified subnetwork indices
@@ -169,9 +180,6 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
         print('Best prior was', best_prior)
         la.fit(train_dataloader)
 
-        batch, labels = next(iter(train_dataloader))
-
-        sigma_noise = calculate_variance(la, batch, labels, alpha=3, beta=1)
         val_targets = torch.from_numpy(dataset.y_val).to(torch.float32)
         val_preds_mu, val_preds_var = la(torch.from_numpy(dataset.X_val).to(torch.float32))
         val_preds_sigma = val_preds_var.squeeze().sqrt()
@@ -190,11 +198,13 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
             test_mse.append(calculate_mse(val_preds_mu.flatten(), val_targets))
             test_nll.append(calculate_nll(
                 test_preds_mu.flatten(), test_targets, torch.tile(torch.sqrt(sigma_noise), (len(test_targets),)), y_scale, y_loc))
-
+        
+        pred_std_val = torch.sqrt(predictive_std_val**2 + sigma_noise)
+        pred_std_test = torch.sqrt(predictive_std_test**2 + sigma_noise)
         val_mse.append(calculate_mse(val_preds_mu.flatten(), val_targets))
-        val_nll.append(calculate_nll(val_preds_mu.flatten(), val_targets, predictive_std_val, y_scale, y_loc))
+        val_nll.append(calculate_nll(val_preds_mu.flatten(), val_targets, pred_std_val, y_scale, y_loc))
         test_mse.append(calculate_mse(test_preds_mu.flatten(), test_targets))
-        test_nll.append(calculate_nll(test_preds_mu.flatten(), test_targets, predictive_std_test, y_scale, y_loc))
+        test_nll.append(calculate_nll(test_preds_mu.flatten(), test_targets, pred_std_test, y_scale, y_loc))
         print("Percentile: ", p, "Val MSE: ", val_mse[-1], "Test MSE: ", test_mse[-1])
         print("Percentile: ", p, "Val NLL: ", val_nll[-1], "Test NLL: ", test_nll[-1])
     return val_nll, test_nll, val_mse, test_mse

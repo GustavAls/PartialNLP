@@ -9,7 +9,7 @@ from copy import deepcopy
 from torch.utils.data import DataLoader, Dataset
 import utils_temp
 from tqdm import tqdm
-
+import misc.likelihood_losses as ll
 def run_swag_partial(model:nn.Module,
                      train_loader: DataLoader,
                      lr=1e-2,
@@ -57,7 +57,7 @@ def run_swag_partial(model:nn.Module,
         [p for p in _model.parameters() if p.requires_grad], lr = lr, momentum=momentum, weight_decay = weight_decay
     )
 
-    criterion = criterion()
+
     average_losses = []
     pbar = tqdm(range(n_epochs))
     for _ in pbar:
@@ -79,7 +79,11 @@ def run_swag_partial(model:nn.Module,
         for batch_i, (inputs, targets) in enumerate(train_loader):
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
-            loss = criterion(_model(inputs), targets)
+
+            if isinstance(criterion, ll.BaseMAPLossSwag):
+                loss = criterion(_model(inputs), targets, _model)
+            else:
+                loss = criterion(_model(inputs), targets)
             loss.backward()
             optimizer.step()
             epoch_losses.append(loss.cpu().clone().detach().numpy())
