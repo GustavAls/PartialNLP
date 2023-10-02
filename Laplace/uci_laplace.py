@@ -358,7 +358,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_runs', type=int, default=15)
     parser.add_argument('--size_ramping', type=ast.literal_eval, default=False)
     parser.add_argument('--get_map', type=ast.literal_eval, default=True)
-    parser.add_argument('--prior_precision', type=float, default=1)
+    parser.add_argument('--prior_precision', type=float, default=0.5)
 
     # TODO implement initialisation corresponding to prior precision
 
@@ -387,5 +387,4 @@ if __name__ == "__main__":
         results = multiple_runs(args.data_path, dataset_class, args.num_runs, args.device, args.num_epochs,
                                 args.output_path, **loss_arguments)
 
-    breakpoint()
     print("Laplace experiments finished!")
