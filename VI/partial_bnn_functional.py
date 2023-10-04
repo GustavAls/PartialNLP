@@ -225,6 +225,8 @@ def train(network: nn.Module,
             else:
                 torch.save(best_model.state_dict(), save_path)
                 print(f"Model was saved to location {save_path}, terminated with MSELoss {best_loss}")
+
+    print("Terminated with loss", best_loss)
     if return_best_model:
         return best_model
     else:

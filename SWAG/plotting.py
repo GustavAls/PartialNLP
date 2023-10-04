@@ -26,7 +26,7 @@ def plot_stuff(percentages, res, title = None, df = None):
     plt.show(block = False)
     fig, ax = plt.subplots(1,1)
     sns.pointplot(data=df, x="percentages", y="nll",
-                  join=False, errorbar=('ci', 50),
+                  join=False, errorbar=('ci', 100),
                   markers="d", scale=.5, errwidth=0.5,
                   ax = ax)
     if title is not None:
@@ -61,20 +61,25 @@ def plot_series(percentages, res, title = None):
         ax.set_title(title)
     plt.show()
 
-def read_data_swag(path):
+def read_data_swag(path, include_map = True):
 
     percentages = []
     test_nll = []
     test_mse = []
     for p in os.listdir(path):
         if 'results' in p:
-
             pcl = pickle.load(open(os.path.join(path, p), 'rb'))
-            test_nll.append(pcl['test_nll'][1:])
+            if not include_map:
+                test_nll.append(pcl['test_nll'][1:])
+            else:
+                test_nll.append(pcl['test_nll'])
             percentages.append(pcl['percentages'])
             test_mse.append([i.item() if not isinstance(i, float) else i for i in pcl['test_mse']][1:])
 
+
     percentages = percentages[-1]
+    if include_map:
+        percentages = [0] + percentages
     test_nll = np.array(test_nll)
     test_mse = np.array(test_mse)
     return percentages, test_nll, test_mse
@@ -128,14 +133,30 @@ def dict_to_df(dic):
     dfnll['percentages'] = percentages
     dfnll['nll'] = [- i for i in data]
     return dfnll
+
+def get_under_folders_and_names(path):
+    names = []
+    paths = []
+    for p in os.listdir(path):
+        if 'model' in p:
+            names.append(p.split("_")[0])
+            paths.append(os.path.join(path, p))
+    return names, paths
 if __name__ == '__main__':
 
+    path = r'C:\Users\45292\Documents\Master\Swag Simple\UCI_SWAG_MAP\yacht_models'
+    path = r"C:\Users\45292\Documents\Master\Swag Simple\UCI_SWAG_MAP_nobayes"
+    names, paths = get_under_folders_and_names(path)
+    for name, path in zip(names, paths):
+        percentages, test_nll, test_mse = read_data_swag(path)
+        test_nll *= -1
+        # breakpoint()
+        # plot_series(percentages, -test_nll[:, 1:], title='Boston Swag')
+        plot_stuff(percentages = percentages, res = test_nll, title=name)
+    # percentages, test_nll, test_mse = read_data_swag(path, include_map=False)
 
-    path = r'C:\Users\45292\Documents\Master\HMC\UCI_HMC\yacht_models'
-    dfnll, dfmse = read_hmc_data(path)
-
-    # plot_series(percentages, -test_nll[:, 1:], title='Boston Swag')
-    plot_stuff(percentages = 0, res = None, title='Yacht', df = dfnll)
+    # # test_nll *=-1
+    # plot_stuff(percentages=percentages, res=test_nll, title='yacht')
     #
     # plot_series(percentages, test_mse)
     # plot_stuff(percentages, test_mse)

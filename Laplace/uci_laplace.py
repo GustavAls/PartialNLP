@@ -18,7 +18,7 @@ from uci import UCIDataloader, UCIDataset, UCIBostonDataset, UCIEnergyDataset, U
 from torch.nn import MSELoss
 from torch.distributions import Gamma
 import misc.likelihood_losses as ll_losses
-
+from VI.partial_bnn_functional import train as train_vi
 
 def count_parameters(model):
     """Count the number of parameters in a model.
@@ -79,22 +79,24 @@ def calculate_precision_from_prior(residuals, alpha=3, beta=5):
     return posterior_tau
 
 
-def calculate_variance(model, batch, labels, alpha=3, beta=5, beta_prior = True):
-    try:
-        preds, _ = model(batch)
-    except:
-        preds = model(batch)
+def calculate_variance(model, dataloader, alpha=3, beta=5, beta_prior = True):
+    residuals = []
+    for batch, label in dataloader:
+        try:
+            output, _ = model(batch)
+        except:
+            output = model(batch)
 
-    residuals = preds.flatten() - labels.flatten()
+        residuals.append(output - label)
+    residuals = torch.cat(residuals, dim = 0)
 
     if beta_prior:
         precision = calculate_precision_from_prior(residuals, alpha, beta)
-        variance = 1 / precision
+        sigma = 1 / torch.sqrt(precision)
     else:
-        variance = residuals.detach().var()
+        sigma = residuals.detach().std()
 
-    return variance
-
+    return sigma
 
 def predict(val_data, model):
     return model(val_data)
@@ -128,7 +130,7 @@ def find_best_prior(ml_model, subnetwork_indices, train_dataloader, val_loader, 
         f_mu, f_var = la(batch)
         f_var = f_var.detach().squeeze().sqrt()
         results.append(calculate_nll(f_mu.flatten(),
-                                     label.flatten(), torch.sqrt(f_var**2 + sigma_noise), y_scale, y_loc))
+                                     label.flatten(), torch.sqrt(f_var**2 + sigma_noise**2), y_scale, y_loc))
 
     return prior_precision_sweep[np.argmin(results)]
 
@@ -162,7 +164,7 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
         subnetwork_indices = subnetwork_mask.select()
         batch, labels = next(iter(train_dataloader))
 
-        sigma_noise = calculate_variance(ml_model, batch, labels, alpha=3, beta=1, beta_prior = False)
+        sigma_noise = calculate_variance(ml_model, train_dataloader, alpha=3, beta=1, beta_prior = False)
 
         best_prior = find_best_prior(mle_model, subnetwork_indices, train_dataloader,
                                      DataLoader(UCIDataloader(dataset.X_val, dataset.y_val, ),
@@ -183,12 +185,12 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
         val_targets = torch.from_numpy(dataset.y_val).to(torch.float32)
         val_preds_mu, val_preds_var = la(torch.from_numpy(dataset.X_val).to(torch.float32))
         val_preds_sigma = val_preds_var.squeeze().sqrt()
-        predictive_std_val = torch.sqrt(val_preds_sigma ** 2)
+        predictive_std_val = val_preds_sigma
 
         test_targets = torch.from_numpy(dataset.y_test).to(torch.float32)
         test_preds_mu, test_preds_var = la(torch.from_numpy(dataset.X_test).to(torch.float32))
         test_preds_sigma = test_preds_var.squeeze().sqrt()
-        predictive_std_test = torch.sqrt(test_preds_sigma ** 2)
+        predictive_std_test = test_preds_sigma
         val_targets = val_targets.flatten()
         test_targets = test_targets.flatten()
         if p == percentages[0]:
@@ -198,9 +200,9 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
             test_mse.append(calculate_mse(val_preds_mu.flatten(), val_targets))
             test_nll.append(calculate_nll(
                 test_preds_mu.flatten(), test_targets, torch.tile(torch.sqrt(sigma_noise), (len(test_targets),)), y_scale, y_loc))
-        
-        pred_std_val = torch.sqrt(predictive_std_val**2 + sigma_noise)
-        pred_std_test = torch.sqrt(predictive_std_test**2 + sigma_noise)
+
+        pred_std_val = torch.sqrt(predictive_std_val**2 + sigma_noise**2)
+        pred_std_test = torch.sqrt(predictive_std_test**2 + sigma_noise**2)
         val_mse.append(calculate_mse(val_preds_mu.flatten(), val_targets))
         val_nll.append(calculate_nll(val_preds_mu.flatten(), val_targets, pred_std_val, y_scale, y_loc))
         test_mse.append(calculate_mse(test_preds_mu.flatten(), test_targets))
@@ -221,6 +223,7 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
             output_path: (str) path to save the results
     """
     all_res = []
+    tmp_res = []
     for run in range(num_runs):
         percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
         dataset = dataset_class(data_dir=data_path,
@@ -235,7 +238,7 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
 
         mle_model = MapNN(input_size=p, width=50, output_size=out_dim, non_linearity="leaky_relu")
 
-        if issubclass(loss := kwargs.get('loss', MSELoss), ll_losses.BaseMAPLoss):
+        if issubclass(loss := kwargs.get('loss', MSELoss), ll_losses.BaseMAPLossSwag):
             kwargs['model'] = mle_model
             loss_fn = loss(**kwargs)
         else:
@@ -248,13 +251,22 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
             'early_stopping_patience': 1000,
             'loss_fn': loss_fn
         }
-        train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train)
+        train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train//8)
         val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
 
-        mle_model = train(network=mle_model, dataloader_train=train_dataloader, dataloader_val=val_dataloader,
-                          **train_args)
-        val_nll, test_nll, val_mse, test_mse = run_percentiles(mle_model, train_dataloader, dataset, percentages)
 
+        mle_model = train_vi(network=mle_model, dataloader_train=train_dataloader, dataloader_val=val_dataloader,
+                             model_old = None,mask = None, vi = False, device='cpu', epochs = num_epochs,
+                             save_path = output_path, num_mc_samples=200, early_stopping_patience=1000,
+                             return_best_model=True, criterion=loss_fn)
+
+        # preds = mle_model(torch.from_numpy(dataset.X_test).float())
+        # labels = torch.from_numpy(dataset.y_test).float()
+        # y_scale = torch.from_numpy(dataset.scl_Y.scale_)
+        # y_loc = torch.from_numpy(dataset.scl_Y.mean_)
+        # sigma_noise = calculate_variance(mle_model, train_dataloader, alpha=3, beta=1, beta_prior=False)
+        # tmp_res.append(calculate_nll(preds.flatten(), labels.flatten(), torch.tile(sigma_noise, (len(labels), )), y_scale, y_loc))
+        val_nll, test_nll, val_mse, test_mse = run_percentiles(mle_model, train_dataloader, dataset, percentages)
         save_name = os.path.join(output_path, f'results_{run}_{dataset_class.dataset_name}.pkl')
         results = {
             'percentages': percentages,
@@ -273,6 +285,7 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         all_res.append(results)
+    breakpoint()
     return all_res
 
 
@@ -375,7 +388,7 @@ if __name__ == "__main__":
     else:
         dataset_class = UCIYachtDataset
 
-    loss_arguments = {'loss': ll_losses.GLLGP_loss if args.get_map else MSELoss,
+    loss_arguments = {'loss': ll_losses.GLLGP_loss_swag if args.get_map else MSELoss,
                       'prior_sigma': 1/args.prior_precision}
 
     if args.size_ramping:

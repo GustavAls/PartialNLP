@@ -26,8 +26,8 @@ def train(network: nn.Module,
     """
 
     network.to(device)
-    optimizer = Adam(network.parameters(), lr=0.01)
-
+    # optimizer = Adam(network.parameters(), lr=0.01)
+    optimizer = SGD(network.parameters(), lr = 0.1)
     best_loss = np.infty
     best_model = None
     patience = 0

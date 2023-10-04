@@ -183,9 +183,11 @@ def evaluate_map(model, dataloader, sigma, y_scale, y_loc):
 
     for batch, label in dataloader:
         preds = model(batch)
+        labels = label
+        break
 
-    nll = calculate_nll_third(label, preds.detach(), sigma.item(), y_scale.item(), y_loc.item())
-    mse = torch.mean((label.flatten() - preds.flatten())**2)
+    nll = calculate_nll_third(labels, preds.detach(), sigma.item(), y_scale.item(), y_loc.item())
+    mse = torch.mean((labels.flatten() - preds.flatten())**2)
     return nll, mse
 
 def get_residuals(model, dataloader):
@@ -213,7 +215,7 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
         device=train_args['device'],
         epochs=train_args['epochs'],
         save_path=None,
-        return_best_model=False,
+        return_best_model=True,
         criterion=train_args['loss']
     )
 
@@ -246,10 +248,10 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
     results_dict['nll_test'].append(nll)
     results_dict['mse_test'].append(mse)
 
+    model = copy.deepcopy(model_)
     for percentage in percentages:
-        mask = create_non_parameter_mask(model_, percentage)
+        mask = create_non_parameter_mask(model, percentage)
         mask = mask.bool()
-        model = copy.deepcopy(model_)
         nlls = []
         mses = []
         residuals = get_residuals(model, dataloader)
@@ -491,7 +493,7 @@ if __name__ == '__main__':
         'device': args.device,
         'epochs': args.num_epochs,
         'save_path': args.output_path,
-        'learning_rate_sweep': np.logspace(-2, -1, 10, endpoint=True),
+        'learning_rate_sweep': np.logspace(-1.5, -1, 2, endpoint=True),
         'swag_epochs': args.swag_epochs,
         'bayes_var': args.bayes_var,
         'loss': loss_arguments
