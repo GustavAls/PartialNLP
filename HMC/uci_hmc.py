@@ -533,7 +533,7 @@ if __name__ == "__main__":
 
     svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
     start_time = time.time()
-    svi_results = svi.run(rng_key, 10000, X=dataset.X_train, y=dataset.y_train)
+    svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
     end_time = time.time()
 
     train_ll, train_rmse = evaluate_MAP(
