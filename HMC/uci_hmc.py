@@ -533,7 +533,7 @@ if __name__ == "__main__":
 
     svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
     start_time = time.time()
-    svi_results = svi.run(rng_key, 10000, X=dataset.X_train, y=dataset.y_train)
+    svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
     end_time = time.time()
 
     train_ll, train_rmse = evaluate_MAP(
@@ -588,7 +588,7 @@ if __name__ == "__main__":
         X, y, prior_variance=args.prior_variance, scale=args.likelihood_scale
         )
         nuts_kernel = NUTS(model, max_tree_depth=15)
-        mcmc = MCMC(nuts_kernel, num_warmup=50, num_samples=75, num_chains=1)
+        mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
 
         rng_key = random.PRNGKey(0)
 
