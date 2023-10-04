@@ -285,7 +285,7 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         all_res.append(results)
-    breakpoint()
+
     return all_res
 
 
