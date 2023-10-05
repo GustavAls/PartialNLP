@@ -227,8 +227,11 @@ def one_d_bnn(X, y=None, prior_variance=0.1, width=50, scale=1.0):
     mean = numpyro.deterministic("mean", output)
 
     # output precision
+    # prec_obs = numpyro.sample(
+    #     "prec_obs", dist.Gamma(3.0, 1.0)
+    # )
     prec_obs = numpyro.sample(
-        "prec_obs", dist.Gamma(3.0, 1.0)
+        "prec_obs", dist.Uniform(1.,1000)
     )
     sigma_obs = 1.0 / jnp.sqrt(prec_obs)
 
@@ -278,7 +281,7 @@ def evaluate_samples_properly(model, rng_key, X, y, samples, y_scale = 1.0, y_lo
 def evaluate_MAP(model, svi_results, X, y, rng_key, y_scale=1.0, y_loc=0.0):
     predictive = Predictive(
         model=model,
-        guide=autoguide.AutoDelta(model),
+        guide=autoguide.AutoNormal(model),
         params=svi_results.params,
         num_samples=1,
     )(rng_key, X=X)
@@ -474,6 +477,16 @@ def run_for_percentile(
         y_loc=dataset.scl_Y.mean_,
     )
 
+
+    model = lambda X, y = None: generate_mixed_bnn_by_param(
+        MAP_params, sample_mask_tuple, prior_variance, scale
+    )
+    svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
+    start_time = time.time()
+    svi_results = svi.run(rng_key, 30000, X=dataset.X_train, y=dataset.y_train)
+    end_time = time.time()
+
+
     results = {
         "prior_variance": prior_variance_used,
         "test_rmse": test_rmse,
@@ -495,6 +508,135 @@ def run_for_percentile(
     return results
 
 
+def calculate_nll_ours(model, svi_results, dataset, bnn, num_mc_samples = 200, delta = False):
+    if delta:
+        guide = lambda: autoguide.AutoDelta(bnn)
+    else:
+        guide = lambda: autoguide.AutoNormal(bnn)
+
+    predictive_train = Predictive(
+        model=model,
+        guide=guide(),
+        params=svi_results.params,
+        num_samples=num_mc_samples,
+    )(rng_key, X=dataset.X_train)
+
+    predictive_test = Predictive(
+        model=model,
+        guide=guide(),
+        params=svi_results.params,
+        num_samples=num_mc_samples,
+    )(rng_key, X=dataset.X_test)
+
+    predictive_val = Predictive(
+        model=model,
+        guide=guide(),
+        params=svi_results.params,
+        num_samples=num_mc_samples,
+    )(rng_key, X=dataset.X_val)
+    y_scale = dataset.scl_Y.scale_
+    y_loc = dataset.scl_Y.mean_
+
+    if num_mc_samples == 1:
+
+        ptrain = predictive_train['mean'].squeeze(0)
+        ptest =  predictive_test['mean'].squeeze(0)
+        pval = predictive_val['mean'].squeeze(0)
+
+    else:
+        ptrain = predictive_train['mean'].squeeze(-1)
+        ptest =  predictive_test['mean'].squeeze(-1)
+        pval = predictive_val['mean'].squeeze(-1)
+
+    ytrain, yval, ytest = dataset.y_train.squeeze(), dataset.y_val.squeeze(), dataset.y_test.squeeze()
+    sigma = np.std(ptrain - ytrain)
+
+    test_nll = calculate_nll_third(ytest, ptest, sigma.item(), y_scale.item(),y_loc.item())
+    val_nll = calculate_nll_third(yval, pval, sigma.item(), y_scale.item(),y_loc.item())
+
+    return test_nll, val_nll
+
+def calculate_nll_third(labels, mc_matrix, sigma, y_scale, y_loc):
+    results = []
+    for i in range(mc_matrix.shape[1]):
+        res_temp = []
+        for j in range(mc_matrix.shape[0]):
+            dist = Normal(mc_matrix[j,i].item()*y_scale + y_loc, np.sqrt(sigma)*y_scale)
+            res_temp.append(dist.log_prob(torch.tensor([labels[i].item()])*y_scale + y_loc).item())
+        results.append(np.mean(res_temp))
+    return np.mean(results)
+
+def make_multiple_runs_vi(num_runs, dataset_class, prior_variance, scale,save_combined = True, save_path = '',
+                          **dataset_args):
+
+    results_dict = {}
+
+    for run in range(num_runs):
+        results_dict[f'run {run}'] = {
+            'percentiles': None,
+            'test_nll': [],
+            'val_nll': []
+        }
+        dataset = dataset_class(**dataset_args)
+
+
+        rng_key = random.PRNGKey(0)
+        optimizer = numpyro.optim.Adam(0.01)
+        model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
+
+        svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
+        start_time = time.time()
+        svi_results = svi.run(rng_key, 10000, X=dataset.X_train, y=dataset.y_train)
+        end_time = time.time()
+        MAP_params = svi_results.params
+
+        percentiles = [14, 2, 5, 8, 14, 23, 37, 61, 100]
+        test_nll, val_nll = calculate_nll_ours(model, svi_results, dataset, one_d_bnn, num_mc_samples=1)
+        results_dict[f'run {run}']['test_nll'].append(test_nll)
+        results_dict[f'run {run}']['val_nll'].append(val_nll)
+        results_dict[f'run {run}']['percentiles'] = [0] + percentiles
+
+        for percentile in percentiles:
+            sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
+            prior_variance_used = prior_variance
+
+            optimizer = numpyro.optim.Adam(0.01)
+            mixed_bnn = generate_mixed_bnn_by_param(
+                MAP_params,
+                create_sample_mask_largest_abs_values(percentile, MAP_params),
+                prior_variance,
+                scale=scale,
+            )
+
+            model = lambda X, y=None: generate_mixed_bnn_by_param(
+                MAP_params,
+                sample_mask_tuple,
+                prior_variance,
+                scale,
+            )(X, y)
+
+            svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
+            start_time = time.time()
+            svi_results = svi.run(rng_key, 10000, X=dataset.X_train, y=dataset.y_train)
+            end_time = time.time()
+
+            test_nll, val_nll = calculate_nll_ours(model,svi_results, dataset, mixed_bnn, delta=False)
+            results_dict[f'run {run}']['test_nll'].append(test_nll)
+            results_dict[f'run {run}']['val_nll'].append(val_nll)
+
+        if not save_combined:
+            save_name = f'run_number_{run}_vi_partial.pkl'
+            with open(os.path.join(save_path, save_name), 'wb') as handle:
+                pickle.dump(results_dict[f'run {run}'], handle,protocol=pickle.HIGHEST_PROTOCOL)
+
+    if save_combined:
+        save_name = f'combined_results_for_{num_runs}_runs_vi_partial.pkl'
+
+        with open(os.path.join(save_path, save_name), 'wb') as handle:
+            pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some integers.")
     parser.add_argument("--dataset", type=str, default="yacht")
@@ -505,8 +647,9 @@ if __name__ == "__main__":
     parser.add_argument("--percentile_pr_cpu", type=ast.literal_eval, default=False)
     parser.add_argument("--scale_prior",  type=ast.literal_eval, default=False)
     parser.add_argument("--update_run", type=ast.literal_eval, default=False)
-    parser.add_argument("--prior_variance", type=float, default=1.0) #0.1 is good for yacht, but not for other datasets
+    parser.add_argument("--prior_variance", type=float, default=2) #0.1 is good for yacht, but not for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, but not for other datasets
+    parser.add_argument('--vi', type = ast.literal_eval, default=False)
     args = parser.parse_args()
 
     if args.dataset == "yacht":
@@ -515,7 +658,7 @@ if __name__ == "__main__":
         dataset_class = UCIEnergyDataset
     elif args.dataset == "boston":
         dataset_class = UCIBostonDataset
-
+    res = []
 
     rand_seed = np.random.randint(0, 10000)
     dataset = dataset_class(
@@ -529,12 +672,46 @@ if __name__ == "__main__":
     optimizer = numpyro.optim.Adam(0.01)
     rng_key = random.PRNGKey(0)
 
+    dataset_args = {'data_dir': args.data_path,
+                    'seed': rand_seed,
+                    'test_split_type': 'random',
+                    'test_size': 0.1,
+                    'val_fraction_of_train': 0.1}
+
     model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
 
-    svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
-    start_time = time.time()
-    svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
-    end_time = time.time()
+    if isinstance(args.vi, bool) and args.vi:
+        make_multiple_runs_vi(args.run, dataset_class,args.prior_variance, args.likelihood_scale,
+                              save_combined=True, save_path=args.output_path, **dataset_args)
+        sys.exit(0)
+
+    # breakpoint()
+    # svi = SVI(model, autoguide.AutoNormal(one_d_bnn), optimizer, Trace_ELBO())
+    # start_time = time.time()
+    # svi_results = svi.run(rng_key, 30000, X=dataset.X_train, y=dataset.y_train)
+    # end_time = time.time()
+    # MAP_params = svi_results.params
+    # percentile = 14
+    # sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
+    # prior_variance_used = 0.1
+    # scale = 1.0
+    # mixed_bnn = generate_mixed_bnn_by_param(
+    #     MAP_params,
+    #     create_sample_mask_largest_abs_values(percentile, MAP_params),
+    #     prior_variance_used,
+    #     scale=scale,
+    # )
+    #
+    # model = lambda X, y=None: generate_mixed_bnn_by_param(
+    #     MAP_params, sample_mask_tuple, prior_variance_used, scale
+    # )(X, y)
+    # svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
+    # start_time = time.time()
+    # svi_results = svi.run(rng_key, 30000, X=dataset.X_train, y=dataset.y_train)
+    # end_time = time.time()
+    #
+    # calculate_nll_ours(model, svi_results, dataset)
+
 
     train_ll, train_rmse = evaluate_MAP(
         model,
@@ -563,6 +740,9 @@ if __name__ == "__main__":
         y_scale=dataset.scl_Y.scale_,
         y_loc=dataset.scl_Y.mean_,
     )
+
+    res.append(test_rmse)
+
 
     map_results = {
         "prior_variance": args.prior_variance,

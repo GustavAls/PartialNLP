@@ -146,13 +146,19 @@ if __name__ == '__main__':
 
     path = r'C:\Users\45292\Documents\Master\Swag Simple\UCI_SWAG_MAP\yacht_models'
     path = r"C:\Users\45292\Documents\Master\Swag Simple\UCI_SWAG_MAP_nobayes"
+    # path = r"C:\Users\45292\Documents\Master\HMC\UCI_HMC_no_scale\boston_models"
+    # dfnll, dfmse = read_hmc_data(path)
+    # plot_stuff(percentages=0, res=None, title='yacht', df=dfnll)
+    # breakpoint()
+    # path = r'C:\Users\45292\Documents\Master\HMC\UCI_HMC_scaled\UCI_HMC'
     names, paths = get_under_folders_and_names(path)
+
     for name, path in zip(names, paths):
+        # dfnll, dfmse = read_hmc_data(path)
         percentages, test_nll, test_mse = read_data_swag(path)
-        test_nll *= -1
         # breakpoint()
         # plot_series(percentages, -test_nll[:, 1:], title='Boston Swag')
-        plot_stuff(percentages = percentages, res = test_nll, title=name)
+        plot_stuff(percentages = percentages, res = test_nll*(-1), title=name)
     # percentages, test_nll, test_mse = read_data_swag(path, include_map=False)
 
     # # test_nll *=-1
