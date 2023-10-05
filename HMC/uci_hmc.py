@@ -590,7 +590,7 @@ def make_multiple_runs_vi(num_runs, dataset_class, prior_variance, scale,save_co
         end_time = time.time()
         MAP_params = svi_results.params
 
-        percentiles = [14, 2, 5, 8, 14, 23, 37, 61, 100]
+        percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
         test_nll, val_nll = calculate_nll_ours(model, svi_results, dataset, one_d_bnn, num_mc_samples=1)
         results_dict[f'run {run}']['test_nll'].append(test_nll)
         results_dict[f'run {run}']['val_nll'].append(val_nll)
