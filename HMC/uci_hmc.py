@@ -650,6 +650,7 @@ if __name__ == "__main__":
     parser.add_argument("--prior_variance", type=float, default=2) #0.1 is good for yacht, but not for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, but not for other datasets
     parser.add_argument('--vi', type = ast.literal_eval, default=False)
+    parser.add_argument('--save_combined', ast.literal_eval, default=False)
     args = parser.parse_args()
 
     if args.dataset == "yacht":
@@ -682,7 +683,7 @@ if __name__ == "__main__":
 
     if isinstance(args.vi, bool) and args.vi:
         make_multiple_runs_vi(args.run, dataset_class,args.prior_variance, args.likelihood_scale,
-                              save_combined=True, save_path=args.output_path, **dataset_args)
+                              save_combined=args.save_combined, save_path=args.output_path, **dataset_args)
         sys.exit(0)
 
     # breakpoint()
