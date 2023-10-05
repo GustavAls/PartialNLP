@@ -483,7 +483,7 @@ def run_for_percentile(
     )
     svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
     start_time = time.time()
-    svi_results = svi.run(rng_key, 30000, X=dataset.X_train, y=dataset.y_train)
+    svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
     end_time = time.time()
 
 
@@ -566,7 +566,7 @@ def calculate_nll_third(labels, mc_matrix, sigma, y_scale, y_loc):
         results.append(np.mean(res_temp))
     return np.mean(results)
 
-def make_multiple_runs_vi(num_runs, dataset_class, prior_variance, scale,save_combined = True, save_path = '',
+def make_multiple_runs_vi(num_runs, dataset_class, prior_variance, scale, save_combined = True, save_path = '',
                           **dataset_args):
 
     results_dict = {}
@@ -647,7 +647,7 @@ if __name__ == "__main__":
     parser.add_argument("--percentile_pr_cpu", type=ast.literal_eval, default=False)
     parser.add_argument("--scale_prior",  type=ast.literal_eval, default=False)
     parser.add_argument("--update_run", type=ast.literal_eval, default=False)
-    parser.add_argument("--prior_variance", type=float, default=2) #0.1 is good for yacht, but not for other datasets
+    parser.add_argument("--prior_variance", type=float, default=2.0) #0.1 is good for yacht, but not for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, but not for other datasets
     parser.add_argument('--vi', type = ast.literal_eval, default=False)
     parser.add_argument('--save_combined', ast.literal_eval, default=False)
@@ -708,7 +708,7 @@ if __name__ == "__main__":
     # )(X, y)
     # svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
     # start_time = time.time()
-    # svi_results = svi.run(rng_key, 30000, X=dataset.X_train, y=dataset.y_train)
+    # svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
     # end_time = time.time()
     #
     # calculate_nll_ours(model, svi_results, dataset)
