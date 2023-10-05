@@ -586,7 +586,7 @@ def make_multiple_runs_vi(num_runs, dataset_class, prior_variance, scale,save_co
 
         svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
         start_time = time.time()
-        svi_results = svi.run(rng_key, 10000, X=dataset.X_train, y=dataset.y_train)
+        svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
         end_time = time.time()
         MAP_params = svi_results.params
 
@@ -617,7 +617,7 @@ def make_multiple_runs_vi(num_runs, dataset_class, prior_variance, scale,save_co
 
             svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
             start_time = time.time()
-            svi_results = svi.run(rng_key, 10000, X=dataset.X_train, y=dataset.y_train)
+            svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
             end_time = time.time()
 
             test_nll, val_nll = calculate_nll_ours(model,svi_results, dataset, mixed_bnn, delta=False)
