@@ -687,11 +687,11 @@ if __name__ == "__main__":
         sys.exit(0)
 
     # breakpoint()
-    # svi = SVI(model, autoguide.AutoNormal(one_d_bnn), optimizer, Trace_ELBO())
-    # start_time = time.time()
-    # svi_results = svi.run(rng_key, 30000, X=dataset.X_train, y=dataset.y_train)
-    # end_time = time.time()
-    # MAP_params = svi_results.params
+    svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
+    start_time = time.time()
+    svi_results = svi.run(rng_key, 30000, X=dataset.X_train, y=dataset.y_train)
+    end_time = time.time()
+    MAP_params = svi_results.params
     # percentile = 14
     # sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
     # prior_variance_used = 0.1
