@@ -12,7 +12,8 @@ import numpy as np
 import argparse
 # Heavily based on: https://huggingface.co/blog/sentiment-analysis-python, and
 # https://huggingface.co/docs/transformers/tasks/sequence_classification
-
+from laplace import Laplace
+from laplace.utils import ModuleNameSubnetMask
 
 class SentimentClassifier:
     def __init__(self, network_name, id2label, label2id, train_size=300, test_size=30):
@@ -88,6 +89,44 @@ class SentimentClassifier:
         predicted_class_id = logits.argmax().item()
         return self.model.config.id2label[predicted_class_id]
 
+    def prepare_laplace(self,output_path, train_bs, eval_bs, dataset_name,device_batch_size):
+        """
+
+        :param output_path: Ouput path, for compatibility with other function calls, this function does not save
+        :param train_bs: training batch size
+        :param eval_bs: eval batch size
+        :param dataset_name: (str) name of the dataset
+        :param device_batch_size: per device batch size
+        :return: None
+        """
+        train_data, test_data = self.load_text_dataset(dataset_name=dataset_name)
+        tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
+        tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
+
+        training_args = TrainingArguments(output_dir=output_path,
+                                                  learning_rate=2e-5,
+                                                  do_train=True,
+                                                  per_device_train_batch_size=device_batch_size,
+                                                  per_device_eval_batch_size=device_batch_size,
+                                                  num_train_epochs=1,
+                                                  evaluation_strategy="epoch",
+                                                  save_strategy="epoch",
+                                                  load_best_model_at_end=True,
+                                                  weight_decay=0.01)
+
+        trainer = Trainer(
+            model=self.model,
+            args=training_args,
+            train_dataset=tokenized_train,
+            eval_dataset=tokenized_test,
+            tokenizer=self._tokenizer,
+            data_collator=self.collator,
+            compute_metrics=self.compute_metrics
+        )
+
+        trainer._prepare_inner_training_for_laplace()
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -113,6 +152,16 @@ if __name__ == "__main__":
                                                label2id=label2id,
                                                train_size=args.train_size,
                                                test_size=args.test_size)
+    subnetwork_mask = ModuleNameSubnetMask(sentiment_classifier.model, module_names=['classifier'])
+    subnetwork_mask.select()
+    subnetwork_indices = subnetwork_mask.indices
+    la = Laplace(sentiment_classifier.model, 'classification',
+            subset_of_weights='subnetwork',
+            hessian_structure='full',
+            subnetwork_indices=subnetwork_indices)
+
+    la.fit()
+    breakpoint()
     sentiment_classifier.runner(output_path=args.output_path,
                                 train_bs=args.train_batch_size,
                                 eval_bs=args.eval_batch_size,
@@ -121,3 +170,4 @@ if __name__ == "__main__":
                                 device_batch_size=args.device_batch_size,
                                 train=args.train)
 
+    breakpoint()
