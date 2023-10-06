@@ -4,7 +4,7 @@
 ### CHANGE HERE FOR GPU/CPU
 ##BSUB -q gpuv100
 ### -- set the job Name --
-#BSUB -J swag_energy_
+#BSUB -J swag_yacht
 ### -- ask for number of cores (default: 1) --
 #BSUB -n 2
 #BSUB -R "span[block=2]"
@@ -44,11 +44,11 @@ echo "Running script..."
 # Send sample job to GPU
 
 ##### ADD INFO HERE ####
-model_name="energy"
+model_name="yacht"
 
 # Create some folders
-dir_outpath="results/UCI_SWAG_nobayes/${model_name}_models"
-dir_datapath="results/UCI_SWAG_nobayes/${model_name}_data"
+dir_outpath="results/UCI_SWAG/${model_name}_models"
+dir_datapath="results/UCI_SWAG/${model_name}_data"
 
 # Make the directories if they don't exist
 mkdir -p $dir_outpath

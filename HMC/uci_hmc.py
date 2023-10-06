@@ -227,12 +227,13 @@ def one_d_bnn(X, y=None, prior_variance=0.1, width=50, scale=1.0):
     mean = numpyro.deterministic("mean", output)
 
     # output precision
-    # prec_obs = numpyro.sample(
-    #     "prec_obs", dist.Gamma(3.0, 1.0)
-    # )
     prec_obs = numpyro.sample(
-        "prec_obs", dist.Uniform(1.,1000)
+        "prec_obs", dist.Gamma(3.0, 1.0)
     )
+    # prec_obs = numpyro.sample(
+    #     "prec_obs", dist.Uniform(1.,1000)
+    # )
+
     sigma_obs = 1.0 / jnp.sqrt(prec_obs)
 
     with numpyro.handlers.scale(scale=scale):
@@ -442,7 +443,7 @@ def run_for_percentile(
     )
 
     nuts_kernel = NUTS(mixed_bnn, max_tree_depth=15)
-    mcmc = MCMC(nuts_kernel, num_warmup=50, num_samples=75, num_chains=1)
+    mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
     rng_key = random.PRNGKey(0)
 
     start_time = time.time()
@@ -483,7 +484,7 @@ def run_for_percentile(
     )
     svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
     start_time = time.time()
-    svi_results = svi.run(rng_key, 30000, X=dataset.X_train, y=dataset.y_train)
+    svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
     end_time = time.time()
 
 
@@ -566,7 +567,7 @@ def calculate_nll_third(labels, mc_matrix, sigma, y_scale, y_loc):
         results.append(np.mean(res_temp))
     return np.mean(results)
 
-def make_multiple_runs_vi(num_runs, dataset_class, prior_variance, scale,save_combined = True, save_path = '',
+def make_multiple_runs_vi(num_runs, dataset_class, prior_variance, scale, save_combined = True, save_path = '',
                           **dataset_args):
 
     results_dict = {}
@@ -647,10 +648,10 @@ if __name__ == "__main__":
     parser.add_argument("--percentile_pr_cpu", type=ast.literal_eval, default=False)
     parser.add_argument("--scale_prior",  type=ast.literal_eval, default=False)
     parser.add_argument("--update_run", type=ast.literal_eval, default=False)
-    parser.add_argument("--prior_variance", type=float, default=2) #0.1 is good for yacht, but not for other datasets
+    parser.add_argument("--prior_variance", type=float, default=1.0) #0.1 is good for yacht, but not for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, but not for other datasets
     parser.add_argument('--vi', type = ast.literal_eval, default=False)
-    parser.add_argument('--save_combined', ast.literal_eval, default=False)
+    parser.add_argument('--save_combined', type=ast.literal_eval, default=False)
     args = parser.parse_args()
 
     if args.dataset == "yacht":
@@ -682,14 +683,14 @@ if __name__ == "__main__":
     model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
 
     if isinstance(args.vi, bool) and args.vi:
-        make_multiple_runs_vi(args.run, dataset_class,args.prior_variance, args.likelihood_scale,
+        make_multiple_runs_vi(args.run, dataset_class, args.prior_variance, args.likelihood_scale,
                               save_combined=args.save_combined, save_path=args.output_path, **dataset_args)
         sys.exit(0)
 
     # breakpoint()
     svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
     start_time = time.time()
-    svi_results = svi.run(rng_key, 30000, X=dataset.X_train, y=dataset.y_train)
+    svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
     end_time = time.time()
     MAP_params = svi_results.params
     # percentile = 14
@@ -708,7 +709,7 @@ if __name__ == "__main__":
     # )(X, y)
     # svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
     # start_time = time.time()
-    # svi_results = svi.run(rng_key, 30000, X=dataset.X_train, y=dataset.y_train)
+    # svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
     # end_time = time.time()
     #
     # calculate_nll_ours(model, svi_results, dataset)
