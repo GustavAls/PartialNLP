@@ -34,7 +34,7 @@ class SentimentClassifier:
         return train_data, test_data
 
     def tokenize(self, examples):
-        return self._tokenizer(examples["text"], truncation=True)
+        return self._tokenizer(examples["text"], return_tensors="pt", padding=True)
 
     @staticmethod
     def compute_metrics(eval_pred):
@@ -47,7 +47,7 @@ class SentimentClassifier:
         f1 = load_f1.compute(predictions=predictions, references=labels)["f1"]
         return {"accuracy": accuracy, "f1": f1}
 
-    def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, train=True):
+    def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, train):
         train_data, test_data = self.load_text_dataset(dataset_name=dataset_name)
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
@@ -77,23 +77,32 @@ class SentimentClassifier:
             print("Training is done")
         else:
             trainer.evaluate()
-            print("Evaluation is done")
+        print("Evaluation is done")
+
+
+    def predict(self, text):
+        tokenized_test_text = self._tokenizer(text, return_tensors="pt")
+        tokenized_test_text = tokenized_test_text.to(self.model.device)
+        with torch.no_grad():
+            logits = self.model(**tokenized_test_text).logits
+        predicted_class_id = logits.argmax().item()
+        return self.model.config.id2label[predicted_class_id]
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Run training and or evaluation of Sentiment Classifier"
     )
-    parser.add_argument("--output_path", type=str, default=None)
-    parser.add_argument("--train_batch_size", type=int, default=None)
-    parser.add_argument("--eval_batch_size", type=int, default=None)
+    parser.add_argument("--output_path", type=str, default=os.getcwd())
+    parser.add_argument("--train_batch_size", type=int, default=4)
+    parser.add_argument("--eval_batch_size", type=int, default=4)
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--num_epochs", type=int, default=50)
     parser.add_argument("--dataset_name", type=str, default="imdb")
-    parser.add_argument("--train", type=bool, default=True)
-    parser.add_argument("--train_size", type=int, default=3000)
-    parser.add_argument("--test_size", type=int, default=300)
-    parser.add_argument("--device_batch_size", type=int, default=12)
+    parser.add_argument("--train", type=bool, default=False)
+    parser.add_argument("--train_size", type=int, default=1000)
+    parser.add_argument("--test_size", type=int, default=100)
+    parser.add_argument("--device_batch_size", type=int, default=4)
 
     args = parser.parse_args()
     torch.cuda.is_available()
