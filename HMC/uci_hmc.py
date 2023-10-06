@@ -227,12 +227,13 @@ def one_d_bnn(X, y=None, prior_variance=0.1, width=50, scale=1.0):
     mean = numpyro.deterministic("mean", output)
 
     # output precision
-    # prec_obs = numpyro.sample(
-    #     "prec_obs", dist.Gamma(3.0, 1.0)
-    # )
     prec_obs = numpyro.sample(
-        "prec_obs", dist.Uniform(1.,1000)
+        "prec_obs", dist.Gamma(3.0, 1.0)
     )
+    # prec_obs = numpyro.sample(
+    #     "prec_obs", dist.Uniform(1.,1000)
+    # )
+
     sigma_obs = 1.0 / jnp.sqrt(prec_obs)
 
     with numpyro.handlers.scale(scale=scale):
@@ -647,10 +648,10 @@ if __name__ == "__main__":
     parser.add_argument("--percentile_pr_cpu", type=ast.literal_eval, default=False)
     parser.add_argument("--scale_prior",  type=ast.literal_eval, default=False)
     parser.add_argument("--update_run", type=ast.literal_eval, default=False)
-    parser.add_argument("--prior_variance", type=float, default=2.0) #0.1 is good for yacht, but not for other datasets
+    parser.add_argument("--prior_variance", type=float, default=1.0) #0.1 is good for yacht, but not for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, but not for other datasets
     parser.add_argument('--vi', type = ast.literal_eval, default=False)
-    parser.add_argument('--save_combined', ast.literal_eval, default=False)
+    parser.add_argument('--save_combined', type=ast.literal_eval, default=False)
     args = parser.parse_args()
 
     if args.dataset == "yacht":
@@ -682,7 +683,7 @@ if __name__ == "__main__":
     model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
 
     if isinstance(args.vi, bool) and args.vi:
-        make_multiple_runs_vi(args.run, dataset_class,args.prior_variance, args.likelihood_scale,
+        make_multiple_runs_vi(args.run, dataset_class, args.prior_variance, args.likelihood_scale,
                               save_combined=args.save_combined, save_path=args.output_path, **dataset_args)
         sys.exit(0)
 
