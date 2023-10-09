@@ -7,8 +7,8 @@ import torch.nn as nn
 from torch.optim import SGD
 from copy import deepcopy
 from torch.utils.data import DataLoader, Dataset
-import utils_temp
 from tqdm import tqdm
+import SWAG.utils_temp as utils_temp
 import misc.likelihood_losses as ll
 
 

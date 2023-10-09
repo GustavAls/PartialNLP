@@ -5,7 +5,7 @@ import torch.nn as nn
 import pickle
 import os
 from torch.utils.data import DataLoader, Dataset
-from swag_temp import run_swag_partial
+from SWAG.swag_temp import run_swag_partial
 from VI.partial_bnn_functional import create_mask, train, create_non_parameter_mask
 from MAP_baseline.MapNN import MapNN
 from uci import UCIDataloader, UCIDataset, UCIBostonDataset, UCIEnergyDataset, UCIConcreteDataset, \
@@ -15,11 +15,11 @@ from torch.distributions.normal import Normal
 import argparse
 import matplotlib.pyplot as plt
 from torch.distributions.gamma import Gamma
-import seaborn as sns
-import pandas as pd
 import ast
 import misc.likelihood_losses as ll
 from torch.nn import MSELoss
+
+
 def parameters_to_vector(parameters) -> torch.Tensor:
     r"""Convert parameters to one vector
 
@@ -207,7 +207,7 @@ def get_empirical_var(model, dataloader):
     return torch.var(torch.cat(residuals, dim = 0)).item()
 
 
-def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, percentages, train_args, trained_model=None):
+def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, percentages, trained_model=None, train_args=None):
 
     if trained_model is None:
         model_ = train(
@@ -362,7 +362,7 @@ def make_multiple_runs_swag(dataset_class, data_path, num_runs, device='cpu', ga
             val_dataloader,
             test_dataloader,
             percentages,
-            train_args
+            train_args=train_args
         )
         results['val_nll'] += res['best_nll_val']
         results['val_mse'] += res['according_mse_val']
@@ -427,7 +427,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Process some integers.")
     parser.add_argument("--seed", type=int)
     parser.add_argument("--output_path", type=str, default=os.getcwd())
-    parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--num_epochs", type=int, default=20000)
     parser.add_argument("--dataset", type=str, default="boston")
     parser.add_argument('--data_path', type=str, default=os.getcwd())

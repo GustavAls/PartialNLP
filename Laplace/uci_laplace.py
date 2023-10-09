@@ -7,6 +7,7 @@ import pandas as pd
 import torch.distributions
 import tqdm
 from SWAG.swag_uci import train_swag
+from SWAG.swag_temp import *
 from MAP_baseline.MapNN import MapNN, MapNNRamping
 from torch.utils.data import Dataset, DataLoader
 import pickle
@@ -118,7 +119,7 @@ def find_best_prior(ml_model, subnetwork_indices, train_dataloader, val_loader, 
     prior_precision_sweep = np.logspace(-3, 5, num=20, endpoint=True)
     batch, label = next(iter(val_loader))
     results = []
-    for prior in tqdm.tqdm(prior_precision_sweep):
+    for prior in tqdm(prior_precision_sweep):
         la = Laplace(copy.deepcopy(ml_model), 'regression',
                      subset_of_weights='subnetwork',
                      hessian_structure='full',
@@ -211,7 +212,7 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
     return val_nll, test_nll, val_mse, test_mse
 
 
-def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output_path, train_swag, **kwargs):
+def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output_path, fit_swag, **kwargs):
     """Run the Laplace approximation for different subnetworks.
         Args:
             data_path: (str) path to the data
@@ -233,6 +234,7 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
 
         n_train, p = dataset.X_train.shape
         n_val = dataset.X_val.shape[0]
+        n_test = dataset.X_test.shape[0]
         out_dim = dataset.y_train.shape[1]
 
         mle_model = MapNN(input_size=p, width=50, output_size=out_dim, non_linearity="leaky_relu")
@@ -245,31 +247,32 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
 
         train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train//8)
         val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
+        test_dataloader = DataLoader(UCIDataloader(dataset.X_test, dataset.y_test), batch_size=n_test)
 
         mle_model = train(network=mle_model, dataloader_train=train_dataloader, dataloader_val=val_dataloader,
                              model_old = None, vi = False, device='cpu', epochs = num_epochs,
                              save_path = output_path, return_best_model=True, criterion=loss_fn)
+        if False:
+            val_nll, test_nll, val_mse, test_mse = run_percentiles(mle_model, train_dataloader, dataset, percentages)
 
-        val_nll, test_nll, val_mse, test_mse = run_percentiles(mle_model, train_dataloader, dataset, percentages)
+            save_name = os.path.join(output_path, f'results_laplace_run_{run}.pkl')
+            results = {
+                'percentages': percentages,
+                'x_train': dataset.X_train,
+                'y_train': dataset.y_train,
+                'y_val': dataset.y_val,
+                'x_val': dataset.X_val,
+                'x_test': dataset.X_test,
+                'y_test': dataset.y_test,
+                'val_nll': val_nll,
+                'test_nll': test_nll,
+                'val_mse': val_mse,
+                'test_mse': test_mse
+            }
+            with open(save_name, 'wb') as handle:
+                pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-        save_name = os.path.join(output_path, f'results_laplace_run_{run}.pkl')
-        results = {
-            'percentages': percentages,
-            'x_train': dataset.X_train,
-            'y_train': dataset.y_train,
-            'y_val': dataset.y_val,
-            'x_val': dataset.X_val,
-            'x_test': dataset.X_test,
-            'y_test': dataset.y_test,
-            'val_nll': val_nll,
-            'test_nll': test_nll,
-            'val_mse': val_mse,
-            'test_mse': test_mse
-        }
-        with open(save_name, 'wb') as handle:
-            pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-        if train_swag:
+        if fit_swag:
             results_swag = {
                 'percentages': percentages,
                 'x_train': dataset.X_train,
@@ -284,6 +287,11 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
                 'test_mse': []
 
             }
+
+            loss_arguments = {'loss': ll.GLLGP_loss_swag, 'prior_sigma': 1 / args.prior_precision}
+            loss = loss_arguments.get('loss', MSELoss)
+            loss_fn = loss(**loss_arguments)
+
             train_args = { 'bayes_var': False,
                            'y_scale': dataset.scl_Y.scale_,
                            'y_loc': dataset.scl_Y.mean_ ,
@@ -296,7 +304,8 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
                            'swag_epochs': 50,
                            }
 
-            res = train_swag(mle_model, train_dataloader, val_dataloader, output_path, dataset_class.dataset_name, loss_fn, train_args)
+            res = train_swag(mle_model, train_dataloader, val_dataloader, test_dataloader,
+                             percentages, trained_model=mle_model, train_args=train_args)
             results_swag['val_nll'] += res['best_nll_val']
             results_swag['val_mse'] += res['according_mse_val']
             results_swag['test_nll'] += res['nll_test']
@@ -386,14 +395,14 @@ def make_size_ramping(data_path, dataset_class, num_runs, device, num_epochs, ou
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some integers.")
     parser.add_argument("--output_path", type=str, default=os.getcwd())
-    parser.add_argument("--device", type=str, default="cuda")
-    parser.add_argument("--num_epochs", type=int, default=20000)
+    parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument("--num_epochs", type=int, default=100)
     parser.add_argument("--dataset", type=str, default="boston")
     parser.add_argument('--data_path', type=str, default=os.getcwd())
     parser.add_argument('--num_runs', type=int, default=15)
     parser.add_argument('--size_ramping', type=ast.literal_eval, default=False)
     parser.add_argument('--get_map', type=ast.literal_eval, default=True)
-    parser.add_argument('--train_swag', type=ast.literal_eval, default=True)
+    parser.add_argument('--fit_swag', type=ast.literal_eval, default=True)
     parser.add_argument('--prior_precision', type=float, default=0.5)
 
     # TODO implement initialisation corresponding to prior precision
@@ -421,6 +430,6 @@ if __name__ == "__main__":
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
     else:
         results = multiple_runs(args.data_path, dataset_class, args.num_runs, args.device, args.num_epochs,
-                                args.output_path, args.train_swag, **loss_arguments)
+                                args.output_path, args.fit_swag, **loss_arguments)
 
     print("Laplace experiments finished!")
