@@ -284,7 +284,19 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
                 'test_mse': []
 
             }
-            res = train_swag(mle_model, train_dataloader, val_dataloader, output_path, dataset_class.dataset_name, loss_fn)
+            train_args = { 'bayes_var': False,
+                           'y_scale': dataset.scl_Y.scale_,
+                           'y_loc': dataset.scl_Y.mean_ ,
+                           'loss': loss_fn,
+                           'num_mc_samples': 100,
+                           'device': args.device,
+                           'epochs': args.num_epochs,
+                           'save_path': args.output_path,
+                           'learning_rate_sweep': np.logspace(-1.5, -1, 2, endpoint=True),
+                           'swag_epochs': 50,
+                           }
+
+            res = train_swag(mle_model, train_dataloader, val_dataloader, output_path, dataset_class.dataset_name, loss_fn, train_args)
             results_swag['val_nll'] += res['best_nll_val']
             results_swag['val_mse'] += res['according_mse_val']
             results_swag['test_nll'] += res['nll_test']
