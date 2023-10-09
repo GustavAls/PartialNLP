@@ -10,6 +10,8 @@ from torch.utils.data import DataLoader, Dataset
 import utils_temp
 from tqdm import tqdm
 import misc.likelihood_losses as ll
+
+
 def run_swag_partial(model:nn.Module,
                      train_loader: DataLoader,
                      lr=1e-2,
@@ -158,6 +160,7 @@ class TestData(Dataset):
         data = data.float()
         label = label.float()
         return data, label
+
 
 def test_swag():
 

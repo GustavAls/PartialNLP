@@ -6,8 +6,7 @@ import numpy as np
 import pandas as pd
 import torch.distributions
 import tqdm
-
-from MAP_baseline.trainer import train
+from SWAG.swag_uci import train_swag
 from MAP_baseline.MapNN import MapNN, MapNNRamping
 from torch.utils.data import Dataset, DataLoader
 import pickle
@@ -18,7 +17,7 @@ from uci import UCIDataloader, UCIDataset, UCIBostonDataset, UCIEnergyDataset, U
 from torch.nn import MSELoss
 from torch.distributions import Gamma
 import misc.likelihood_losses as ll_losses
-from VI.partial_bnn_functional import train as train_vi
+from VI.partial_bnn_functional import train
 
 def count_parameters(model):
     """Count the number of parameters in a model.
@@ -212,7 +211,7 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
     return val_nll, test_nll, val_mse, test_mse
 
 
-def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output_path, **kwargs):
+def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output_path, train_swag, **kwargs):
     """Run the Laplace approximation for different subnetworks.
         Args:
             data_path: (str) path to the data
@@ -244,30 +243,16 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
         else:
             loss_fn = loss()
 
-        train_args = {
-            'device': device,
-            'epochs': num_epochs,
-            'save_path': output_path,
-            'early_stopping_patience': 1000,
-            'loss_fn': loss_fn
-        }
         train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train//8)
         val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
 
+        mle_model = train(network=mle_model, dataloader_train=train_dataloader, dataloader_val=val_dataloader,
+                             model_old = None, vi = False, device='cpu', epochs = num_epochs,
+                             save_path = output_path, return_best_model=True, criterion=loss_fn)
 
-        mle_model = train_vi(network=mle_model, dataloader_train=train_dataloader, dataloader_val=val_dataloader,
-                             model_old = None,mask = None, vi = False, device='cpu', epochs = num_epochs,
-                             save_path = output_path, num_mc_samples=200, early_stopping_patience=1000,
-                             return_best_model=True, criterion=loss_fn)
-        breakpoint()
-        # preds = mle_model(torch.from_numpy(dataset.X_test).float())
-        # labels = torch.from_numpy(dataset.y_test).float()
-        # y_scale = torch.from_numpy(dataset.scl_Y.scale_)
-        # y_loc = torch.from_numpy(dataset.scl_Y.mean_)
-        # sigma_noise = calculate_variance(mle_model, train_dataloader, alpha=3, beta=1, beta_prior=False)
-        # tmp_res.append(calculate_nll(preds.flatten(), labels.flatten(), torch.tile(sigma_noise, (len(labels), )), y_scale, y_loc))
         val_nll, test_nll, val_mse, test_mse = run_percentiles(mle_model, train_dataloader, dataset, percentages)
-        save_name = os.path.join(output_path, f'results_{run}_{dataset_class.dataset_name}.pkl')
+
+        save_name = os.path.join(output_path, f'results_laplace_run_{run}.pkl')
         results = {
             'percentages': percentages,
             'x_train': dataset.X_train,
@@ -283,6 +268,31 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
         }
         with open(save_name, 'wb') as handle:
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        if train_swag:
+            results_swag = {
+                'percentages': percentages,
+                'x_train': dataset.X_train,
+                'y_train': dataset.y_train,
+                'y_val': dataset.y_val,
+                'x_val': dataset.X_val,
+                'x_test': dataset.X_test,
+                'y_test': dataset.y_test,
+                'val_nll': [],
+                'test_nll': [],
+                'val_mse': [],
+                'test_mse': []
+
+            }
+            res = train_swag(mle_model, train_dataloader, val_dataloader, output_path, dataset_class.dataset_name, loss_fn)
+            results_swag['val_nll'] += res['best_nll_val']
+            results_swag['val_mse'] += res['according_mse_val']
+            results_swag['test_nll'] += res['nll_test']
+            results_swag['test_mse'] += res['mse_test']
+
+            save_name = os.path.join(output_path, f'results_swag_run_{run}.pkl')
+            with open(save_name, 'wb') as handle:
+                pickle.dump(results_swag, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         all_res.append(results)
 
@@ -371,6 +381,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_runs', type=int, default=15)
     parser.add_argument('--size_ramping', type=ast.literal_eval, default=False)
     parser.add_argument('--get_map', type=ast.literal_eval, default=True)
+    parser.add_argument('--train_swag', type=ast.literal_eval, default=True)
     parser.add_argument('--prior_precision', type=float, default=0.5)
 
     # TODO implement initialisation corresponding to prior precision
@@ -398,6 +409,6 @@ if __name__ == "__main__":
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
     else:
         results = multiple_runs(args.data_path, dataset_class, args.num_runs, args.device, args.num_epochs,
-                                args.output_path, **loss_arguments)
+                                args.output_path, args.train_swag, **loss_arguments)
 
     print("Laplace experiments finished!")

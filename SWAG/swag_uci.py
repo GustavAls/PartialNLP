@@ -196,6 +196,8 @@ def get_residuals(model, dataloader):
         residuals.append(model(batch)-label)
 
     return torch.cat(residuals, dim = 0)
+
+
 def get_empirical_var(model, dataloader):
 
     residuals = []
@@ -204,20 +206,24 @@ def get_empirical_var(model, dataloader):
 
     return torch.var(torch.cat(residuals, dim = 0)).item()
 
-def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, percentages, train_args):
 
-    model_ = train(
-        copy.deepcopy(untrained_model),
-        dataloader,
-        dataloader_val,
-        model_old=None,
-        vi=False,
-        device=train_args['device'],
-        epochs=train_args['epochs'],
-        save_path=None,
-        return_best_model=True,
-        criterion=train_args['loss']
-    )
+def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, percentages, train_args, trained_model=None):
+
+    if trained_model is None:
+        model_ = train(
+            copy.deepcopy(untrained_model),
+            dataloader,
+            dataloader_val,
+            model_old=None,
+            vi=False,
+            device=train_args['device'],
+            epochs=train_args['epochs'],
+            save_path=None,
+            return_best_model=True,
+            criterion=train_args['loss']
+        )
+    else:
+        model_ = trained_model
 
     learning_rate_sweep = train_args['learning_rate_sweep']
     bayes_var = train_args['bayes_var']
@@ -336,7 +342,6 @@ def make_multiple_runs_swag(dataset_class, data_path, num_runs, device='cpu', ga
 
         }
 
-
         train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train//8)
         val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
         test_dataloader = DataLoader(UCIDataloader(dataset.X_test, dataset.y_test), batch_size=n_test)
@@ -371,48 +376,6 @@ def make_multiple_runs_swag(dataset_class, data_path, num_runs, device='cpu', ga
         results_all.append(results)
     return results_all
 
-def plot_stuff(percentages, res):
-    percentages = [0] + percentages
-    import seaborn as sns
-    import pandas as pd
-    df = pd.DataFrame()
-    df['percentages'] = res.shape[0]*percentages
-    df['nll'] = res.flatten() * (-1)
-    plt.figure()
-    sns.pointplot(errorbar=lambda x: np.percentile(x, [25, 75]),
-                  data=df, x="percentages", y="nll",
-                  join=False,
-                  markers="d", scale=.5, errwidth=0.5, estimator=np.median)
-    plt.show(block = False)
-    plt.figure()
-    sns.pointplot(data=df, x="percentages", y="nll",
-                  join=False, errorbar=('ci', 50),
-                  markers="d", scale=.5, errwidth=0.5)
-    plt.show(block=False)
-
-
-def plot_series(percentages, res):
-    fig, ax = plt.subplots(1,1)
-    perc = [0] + percentages
-    rs = res - res.mean(-1)[:, None]
-    rs *= -1
-
-    runs = np.zeros_like(rs)
-    for i in range(runs.shape[0]):
-        runs[i] = i + 1
-    df = pd.DataFrame()
-    df['runs'] = runs.flatten()
-    df['nll'] = rs.flatten()
-    df['percentages'] = runs.shape[0] * perc
-    sns.lineplot(data=df, x='percentages', y='nll', errorbar=None, ax = ax, linewidth = 2, legend=False)
-    sns.lineplot(data=df, x = 'percentages', y = 'nll',
-                 hue ='runs', style = 'runs', alpha = 0.4, ax = ax, legend=False,
-                 palette = sns.color_palette(['black']))
-    for line in ax.lines[1:]:
-        line.set(linestyle = '-.')
-    ax.lines[0].set_label('Mean')
-    ax.legend()
-    plt.show()
 
 class MAPLoss(nn.Module):
     def __init__(self, prior_mu, prior_sigma):
@@ -424,6 +387,7 @@ class MAPLoss(nn.Module):
     def forward(self, pred, target, w):
         out = self.likelihood(pred, target) - self.dist.log_prob(w).mean()
         return out
+
 
 class DataForFun(Dataset):
     def __init__(self):
@@ -440,6 +404,7 @@ class DataForFun(Dataset):
         label = torch.from_numpy(self.y[item]).float()
         return inp, label
 
+
 class TestModelMulti(nn.Module):
     def __init__(self):
         super(TestModelMulti, self).__init__()
@@ -455,6 +420,7 @@ class TestModelMulti(nn.Module):
         out = self.activation(out)
         out = self.last_layer(out)
         return out
+
 
 if __name__ == '__main__':
 

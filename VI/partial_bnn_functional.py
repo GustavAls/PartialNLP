@@ -69,6 +69,7 @@ def vector_mask_to_parameter_mask(vec, parameters) -> list[Any]:
 
     return param_masks
 
+
 def create_mask(model, percentile):
     parameter_vector = nn.utils.parameters_to_vector(model.parameters())
     argsorted = torch.argsort(torch.abs(parameter_vector), descending=True)
@@ -80,6 +81,7 @@ def create_mask(model, percentile):
     param_mask = vector_mask_to_parameter_mask(mask, model.parameters())
     param_mask = order_with_bias(param_mask, model)
     return param_mask
+
 
 def create_non_parameter_mask(model, percentile):
     parameter_vector = nn.utils.parameters_to_vector(model.parameters())
@@ -232,6 +234,7 @@ def train(network: nn.Module,
     else:
         return network
 
+
 def get_sigma(model, dataloader, vi = True, num_mc_samples = 25, device = 'cpu'):
 
     predictions = []
@@ -257,6 +260,7 @@ def get_sigma(model, dataloader, vi = True, num_mc_samples = 25, device = 'cpu')
             targets = targets[0]
             predictions = predictions[0]
     return rmse(predictions, targets)
+
 
 def evaluate_monte_carlo(model, dataloader, loss_fn, num_mc_samples = 25, device = 'cpu'):
 
