@@ -252,25 +252,24 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
         mle_model = train(network=mle_model, dataloader_train=train_dataloader, dataloader_val=val_dataloader,
                              model_old = None, vi = False, device='cpu', epochs = num_epochs,
                              save_path = output_path, return_best_model=True, criterion=loss_fn)
-        if False:
-            val_nll, test_nll, val_mse, test_mse = run_percentiles(mle_model, train_dataloader, dataset, percentages)
+        val_nll, test_nll, val_mse, test_mse = run_percentiles(mle_model, train_dataloader, dataset, percentages)
 
-            save_name = os.path.join(output_path, f'results_laplace_run_{run}.pkl')
-            results = {
-                'percentages': percentages,
-                'x_train': dataset.X_train,
-                'y_train': dataset.y_train,
-                'y_val': dataset.y_val,
-                'x_val': dataset.X_val,
-                'x_test': dataset.X_test,
-                'y_test': dataset.y_test,
-                'val_nll': val_nll,
-                'test_nll': test_nll,
-                'val_mse': val_mse,
-                'test_mse': test_mse
-            }
-            with open(save_name, 'wb') as handle:
-                pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        save_name = os.path.join(output_path, f'results_laplace_run_{run}.pkl')
+        results = {
+            'percentages': percentages,
+            'x_train': dataset.X_train,
+            'y_train': dataset.y_train,
+            'y_val': dataset.y_val,
+            'x_val': dataset.X_val,
+            'x_test': dataset.X_test,
+            'y_test': dataset.y_test,
+            'val_nll': val_nll,
+            'test_nll': test_nll,
+            'val_mse': val_mse,
+            'test_mse': test_mse
+        }
+        with open(save_name, 'wb') as handle:
+            pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         if fit_swag:
             results_swag = {
