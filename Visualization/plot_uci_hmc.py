@@ -12,7 +12,7 @@ import requests
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 
-path = r"C:\Users\Gustav\Desktop\MasterThesisResults\UCI_HMC"
+path = r"C:\Users\Gustav\Desktop\MasterThesisResults\UCI_HMC_boston_scale"
 datasets = ["yacht", "energy", "boston"]
 
 all_results_df_list_scaled = {}

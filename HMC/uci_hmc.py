@@ -567,74 +567,61 @@ def calculate_nll_third(labels, mc_matrix, sigma, y_scale, y_loc):
         results.append(np.mean(res_temp))
     return np.mean(results)
 
-def make_multiple_runs_vi(num_runs, dataset_class, prior_variance, scale, save_combined = True, save_path = '',
+def make_vi_run(run, dataset_class, prior_variance, scale, save_path = '',
                           **dataset_args):
 
     results_dict = {}
 
-    for run in range(num_runs):
-        results_dict[f'run {run}'] = {
-            'percentiles': None,
-            'test_nll': [],
-            'val_nll': []
-        }
-        dataset = dataset_class(**dataset_args)
+    results_dict[f'run {run}'] = {
+        'percentiles': None,
+        'test_nll': [],
+        'val_nll': []
+    }
+    dataset = dataset_class(**dataset_args)
 
 
-        rng_key = random.PRNGKey(0)
+    rng_key = random.PRNGKey(0)
+    optimizer = numpyro.optim.Adam(0.01)
+    model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
+
+    svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
+    svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
+    MAP_params = svi_results.params
+
+    percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
+    test_nll, val_nll = calculate_nll_ours(model, svi_results, dataset, one_d_bnn, num_mc_samples=1)
+    results_dict[f'run {run}']['test_nll'].append(test_nll)
+    results_dict[f'run {run}']['val_nll'].append(val_nll)
+    results_dict[f'run {run}']['percentiles'] = [0] + percentiles
+
+    for percentile in percentiles:
+        sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
+
         optimizer = numpyro.optim.Adam(0.01)
-        model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
+        mixed_bnn = generate_mixed_bnn_by_param(
+            MAP_params,
+            create_sample_mask_largest_abs_values(percentile, MAP_params),
+            prior_variance,
+            scale=scale,
+        )
 
-        svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
-        start_time = time.time()
+        model = lambda X, y=None: generate_mixed_bnn_by_param(
+            MAP_params,
+            sample_mask_tuple,
+            prior_variance,
+            scale,
+        )(X, y)
+
+        svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
         svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
-        end_time = time.time()
-        MAP_params = svi_results.params
 
-        percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
-        test_nll, val_nll = calculate_nll_ours(model, svi_results, dataset, one_d_bnn, num_mc_samples=1)
+        test_nll, val_nll = calculate_nll_ours(model,svi_results, dataset, mixed_bnn, delta=False)
         results_dict[f'run {run}']['test_nll'].append(test_nll)
         results_dict[f'run {run}']['val_nll'].append(val_nll)
-        results_dict[f'run {run}']['percentiles'] = [0] + percentiles
 
-        for percentile in percentiles:
-            sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
-            prior_variance_used = prior_variance
-
-            optimizer = numpyro.optim.Adam(0.01)
-            mixed_bnn = generate_mixed_bnn_by_param(
-                MAP_params,
-                create_sample_mask_largest_abs_values(percentile, MAP_params),
-                prior_variance,
-                scale=scale,
-            )
-
-            model = lambda X, y=None: generate_mixed_bnn_by_param(
-                MAP_params,
-                sample_mask_tuple,
-                prior_variance,
-                scale,
-            )(X, y)
-
-            svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
-            start_time = time.time()
-            svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
-            end_time = time.time()
-
-            test_nll, val_nll = calculate_nll_ours(model,svi_results, dataset, mixed_bnn, delta=False)
-            results_dict[f'run {run}']['test_nll'].append(test_nll)
-            results_dict[f'run {run}']['val_nll'].append(val_nll)
-
-        if not save_combined:
-            save_name = f'run_number_{run}_vi_partial.pkl'
-            with open(os.path.join(save_path, save_name), 'wb') as handle:
-                pickle.dump(results_dict[f'run {run}'], handle,protocol=pickle.HIGHEST_PROTOCOL)
-
-    if save_combined:
-        save_name = f'combined_results_for_{num_runs}_runs_vi_partial.pkl'
-
-        with open(os.path.join(save_path, save_name), 'wb') as handle:
-            pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    save_name = f'run_number_{run}_vi_partial.pkl'
+    with open(os.path.join(save_path, save_name), 'wb') as handle:
+        pickle.dump(results_dict[f'run {run}'], handle,protocol=pickle.HIGHEST_PROTOCOL)
 
 
 
@@ -645,13 +632,11 @@ if __name__ == "__main__":
     parser.add_argument("--output_path", type=str, default=None)
     parser.add_argument("--data_path", type=str, default=None)
     parser.add_argument("--run", type=int, default=15)
-    parser.add_argument("--percentile_pr_cpu", type=ast.literal_eval, default=False)
     parser.add_argument("--scale_prior",  type=ast.literal_eval, default=False)
     parser.add_argument("--update_run", type=ast.literal_eval, default=False)
     parser.add_argument("--prior_variance", type=float, default=1.0) #0.1 is good for yacht, but not for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, but not for other datasets
     parser.add_argument('--vi', type = ast.literal_eval, default=False)
-    parser.add_argument('--save_combined', type=ast.literal_eval, default=False)
     args = parser.parse_args()
 
     if args.dataset == "yacht":
@@ -683,8 +668,7 @@ if __name__ == "__main__":
     model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
 
     if isinstance(args.vi, bool) and args.vi:
-        make_multiple_runs_vi(args.run, dataset_class, args.prior_variance, args.likelihood_scale,
-                              save_combined=args.save_combined, save_path=args.output_path, **dataset_args)
+        make_vi_run(args.run, dataset_class, args.prior_variance, args.likelihood_scale, save_path=args.output_path, **dataset_args)
         sys.exit(0)
 
     # breakpoint()
@@ -828,19 +812,16 @@ if __name__ == "__main__":
     # Halfway done training, so we have to do some creative bookkeeping
 
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
-    # percentiles = percentiles[args.run % len(percentiles)] if args.percentil_pr_cpu else percentiles
-    # run = args.run // len(percentiles) if args.percentile_pr_cpu else args.run
-    run = args.run
 
     MAP_params = svi_results.params
 
     if not args.scale_prior:
         if args.update_run:
-            all_results = pickle.load(open(os.path.join(args.output_path, f"{args.dataset}_not_scaled_run_{run}.pkl"), "rb"))
+            all_results = pickle.load(open(os.path.join(args.output_path, f"{args.dataset}_not_scaled_run_{args.run}.pkl"), "rb"))
         else:
             all_results = {"map_results": map_results, "full_network_results": full_network_results}
 
-        pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_not_scaled_run_{run}.pkl"), "wb"))
+        pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_not_scaled_run_{args.run}.pkl"), "wb"))
         for percentile in percentiles:
             if str(percentile) not in all_results.keys():
                 print(f"Running for {percentile} of weights sampled scaled, by maximum absolute value")
@@ -854,16 +835,16 @@ if __name__ == "__main__":
                     )
                 )
                 print(all_results[f"{percentile}"])
-                pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_not_scaled_run_{run}.pkl"), "wb"))
+                pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_not_scaled_run_{args.run}.pkl"), "wb"))
 
     else:
         if args.update_run:
             all_results = pickle.load(
-                open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{run}.pkl"), "rb"))
+                open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "rb"))
         else:
             all_results = {"map_results": map_results, "full_network_results": full_network_results}
 
-        pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{run}.pkl"), "wb"))
+        pickle.dump(all_results, open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "wb"))
         for percentile in percentiles:
             if str(percentile) not in all_results.keys():
                 print(f"Running for {percentile} of weights sampled scaled, by maximum absolute value")
@@ -878,4 +859,4 @@ if __name__ == "__main__":
                 )
                 print(all_results[f"{percentile}"])
                 pickle.dump(all_results,
-                            open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{run}.pkl"), "wb"))
+                            open(os.path.join(args.output_path, f"{args.dataset}_scaled_run_{args.run}.pkl"), "wb"))
