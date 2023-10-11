@@ -300,7 +300,7 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
                            'epochs': args.num_epochs,
                            'save_path': args.output_path,
                            'learning_rate_sweep': np.logspace(-1.5, -1, 2, endpoint=True),
-                           'swag_epochs': 50,
+                           'swag_epochs': 100,
                            }
 
             res = train_swag(mle_model, train_dataloader, val_dataloader, test_dataloader,

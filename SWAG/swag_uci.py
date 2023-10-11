@@ -66,9 +66,11 @@ def calculate_mse(preds, labels):
     mse = torch.mean(torch.cat(results, dim = 0)).item()
     return mse
 
+
 def calculate_mse_batch(preds, labels):
     mse = torch.mean((preds - labels)**2).item()
     return mse
+
 
 def calculate_nll_third(labels, mc_matrix, sigma, y_scale, y_loc):
     results = []
@@ -97,6 +99,7 @@ def calculate_nll_fourth(labels, mc_matrix, sigma, y_scale, y_loc):
         results.append(dist.log_prob(torch.tile(labels[i]*y_scale+y_loc, (mc_matrix.shape[-1], ))).item()/mc_matrix.shape[-1])
     return np.mean(results)
 
+
 def calculate_nll_fifth(labels, mc_matrix, sigma, y_scale, y_loc):
 
     results = []
@@ -107,6 +110,7 @@ def calculate_nll_fifth(labels, mc_matrix, sigma, y_scale, y_loc):
         dist = Normal(mc_matrix[i].mean()*y_scale + y_loc, posterior_sigma*y_scale)
         results.append(dist.log_prob(labels[i]*y_scale + y_loc))
     return np.mean(results)
+
 
 def get_swag_residuals(model, dataloader, mask,swag_results, train_args):
     theta_swa = swag_results["theta_swa"]
