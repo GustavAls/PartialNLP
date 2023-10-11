@@ -157,6 +157,7 @@ if __name__ == '__main__':
     for name, path in zip(names, paths):
         # dfnll, dfmse = read_hmc_data(path)
         percentages, test_nll, test_mse = read_data_swag(path, include_map=True)
+        breakpoint()
         # breakpoint()
         # plot_series(percentages, -test_nll[:, 1:], title='Boston Swag')
         plot_stuff(percentages = percentages, res = test_nll, title=name)

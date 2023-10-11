@@ -259,7 +259,7 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
                              model_old = None,mask = None, vi = False, device='cpu', epochs = num_epochs,
                              save_path = output_path, num_mc_samples=200, early_stopping_patience=1000,
                              return_best_model=True, criterion=loss_fn)
-        breakpoint()
+
         # preds = mle_model(torch.from_numpy(dataset.X_test).float())
         # labels = torch.from_numpy(dataset.y_test).float()
         # y_scale = torch.from_numpy(dataset.scl_Y.scale_)
