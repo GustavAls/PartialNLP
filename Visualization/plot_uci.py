@@ -85,15 +85,14 @@ def plot_partial_percentages(percentages, res, data_name=None, df=None, num_runs
                 df[key + '_nll'] = [nll.item() for nll in val.flatten()]
             elif 'SWAG' in key:
                 df[key + '_nll'] = [(-1) * ll for ll in val.flatten()]
-    fig, ax = plt.subplots(1, 1)
-    # plt.rcParams['figure.figsize'] = [10, 8]
 
     # Plot median
-    # plot_estimator(df=df, errorbar_func=lambda x: np.percentile(x, (25, 75)), estimator=np.median, ax=ax, data_name=data_name)
+    fig, ax = plt.subplots(1, 1)
+    plot_estimator(df=df, errorbar_func=lambda x: np.percentile(x, (25, 75)), estimator=np.median, ax=ax, data_name=data_name)
 
     # Plot mean
+    fig, ax = plt.subplots(1, 1)
     plot_estimator(df=df, errorbar_func=('ci', 100), estimator=np.mean, ax=ax, data_name=data_name)
-    breakpoint()
 
 def plot_series(percentages, res, title = None):
     fig, ax = plt.subplots(1,1)
@@ -273,12 +272,14 @@ def plot_la_swag_combined(path):
 
 
 if __name__ == '__main__':
-    # path_la = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_Laplace_MAP'
-    # path_swag = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_SWAG_MAP_nobayes'
+    path_la = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_Laplace_MAP'
+    path_swag = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_SWAG_MAP_nobayes'
     # plot_la_swag(path_la, path_swag)
-    path = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_Laplace_SWAG'
+    # path = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_Laplace_SWAG_2'
 
-    plot_la_swag_combined(path)
+    # plot_la_swag_combined(path)
+    plot_la_swag(path_la, path_swag)
+
     breakpoint()
 
 
