@@ -581,7 +581,7 @@ def make_vi_run(run, dataset, prior_variance, scale, save_path, model, svi_resul
         pickle.dump(results_dict, handle,protocol=pickle.HIGHEST_PROTOCOL)
 
 
-def make_hmc_run(run, dataset, scale_prior, save_path, likelihood_scale, percentiles, results_dict):
+def make_hmc_run(run, dataset, scale_prior, prior_variance, save_path, likelihood_scale, percentiles, results_dict):
     MAP_params = results_dict['map_results']['svi_results'].params
     for percentile in percentiles:
         # If update runs are done
@@ -592,6 +592,7 @@ def make_hmc_run(run, dataset, scale_prior, save_path, likelihood_scale, percent
                 percentile,
                 MAP_params,
                 prior_variance_scaled=scale_prior,
+                prior_variance=prior_variance,
                 scale=likelihood_scale,
             )
             print(results_dict[f"{percentile}"])
@@ -601,13 +602,11 @@ def make_hmc_run(run, dataset, scale_prior, save_path, likelihood_scale, percent
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some integers.")
     parser.add_argument("--dataset", type=str, default="yacht")
-    parser.add_argument("--gap", default=False, action="store_true")
     parser.add_argument("--output_path", type=str, default=os.getcwd())
     parser.add_argument("--data_path", type=str, default=os.getcwd())
     parser.add_argument("--run", type=int, default=15)
-    parser.add_argument("--num_epochs", type=int, default=200)
-    parser.add_argument("--scale_prior",  type=ast.literal_eval, default=False)
-    parser.add_argument("--update_run", type=ast.literal_eval, default=False)
+    parser.add_argument("--num_epochs", type=int, default=20000)
+    parser.add_argument("--scale_prior",  type=ast.literal_eval, default=True)
     parser.add_argument("--prior_variance", type=float, default=1.0) #0.1 is good for yacht, but not for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, but not for other datasets
     parser.add_argument('--vi', type=ast.literal_eval, default=False)
@@ -660,5 +659,6 @@ if __name__ == "__main__":
             make_vi_run(args.run, dataset, args.prior_variance, args.likelihood_scale,
                         save_path=args.output_path, model=model, svi_results=svi_results)
 
-    make_hmc_run(args.run, dataset, args.scale_prior, args.output_path, args.likelihood_scale, percentiles, hmc_result_dict)
+    make_hmc_run(args.run, dataset, args.scale_prior, args.prior_variance,
+                 args.output_path, args.likelihood_scale, percentiles,  hmc_result_dict)
 
