@@ -602,7 +602,7 @@ def train_MAP_solution(dataset, num_epochs):
 def convert_torch_to_pyro_params(torch_params, MAP_params):
     # Torch model does not have a precision parameter
     assert len(MAP_params.keys()) - 1 == len(torch_params.keys())
-    for svi_key in zip(MAP_params.keys(), torch_params.keys()):
+    for svi_key in MAP_params.keys():
         # Hardcoded for now
         if "W1" in svi_key:
             MAP_params[svi_key] = convert_torch_to_pyro_params(torch_params['linear1.weight'].detach()).T

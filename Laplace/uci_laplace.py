@@ -253,8 +253,6 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
                              model_old = None, vi = False, device='cpu', epochs = num_epochs,
                              save_path = map_path, return_best_model=True, criterion=loss_fn)
 
-        torch.save(mle_model.state_dict(), map_path)
-
         val_nll, test_nll, val_mse, test_mse = run_percentiles(mle_model, train_dataloader, dataset, percentages)
 
         save_name = os.path.join(output_path, f'results_laplace_run_{run}.pkl')
