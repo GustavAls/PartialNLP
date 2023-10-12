@@ -1,7 +1,6 @@
 import ast
 import sys, os, time, requests
 sys.path.append(os.getcwd())
-from functools import partial
 import torch
 import numpy as np
 import pandas as pd
@@ -10,7 +9,12 @@ from sklearn.model_selection import train_test_split
 import numpyro
 import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS, Predictive, Trace_ELBO, autoguide, SVI
-from numpyro.infer.initialization import init_to_uniform
+from uci import UCIDataloader
+from torch.utils.data import DataLoader
+from VI.partial_bnn_functional import train
+from MAP_baseline.MapNN import MapNN
+from misc.likelihood_losses import GLLGP_loss_swag, BaseMAPLossSwag
+from torch.nn import MSELoss
 import pickle
 import jax
 import jax.numpy as jnp
@@ -20,6 +24,10 @@ numpyro.set_platform("cpu")
 numpyro.set_host_device_count(8)
 import argparse
 from torch.distributions import Normal
+
+
+def tensor_to_jax_array(tensor):
+    return jnp.array(tensor.cpu().detach().numpy())
 
 
 def _gap_train_test_split(X, y, gap_column, test_size):
@@ -262,22 +270,13 @@ def evaluate_samples_properly(model, rng_key, X, y, samples, y_scale=1.0, y_loc=
     sigma_obs = (1.0 / jnp.sqrt(samples["prec_obs"])).mean()
 
     predictive = Predictive(model, samples)(rng_key, X=X)
-    # def calculate_ll_third(labels, mc_matrix, sigma, y_scale, y_loc):
-    #     results = []
-    #     for i in range(mc_matrix.shape[1]):
-    #         res_temp = []
-    #         for j in range(mc_matrix.shape[0]):
-    #             dist = Normal(mc_matrix[j, i].item() * y_scale + y_loc, np.sqrt(sigma) * y_scale)
-    #             res_temp.append(dist.log_prob(torch.tensor([labels[i].item()]) * y_scale + y_loc).item())
-    #         results.append(np.mean(res_temp))
-    #     return np.mean(results)
 
     def calculate_ll(labels, mc_matrix):
         results = []
-        for i in range(mc_matrix.shape[0]):
+        for i in range(mc_matrix.shape[1]):
             res_temp = []
-            for j in range(mc_matrix.shape[1]):
-                dist = Normal(mc_matrix[i, j] * y_scale.item() + y_loc.item(), sigma_obs.item() * y_scale.item())
+            for j in range(mc_matrix.shape[0]):
+                dist = Normal(mc_matrix[j, i] * y_scale.item() + y_loc.item(), sigma_obs.item() * y_scale.item())
                 res_temp.append(dist.log_prob(torch.tensor([labels[i] * y_scale.item() + y_loc.item()])).item())
             results.append(np.mean(res_temp))
         return np.mean(results)
@@ -452,8 +451,8 @@ def run_for_percentile(
         scale=scale,
     )
 
-    nuts_kernel = NUTS(mixed_bnn, max_tree_depth=15)
-    mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
+    nuts_kernel = NUTS(mixed_bnn, max_tree_depth=1)
+    mcmc = MCMC(nuts_kernel, num_warmup=1, num_samples=1, num_chains=1)
     rng_key = random.PRNGKey(0)
     mcmc.run(rng_key, dataset.X_train, dataset.y_train)
     test_ll = evaluate_samples_properly(
@@ -581,6 +580,46 @@ def make_vi_run(run, dataset, prior_variance, scale, save_path, model, svi_resul
         pickle.dump(results_dict, handle,protocol=pickle.HIGHEST_PROTOCOL)
 
 
+def train_MAP_solution(dataset, num_epochs):
+    n_train, p = dataset.X_train.shape
+    n_val = dataset.X_val.shape[0]
+    out_dim = dataset.y_train.shape[1]
+
+    mle_model = MapNN(input_size=p, width=50, output_size=out_dim, non_linearity="leaky_relu")
+    loss_arguments = {'loss': GLLGP_loss_swag , 'prior_sigma': 1}
+    if issubclass(loss := loss_arguments.get('loss', MSELoss), BaseMAPLossSwag):
+        loss_arguments['model'] = mle_model
+        loss_fn = loss(**loss_arguments)
+
+    train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train // 8)
+    val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
+
+    mle_model = train(network=mle_model, dataloader_train=train_dataloader, dataloader_val=val_dataloader,
+                      model_old=None, vi=False, device='cpu', epochs=num_epochs, return_best_model=True, criterion=loss_fn)
+    return mle_model
+
+
+def convert_torch_to_pyro_params(torch_params, MAP_params):
+    # Torch model does not have a precision parameter
+    assert len(MAP_params.keys()) - 1 == len(torch_params.keys())
+    for svi_key in zip(MAP_params.keys(), torch_params.keys()):
+        # Hardcoded for now
+        if "W1" in svi_key:
+            MAP_params[svi_key] = convert_torch_to_pyro_params(torch_params['linear1.weight'].detach()).T
+        elif "W2" in svi_key:
+            MAP_params[svi_key] = convert_torch_to_pyro_params(torch_params['linear2.weight'].detach()).T
+        elif "b1" in svi_key:
+            MAP_params[svi_key] = convert_torch_to_pyro_params(torch_params['linear1.bias'].detach()).T
+        elif "b2" in svi_key:
+            MAP_params[svi_key] = convert_torch_to_pyro_params(torch_params['linear1.bias'].detach()).T
+        elif "W_output" in svi_key:
+            MAP_params[svi_key] = convert_torch_to_pyro_params(torch_params['out.weight'].detach()).T
+        elif "b_output" in svi_key:
+            MAP_params[svi_key] = convert_torch_to_pyro_params(torch_params['out.bias'].detach()).T
+
+    return MAP_params
+
+
 def make_hmc_run(run, dataset, scale_prior, prior_variance, save_path, likelihood_scale, percentiles, results_dict):
     MAP_params = results_dict['map_results']['svi_results'].params
     for percentile in percentiles:
@@ -601,11 +640,12 @@ def make_hmc_run(run, dataset, scale_prior, prior_variance, save_path, likelihoo
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some integers.")
-    parser.add_argument("--dataset", type=str, default="yacht")
+    parser.add_argument("--dataset", type=str, default="boston")
     parser.add_argument("--output_path", type=str, default=os.getcwd())
     parser.add_argument("--data_path", type=str, default=os.getcwd())
+    parser.add_argument("--map_path", type=str, default=None)
     parser.add_argument("--run", type=int, default=15)
-    parser.add_argument("--num_epochs", type=int, default=20000)
+    parser.add_argument("--num_epochs", type=int, default=100)
     parser.add_argument("--scale_prior",  type=ast.literal_eval, default=True)
     parser.add_argument("--prior_variance", type=float, default=1.0) #0.1 is good for yacht, but not for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, but not for other datasets
@@ -633,13 +673,22 @@ if __name__ == "__main__":
     if os.path.exists(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")):
         hmc_result_dict = pickle.load(open(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl"), "rb"))
     else:
-        rng_key = random.PRNGKey(0)
+        rng_key = random.PRNGKey(1)
         optimizer = numpyro.optim.Adam(0.01)
         model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
 
         svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
         svi_results = svi.run(rng_key, args.num_epochs, X=dataset.X_train, y=dataset.y_train)
         MAP_params = svi_results.params
+        # Overwrite MAP params with the ones from the saved model
+        # if args.map_path is not None:
+        if True:
+            # When completed model is ready
+            #torch_MAP_params = pickle.load(open(args.map_path, "rb"))
+            # Testing with MAP solution
+            mle_model = train_MAP_solution(dataset, args.num_epochs)
+            mle_state_dict = mle_model.state_dict()
+            MAP_params = convert_torch_to_pyro_params(mle_state_dict, MAP_params)
 
         vi_results_dict = {'percentiles': None, 'test_ll': [], 'val_ll': []}
 

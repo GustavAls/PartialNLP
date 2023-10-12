@@ -267,3 +267,5 @@ def schedule(epoch, lr_init, epochs, swa, swa_start=None, swa_lr=None):
     else:
         factor = lr_ratio
     return lr_init * factor
+
+
