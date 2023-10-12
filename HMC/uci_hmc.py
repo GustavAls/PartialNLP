@@ -451,8 +451,8 @@ def run_for_percentile(
         scale=scale,
     )
 
-    nuts_kernel = NUTS(mixed_bnn, max_tree_depth=1)
-    mcmc = MCMC(nuts_kernel, num_warmup=1, num_samples=1, num_chains=1)
+    nuts_kernel = NUTS(mixed_bnn, max_tree_depth=15)
+    mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
     rng_key = random.PRNGKey(0)
     mcmc.run(rng_key, dataset.X_train, dataset.y_train)
     test_ll = evaluate_samples_properly(
@@ -580,12 +580,7 @@ def make_vi_run(run, dataset, prior_variance, scale, save_path, model, svi_resul
         pickle.dump(results_dict, handle,protocol=pickle.HIGHEST_PROTOCOL)
 
 
-def train_MAP_solution(dataset, num_epochs):
-    n_train, p = dataset.X_train.shape
-    n_val = dataset.X_val.shape[0]
-    out_dim = dataset.y_train.shape[1]
-
-    mle_model = MapNN(input_size=p, width=50, output_size=out_dim, non_linearity="leaky_relu")
+def train_MAP_solution(mle_model, dataset, num_epochs):
     loss_arguments = {'loss': GLLGP_loss_swag , 'prior_sigma': 1}
     if issubclass(loss := loss_arguments.get('loss', MSELoss), BaseMAPLossSwag):
         loss_arguments['model'] = mle_model
@@ -605,17 +600,17 @@ def convert_torch_to_pyro_params(torch_params, MAP_params):
     for svi_key in MAP_params.keys():
         # Hardcoded for now
         if "W1" in svi_key:
-            MAP_params[svi_key] = convert_torch_to_pyro_params(torch_params['linear1.weight'].detach()).T
+            MAP_params[svi_key] = tensor_to_jax_array(torch_params['linear1.weight'].detach()).T
         elif "W2" in svi_key:
-            MAP_params[svi_key] = convert_torch_to_pyro_params(torch_params['linear2.weight'].detach()).T
+            MAP_params[svi_key] = tensor_to_jax_array(torch_params['linear2.weight'].detach()).T
         elif "b1" in svi_key:
-            MAP_params[svi_key] = convert_torch_to_pyro_params(torch_params['linear1.bias'].detach()).T
+            MAP_params[svi_key] = tensor_to_jax_array(torch_params['linear1.bias'].detach()).T
         elif "b2" in svi_key:
-            MAP_params[svi_key] = convert_torch_to_pyro_params(torch_params['linear1.bias'].detach()).T
+            MAP_params[svi_key] = tensor_to_jax_array(torch_params['linear1.bias'].detach()).T
         elif "W_output" in svi_key:
-            MAP_params[svi_key] = convert_torch_to_pyro_params(torch_params['out.weight'].detach()).T
+            MAP_params[svi_key] = tensor_to_jax_array(torch_params['out.weight'].detach()).T
         elif "b_output" in svi_key:
-            MAP_params[svi_key] = convert_torch_to_pyro_params(torch_params['out.bias'].detach()).T
+            MAP_params[svi_key] = tensor_to_jax_array(torch_params['out.bias'].detach()).T
 
     return MAP_params
 
@@ -645,7 +640,7 @@ if __name__ == "__main__":
     parser.add_argument("--data_path", type=str, default=os.getcwd())
     parser.add_argument("--map_path", type=str, default=None)
     parser.add_argument("--run", type=int, default=15)
-    parser.add_argument("--num_epochs", type=int, default=100)
+    parser.add_argument("--num_epochs", type=int, default=20000)
     parser.add_argument("--scale_prior",  type=ast.literal_eval, default=True)
     parser.add_argument("--prior_variance", type=float, default=1.0) #0.1 is good for yacht, but not for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, but not for other datasets
@@ -680,13 +675,17 @@ if __name__ == "__main__":
         svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
         svi_results = svi.run(rng_key, args.num_epochs, X=dataset.X_train, y=dataset.y_train)
         MAP_params = svi_results.params
+
         # Overwrite MAP params with the ones from the saved model
-        # if args.map_path is not None:
-        if True:
+        if args.map_path is not None:
             # When completed model is ready
-            #torch_MAP_params = pickle.load(open(args.map_path, "rb"))
+            n_train, p = dataset.X_train.shape
+            n_val = dataset.X_val.shape[0]
+            out_dim = dataset.y_train.shape[1]
+            mle_model = MapNN(input_size=p, width=50, output_size=out_dim, non_linearity="leaky_relu")
+            mle_model.load_state_dict(torch.load(args.map_path))
             # Testing with MAP solution
-            mle_model = train_MAP_solution(dataset, args.num_epochs)
+            # mle_model = train_MAP_solution(dataset, args.num_epochs)
             mle_state_dict = mle_model.state_dict()
             MAP_params = convert_torch_to_pyro_params(mle_state_dict, MAP_params)
 
