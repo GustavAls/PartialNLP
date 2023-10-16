@@ -15,11 +15,11 @@ from VI.partial_bnn_functional import train
 from MAP_baseline.MapNN import MapNN
 from misc.likelihood_losses import GLLGP_loss_swag, BaseMAPLossSwag
 from torch.nn import MSELoss
-from Laplace.uci_laplace import calculate_nll
 import pickle
 import jax
 import jax.numpy as jnp
 import jax.nn
+from Laplace.uci_laplace import calculate_std
 from jax import random
 numpyro.set_platform("cpu")
 numpyro.set_host_device_count(8)
@@ -511,6 +511,7 @@ def calculate_ll_ours(model, params, dataset, bnn, num_mc_samples = 200, delta =
         ptrain = mle_model(torch.tensor(dataset.X_train, dtype=torch.float32)).detach().numpy()
         ptest = mle_model(torch.tensor(dataset.X_test, dtype=torch.float32)).detach().numpy()
         pval = mle_model(torch.tensor(dataset.X_val, dtype=torch.float32)).detach().numpy()
+        sigma_noise = calculate_std(mle_model, train_dataloader, alpha=3, beta=1, beta_prior=False)
     elif num_mc_samples == 1:
         ptrain = predictive_train['mean'].squeeze(0)
         ptest =  predictive_test['mean'].squeeze(0)
@@ -523,6 +524,9 @@ def calculate_ll_ours(model, params, dataset, bnn, num_mc_samples = 200, delta =
     ytrain, yval, ytest = dataset.y_train.squeeze(), dataset.y_val.squeeze(), dataset.y_test.squeeze()
     sigma = np.std(ptrain - ytrain)
 
+
+    other_test_nll = calculate_nll(torch.tensor(ptest), torch.tensor(ytest),
+                                   torch.tile(torch.tensor(sigma), (len(ytest),)), y_scale.item(), y_loc.item())
     test_ll = calculate_ll_mc(ytest, ptest, sigma.item(), y_scale.item(), y_loc.item())
     val_ll = calculate_ll_mc(yval, pval, sigma.item(), y_scale.item(), y_loc.item())
 
@@ -539,8 +543,9 @@ def calculate_nll(preds, labels, sigma, y_scale, y_loc):
             nll: (float) negative log likelihood
     """
     results = []
-    for pred, label in zip(preds, labels):
-        dist = Normal(pred * y_scale + y_loc, sigma * y_scale)
+    scales = var
+    for pred, scale, label in zip(preds, scales, labels):
+        dist = Normal(pred * y_scale + y_loc, scale * y_scale)
         results.append(dist.log_prob(label * y_scale + y_loc))
     nll = -1 * sum(results) / len(results)
     return nll

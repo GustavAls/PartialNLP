@@ -251,7 +251,7 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
 
         mle_model = train(network=mle_model, dataloader_train=train_dataloader, dataloader_val=val_dataloader,
                              model_old = None, vi = False, device='cpu', epochs = num_epochs,
-                             save_path = map_path, return_best_model=True, criterion=loss_fn)
+                             save_path = os.path.join(map_path, f"run_{run}.pt"), return_best_model=True, criterion=loss_fn)
 
         val_nll, test_nll, val_mse, test_mse = run_percentiles(mle_model, train_dataloader, dataset, percentages)
 
