@@ -1,3 +1,4 @@
+import copy
 import os
 import torch
 from datasets import load_dataset
@@ -7,15 +8,20 @@ from transformers import (AutoTokenizer,
                           AutoModelForSequenceClassification,
                           TrainingArguments,
                           Trainer)
+from transformers.modeling_outputs import SequenceClassifierOutput
 from transformers.models.distilbert.modeling_distilbert import DistilBertForSequenceClassification
 import numpy as np
 import argparse
+import importlib
 # Heavily based on: https://huggingface.co/blog/sentiment-analysis-python, and
 # https://huggingface.co/docs/transformers/tasks/sequence_classification
-from laplace import Laplace
-# from laplace import Laplace
-from laplace.utils import ModuleNameSubnetMask
-
+# from  import laplace_partial as lp
+# from laplace_lora.laplace_partial.utils import ModuleNameSubnetMask
+import laplace_partial as lp
+from PartialConstructor import PartialConstructor
+import torch.nn as nn
+from Laplace.laplace import Laplace
+from torch.utils.data import Dataset, DataLoader
 class SentimentClassifier:
     def __init__(self, network_name, id2label, label2id, train_size=300, test_size=30):
         self._tokenizer = AutoTokenizer.from_pretrained(network_name)
@@ -123,6 +129,124 @@ class SentimentClassifier:
         return epoch_iterator, trainer
 
 
+class Extension(torch.nn.Module):
+
+    def __init__(self, model):
+        super(Extension, self).__init__()
+        self.model = model
+
+    def forward(self, **kwargs):
+        kwargs.pop('labels', None)
+        output_dict = self.model(**kwargs)
+        logits = output_dict['logits']
+        return logits.to(torch.float32)
+
+
+class Truncater(torch.nn.Module):
+    def __init__(self, model):
+        super(Truncater, self).__init__()
+
+        self.embeddings = model.distilbert.embeddings
+        self.classifier = model.classifier
+        self.config = model.config
+        self.num_labels = model.num_labels
+        self.another_linear = torch.nn.Linear(768, 20)
+        self.another_linear_v2 = torch.nn.Linear(20, 20)
+        self.classifier = torch.nn.Linear(20, 2)
+
+
+    def forward(
+            self,
+            input_ids =  None,
+            attention_mask = None,
+            head_mask= None,
+            inputs_embeds = None,
+            labels= None,
+            output_attentions= None,
+            output_hidden_states = None,
+            return_dict= None,
+    ):
+        embeddings = self.embeddings(input_ids, inputs_embeds)
+        embeddings = torch.nn.ReLU()(self.another_linear(embeddings))
+        embeddings = torch.nn.ReLU()(self.another_linear_v2(embeddings))
+        logits = self.classifier(embeddings[:, 0])  # (bs, num_labels)
+
+        loss = None
+        if labels is not None:
+            if self.config.problem_type is None:
+                if self.num_labels == 1:
+                    self.config.problem_type = "regression"
+                elif self.num_labels > 1 and (labels.dtype == torch.long or labels.dtype == torch.int):
+                    self.config.problem_type = "single_label_classification"
+                else:
+                    self.config.problem_type = "multi_label_classification"
+
+            if self.config.problem_type == "regression":
+                loss_fct = torch.nn.MSELoss()
+                if self.num_labels == 1:
+                    loss = loss_fct(logits.squeeze(), labels.squeeze())
+                else:
+                    loss = loss_fct(logits, labels)
+            elif self.config.problem_type == "single_label_classification":
+                loss_fct = torch.nn.CrossEntropyLoss()
+                loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+            elif self.config.problem_type == "multi_label_classification":
+                loss_fct = torch.nn.BCEWithLogitsLoss()
+                loss = loss_fct(logits, labels)
+        return SequenceClassifierOutput(
+            loss=loss,
+            logits=logits,
+            hidden_states=None,
+            attentions=None
+        )
+
+class Tesnet(nn.Module):
+    def __init__(self):
+        super(Tesnet, self).__init__()
+        self.layer_one = nn.Linear(10, 10)
+        self.layer_two = nn.Linear(10, 2)
+        self.activation = nn.ReLU()
+
+    def forward(self, x):
+        out = self.layer_one(x)
+        out = self.activation(out)
+        out = self.layer_two(out)
+        return out
+
+class TestNetWrapper(nn.Module):
+
+    def __init__(self, model):
+        super(TestNetWrapper, self).__init__()
+        self.model = model
+    def forward(self, x, labels):
+        out = self.model(x)
+        return out
+
+class ForfunData(Dataset):
+
+    def __init__(self):
+        self.X = torch.randn(100, 10)
+        y = torch.randint(0, 2, size = (100, 1))
+        self.y = torch.zeros((100, 2))
+        for i in range(y.shape[0]):
+            self.y[y[i]] = 1
+
+        self.return_normal = True
+
+    def get_normal(self, item):
+        return self.X[item], self.y[item]
+    def get_unnormal(self, item):
+        return {'x': self.X[item], 'labels': self.y[item]}
+    def __len__(self):
+        return len(self.y)
+
+    def __getitem__(self, item):
+        if self.return_normal:
+            return self.X[item], self.y[item].reshape(-1)
+        else:
+            return self.get_unnormal(item)
+
+
 if __name__ == "__main__":
     """
     
@@ -137,7 +261,7 @@ if __name__ == "__main__":
     HUGGINGFACE:
         training_args.py: Added Laplace input as optional, on line 715 (bool)
         trainer.py: Added function ._prepare_inner_training_for_laplace().
-        trainer.py: Made a check for (args.laplace == True) in .train() so it returns
+        trainer.py: Made a check for (args.laplace_partial == True) in .train() so it returns
                     ._prepare_inner_training_for_laplace(). 
     
     LAPLACE:
@@ -165,8 +289,26 @@ if __name__ == "__main__":
     parser.add_argument("--test_size", type=int, default=300)
     parser.add_argument("--device_batch_size", type=int, default=12)
 
+
     args = parser.parse_args()
     torch.cuda.is_available()
+
+    tesnet = Tesnet()
+    dataset = ForfunData()
+    dataset2 = copy.deepcopy(dataset)
+    dataset2.return_normal = False
+    dataloader2 = DataLoader(dataset2, batch_size=100)
+    dataloader = DataLoader(dataset, batch_size=100)
+    la1 = Laplace(copy.deepcopy(tesnet), 'classification', subset_of_weights='all')
+    la1.fit(dataloader)
+    tnet2 = TestNetWrapper(copy.deepcopy(tesnet))
+
+    partial_construct = PartialConstructor(tnet2, module_names=['model.layer_one', 'model.layer_two'])
+    partial_construct.select()
+    la2 = lp.Laplace(tnet2, 'classification', 'all')
+    la2.fit(dataloader2)
+    breakpoint()
+
     id2label = {0: "NEGATIVE", 1: "POSITIVE"}
     label2id = {"NEGATIVE": 0, "POSITIVE": 1}
     sentiment_classifier = SentimentClassifier("distilbert-base-uncased",
@@ -189,17 +331,32 @@ if __name__ == "__main__":
                                 device_batch_size=args.device_batch_size,
                                 )
 
-    subnetwork_mask = ModuleNameSubnetMask(sentiment_classifier.model, module_names=['classifier'])
-    subnetwork_mask.select()
-    subnetwork_indices = subnetwork_mask.indices
-
-    la = Laplace(sentiment_classifier.model, 'classification',
-            subset_of_weights='subnetworknlp',
-            hessian_structure='full',
-            subnetwork_indices=subnetwork_indices,
-            backend_kwargs = {'transformer': True})
-    la.fit(train_loader)
     x = next(iter(train_loader))
+    # out = sentiment_classifier.model(x)
+
+    m = Truncater(sentiment_classifier.model)
+    m = Extension(m)
+    out = m(**x)
+    breakpoint()
+    partial_constructor = PartialConstructor(m, module_names=['model.classifier'])
+    partial_constructor.select()
+
+
+    """
+    Pass the subnetwork mask around, so we only calculate the kronecker factorization (KFAC)
+    on the specified mask. Create new class that does that. 
+    """
+    # subnetwork_mask = ModuleNameSubnetMask(m, module_names=['model.classifier'])
+    # subnetwork_mask.select()
+    # subnetwork_indices = subnetwork_mask.indices
+
+    la = lp.Laplace(m, 'classification',
+                    subset_of_weights='all',
+                    hessian_structure='kron')
+
+    la.fit(train_loader)
+    la._glm_predictive_distribution(x)
+
 
     breakpoint()
 
