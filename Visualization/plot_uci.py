@@ -316,8 +316,8 @@ if __name__ == '__main__':
     # path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_VI'
     # plot_hmc_vi(path_hmc, path_vi)
 
-    path_hmc_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_HMC_VI_2'
-    plot_hmc_vi_combined(path_hmc_vi)
+    # path_hmc_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_HMC_VI'
+    # plot_hmc_vi_combined(path_hmc_vi)
 
     breakpoint()
 

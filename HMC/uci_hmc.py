@@ -289,15 +289,13 @@ def evaluate_samples_properly(model, rng_key, X, y, samples, y_scale=1.0, y_loc=
     return likelihood
 
 
-def evaluate_MAP(model, MAP_params, X, y, rng_key, y_scale=1.0, y_loc=0.0, mle_model=None):
+def evaluate_MAP(model, MAP_params, X, y, rng_key, y_scale=1.0, y_loc=0.0):
     predictive = Predictive(
         model=model,
         guide=autoguide.AutoNormal(model),
         params=MAP_params,
         num_samples=1,
     )(rng_key, X=X)
-
-    preds = mle_model(torch.tensor(X)).detach().numpy()
 
     sigma_obs = 1.0 / jnp.sqrt(MAP_params["prec_obs_auto_loc"])
     rmse = (((predictive["mean"][0, :] - y) ** 2).mean() ** 0.5) * y_scale
@@ -509,14 +507,14 @@ def calculate_ll_ours(model, params, dataset, bnn, num_mc_samples = 200, delta =
     y_scale = dataset.scl_Y.scale_
     y_loc = dataset.scl_Y.mean_
 
-    # preds = mle_model(torch.tensor(dataset.X_train, dtype=torch.float32)).detach().numpy()
-
-    if num_mc_samples == 1:
-
+    if num_mc_samples == 1 and mle_model is not None:
+        ptrain = mle_model(torch.tensor(dataset.X_train, dtype=torch.float32)).detach().numpy()
+        ptest = mle_model(torch.tensor(dataset.X_test, dtype=torch.float32)).detach().numpy()
+        pval = mle_model(torch.tensor(dataset.X_val, dtype=torch.float32)).detach().numpy()
+    elif num_mc_samples == 1:
         ptrain = predictive_train['mean'].squeeze(0)
         ptest =  predictive_test['mean'].squeeze(0)
         pval = predictive_val['mean'].squeeze(0)
-
     else:
         ptrain = predictive_train['mean'].squeeze(-1)
         ptest =  predictive_test['mean'].squeeze(-1)
@@ -525,24 +523,41 @@ def calculate_ll_ours(model, params, dataset, bnn, num_mc_samples = 200, delta =
     ytrain, yval, ytest = dataset.y_train.squeeze(), dataset.y_val.squeeze(), dataset.y_test.squeeze()
     sigma = np.std(ptrain - ytrain)
 
-    test_ll = calculate_ll_third(ytest, ptest, sigma.item(), y_scale.item(),y_loc.item())
-    val_ll = calculate_ll_third(yval, pval, sigma.item(), y_scale.item(),y_loc.item())
+    test_ll = calculate_ll_mc(ytest, ptest, sigma.item(), y_scale.item(), y_loc.item())
+    val_ll = calculate_ll_mc(yval, pval, sigma.item(), y_scale.item(), y_loc.item())
 
     return test_ll, val_ll
 
 
-def calculate_ll_third(labels, mc_matrix, sigma, y_scale, y_loc):
+def calculate_nll(preds, labels, sigma, y_scale, y_loc):
+    """Calculate the negative log likelihood of the predictions.
+        Args:
+            preds: (np.array) predictions of the model
+            label: (np.array) true labels
+            sigma: (float) variance of the predictions
+        Returns:
+            nll: (float) negative log likelihood
+    """
+    results = []
+    for pred, label in zip(preds, labels):
+        dist = Normal(pred * y_scale + y_loc, sigma * y_scale)
+        results.append(dist.log_prob(label * y_scale + y_loc))
+    nll = -1 * sum(results) / len(results)
+    return nll
+
+
+def calculate_ll_mc(labels, mc_matrix, sigma, y_scale, y_loc):
     results = []
     for i in range(mc_matrix.shape[1]):
         res_temp = []
         for j in range(mc_matrix.shape[0]):
-            dist = Normal(mc_matrix[j,i].item()*y_scale + y_loc, np.sqrt(sigma)*y_scale)
-            res_temp.append(dist.log_prob(torch.tensor([labels[i].item()])*y_scale + y_loc).item())
+            dist = Normal(mc_matrix[j,i].item() * y_scale + y_loc, sigma * y_scale)
+            res_temp.append(dist.log_prob(torch.tensor([labels[i].item()]) * y_scale + y_loc).item())
         results.append(np.mean(res_temp))
     return np.mean(results)
 
 
-def make_vi_run(run, dataset, prior_variance, scale, save_path, model, MAP_params):
+def make_vi_run(run, dataset, prior_variance, scale, save_path, model, MAP_params, mle_model=None):
     results_dict = {
         'percentiles': None,
         'test_ll': [],
@@ -550,7 +565,7 @@ def make_vi_run(run, dataset, prior_variance, scale, save_path, model, MAP_param
     }
 
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
-    test_ll, val_ll = calculate_ll_ours(model, MAP_params, dataset, one_d_bnn, num_mc_samples=1)
+    test_ll, val_ll = calculate_ll_ours(model, MAP_params, dataset, one_d_bnn, num_mc_samples=1, mle_model=mle_model)
     results_dict['test_ll'].append(test_ll)
     results_dict['val_ll'].append(val_ll)
     results_dict['percentiles'] = [0] + percentiles
@@ -599,7 +614,7 @@ def train_MAP_solution(mle_model, dataset, num_epochs):
     return mle_model
 
 
-def convert_torch_to_pyro_params(torch_params, MAP_params):
+def convert_torch_to_pyro_params(torch_params, MAP_params, precision):
     # Torch model does not have a precision parameter
     assert len(MAP_params.keys()) - 1 == len(torch_params.keys())
     for svi_key in MAP_params.keys():
@@ -616,6 +631,8 @@ def convert_torch_to_pyro_params(torch_params, MAP_params):
             MAP_params[svi_key] = tensor_to_jax_array(torch_params['out.weight'].detach()).T
         elif "b_output" in svi_key:
             MAP_params[svi_key] = tensor_to_jax_array(torch_params['out.bias'].detach()).T
+        elif "prec_obs_auto_loc" in svi_key:
+            MAP_params[svi_key] = jnp.array(precision)
 
     return MAP_params
 
@@ -692,11 +709,15 @@ if __name__ == "__main__":
             # Testing with MAP solution
             # mle_model = train_MAP_solution(mle_model, dataset, args.num_epochs)
             mle_state_dict = mle_model.state_dict()
-            MAP_params = convert_torch_to_pyro_params(mle_state_dict, MAP_params)
+            ptrain = mle_model(torch.tensor(dataset.X_train, dtype=torch.float32)).detach().numpy()
+            ytrain = dataset.y_train.squeeze()
+            sigma = np.std(ptrain - ytrain)
+            precision = 1 / (sigma ** 2)
+            MAP_params = convert_torch_to_pyro_params(mle_state_dict, MAP_params, precision)
 
         vi_results_dict = {'percentiles': None, 'test_ll': [], 'val_ll': []}
 
-        test_ll, val_ll = calculate_ll_ours(model, MAP_params, dataset, one_d_bnn, num_mc_samples=1)
+        test_ll, val_ll = calculate_ll_ours(model, MAP_params, dataset, one_d_bnn, num_mc_samples=1, mle_model=mle_model)
 
         vi_results_dict['map_params'] = MAP_params
         vi_results_dict['test_ll'].append(test_ll)
@@ -711,7 +732,7 @@ if __name__ == "__main__":
 
         if args.vi:
             make_vi_run(args.run, dataset, args.prior_variance, args.likelihood_scale,
-                        save_path=args.output_path, model=model, MAP_params=MAP_params)
+                        save_path=args.output_path, model=model, MAP_params=MAP_params, mle_model=mle_model)
 
     make_hmc_run(args.run, dataset, args.scale_prior, args.prior_variance,
                  args.output_path, args.likelihood_scale, percentiles,  hmc_result_dict)
