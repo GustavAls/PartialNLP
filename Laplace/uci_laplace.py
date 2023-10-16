@@ -79,7 +79,7 @@ def calculate_precision_from_prior(residuals, alpha=3, beta=5):
     return posterior_tau
 
 
-def calculate_variance(model, dataloader, alpha=3, beta=5, beta_prior = True):
+def calculate_std(model, dataloader, alpha=3, beta=5, beta_prior = True):
     residuals = []
     for batch, label in dataloader:
         try:
@@ -164,7 +164,7 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
         subnetwork_indices = subnetwork_mask.select()
         batch, labels = next(iter(train_dataloader))
 
-        sigma_noise = calculate_variance(ml_model, train_dataloader, alpha=3, beta=1, beta_prior = False)
+        sigma_noise = calculate_std(ml_model, train_dataloader, alpha=3, beta=1, beta_prior = False)
 
         best_prior = find_best_prior(mle_model, subnetwork_indices, train_dataloader,
                                      DataLoader(UCIDataloader(dataset.X_val, dataset.y_val, ),
@@ -196,10 +196,10 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
         if p == percentages[0]:
             val_mse.append(calculate_mse(val_preds_mu.flatten(), val_targets))
             val_nll.append(calculate_nll(
-                val_preds_mu.flatten(), val_targets, torch.tile(torch.sqrt(sigma_noise), (len(val_targets),)), y_scale, y_loc))
+                val_preds_mu.flatten(), val_targets, torch.tile(sigma_noise, (len(val_targets),)), y_scale, y_loc))
             test_mse.append(calculate_mse(val_preds_mu.flatten(), val_targets))
             test_nll.append(calculate_nll(
-                test_preds_mu.flatten(), test_targets, torch.tile(torch.sqrt(sigma_noise), (len(test_targets),)), y_scale, y_loc))
+                test_preds_mu.flatten(), test_targets, torch.tile(sigma_noise, (len(test_targets),)), y_scale, y_loc))
 
         pred_std_val = torch.sqrt(predictive_std_val**2 + sigma_noise**2)
         pred_std_test = torch.sqrt(predictive_std_test**2 + sigma_noise**2)
