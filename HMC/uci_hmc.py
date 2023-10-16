@@ -506,31 +506,36 @@ def calculate_ll_ours(model, params, dataset, bnn, num_mc_samples = 200, delta =
     )(rng_key, X=dataset.X_val)
     y_scale = dataset.scl_Y.scale_
     y_loc = dataset.scl_Y.mean_
+    ytrain, yval, ytest = dataset.y_train.squeeze(), dataset.y_val.squeeze(), dataset.y_test.squeeze()
 
     if num_mc_samples == 1 and mle_model is not None:
         ptrain = mle_model(torch.tensor(dataset.X_train, dtype=torch.float32)).detach().numpy()
         ptest = mle_model(torch.tensor(dataset.X_test, dtype=torch.float32)).detach().numpy()
         pval = mle_model(torch.tensor(dataset.X_val, dtype=torch.float32)).detach().numpy()
-        sigma_noise = calculate_std(mle_model, train_dataloader, alpha=3, beta=1, beta_prior=False)
+        train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train // 8)
+        sigma = calculate_std(mle_model, train_dataloader, alpha=3, beta=1, beta_prior=False)
     elif num_mc_samples == 1:
-        ptrain = predictive_train['mean'].squeeze(0)
-        ptest =  predictive_test['mean'].squeeze(0)
-        pval = predictive_val['mean'].squeeze(0)
+        ptrain = np.asarray(predictive_train['mean'].squeeze(0))
+        ptest =  np.asarray(predictive_test['mean'].squeeze(0))
+        pval = np.asarray(predictive_val['mean'].squeeze(0))
+        sigma = np.std(ptrain - ytrain)
     else:
-        ptrain = predictive_train['mean'].squeeze(-1)
-        ptest =  predictive_test['mean'].squeeze(-1)
-        pval = predictive_val['mean'].squeeze(-1)
+        ptrain = np.asarray(predictive_train['mean'].squeeze(-1))
+        ptest =  np.asarray(predictive_test['mean'].squeeze(-1))
+        pval = np.asarray(predictive_val['mean'].squeeze(-1))
+        sigma = np.std(ptrain - ytrain)
 
-    ytrain, yval, ytest = dataset.y_train.squeeze(), dataset.y_val.squeeze(), dataset.y_test.squeeze()
-    sigma = np.std(ptrain - ytrain)
+    if num_mc_samples == 1:
+        test_nll = calculate_nll(torch.tensor(ptest), torch.tensor(ytest),
+                                       torch.tile(torch.tensor(sigma), (len(ytest),)), y_scale.item(), y_loc.item())
+        val_nll = calculate_nll(torch.tensor(pval), torch.tensor(yval),
+                                       torch.tile(torch.tensor(sigma), (len(yval),)), y_scale.item(), y_loc.item())
+    else:
+        test_nll = calculate_ll_mc(ytest, ptest, sigma, y_scale.item(), y_loc.item())
+        val_nll = calculate_ll_mc(yval, pval, sigma, y_scale.item(), y_loc.item())
 
 
-    other_test_nll = calculate_nll(torch.tensor(ptest), torch.tensor(ytest),
-                                   torch.tile(torch.tensor(sigma), (len(ytest),)), y_scale.item(), y_loc.item())
-    test_ll = calculate_ll_mc(ytest, ptest, sigma.item(), y_scale.item(), y_loc.item())
-    val_ll = calculate_ll_mc(yval, pval, sigma.item(), y_scale.item(), y_loc.item())
-
-    return test_ll, val_ll
+    return -test_nll, -val_nll
 
 
 def calculate_nll(preds, labels, sigma, y_scale, y_loc):
@@ -538,12 +543,12 @@ def calculate_nll(preds, labels, sigma, y_scale, y_loc):
         Args:
             preds: (np.array) predictions of the model
             label: (np.array) true labels
-            sigma: (float) variance of the predictions
+            sigma: (float) standard deviation of the predictions
         Returns:
             nll: (float) negative log likelihood
     """
     results = []
-    scales = var
+    scales = sigma
     for pred, scale, label in zip(preds, scales, labels):
         dist = Normal(pred * y_scale + y_loc, scale * y_scale)
         results.append(dist.log_prob(label * y_scale + y_loc))
@@ -593,10 +598,7 @@ def make_vi_run(run, dataset, prior_variance, scale, save_path, model, MAP_param
             scale,
         )(X, y)
 
-        svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
-        svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
-
-        test_ll, val_ll = calculate_ll_ours(model,svi_results.params, dataset, mixed_bnn, delta=False)
+        test_ll, val_ll = calculate_ll_ours(model, MAP_params, dataset, mixed_bnn, delta=False)
         results_dict['test_ll'].append(test_ll)
         results_dict['val_ll'].append(val_ll)
 
@@ -671,7 +673,7 @@ if __name__ == "__main__":
     parser.add_argument("--scale_prior",  type=ast.literal_eval, default=True)
     parser.add_argument("--prior_variance", type=float, default=1.0) #0.1 is good for yacht, but not for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, but not for other datasets
-    parser.add_argument('--vi', type=ast.literal_eval, default=False)
+    parser.add_argument('--vi', type=ast.literal_eval, default=True)
     args = parser.parse_args()
 
     if args.dataset == "yacht":
@@ -714,9 +716,8 @@ if __name__ == "__main__":
             # Testing with MAP solution
             # mle_model = train_MAP_solution(mle_model, dataset, args.num_epochs)
             mle_state_dict = mle_model.state_dict()
-            ptrain = mle_model(torch.tensor(dataset.X_train, dtype=torch.float32)).detach().numpy()
-            ytrain = dataset.y_train.squeeze()
-            sigma = np.std(ptrain - ytrain)
+            train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train // 8)
+            sigma = calculate_std(mle_model, train_dataloader, alpha=3, beta=1, beta_prior=False)
             precision = 1 / (sigma ** 2)
             MAP_params = convert_torch_to_pyro_params(mle_state_dict, MAP_params, precision)
 
