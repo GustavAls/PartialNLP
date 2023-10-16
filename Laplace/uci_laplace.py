@@ -212,7 +212,7 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
     return val_nll, test_nll, val_mse, test_mse
 
 
-def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output_path, fit_swag, **kwargs):
+def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output_path, fit_swag, map_path, **kwargs):
     """Run the Laplace approximation for different subnetworks.
         Args:
             data_path: (str) path to the data
@@ -251,7 +251,8 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
 
         mle_model = train(network=mle_model, dataloader_train=train_dataloader, dataloader_val=val_dataloader,
                              model_old = None, vi = False, device='cpu', epochs = num_epochs,
-                             save_path = output_path, return_best_model=True, criterion=loss_fn)
+                             save_path = map_path, return_best_model=True, criterion=loss_fn)
+
         val_nll, test_nll, val_mse, test_mse = run_percentiles(mle_model, train_dataloader, dataset, percentages)
 
         save_name = os.path.join(output_path, f'results_laplace_run_{run}.pkl')
@@ -299,8 +300,8 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
                            'device': args.device,
                            'epochs': args.num_epochs,
                            'save_path': args.output_path,
-                           'learning_rate_sweep': np.logspace(-1.5, -1, 2, endpoint=True),
-                           'swag_epochs': 50,
+                           'learning_rate_sweep': np.logspace(-5, -1, 10, endpoint=True),
+                           'swag_epochs': 100,
                            }
 
             res = train_swag(mle_model, train_dataloader, val_dataloader, test_dataloader,
@@ -395,9 +396,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some integers.")
     parser.add_argument("--output_path", type=str, default=os.getcwd())
     parser.add_argument("--device", type=str, default="cpu")
-    parser.add_argument("--num_epochs", type=int, default=20000)
+    parser.add_argument("--num_epochs", type=int, default=100)
     parser.add_argument("--dataset", type=str, default="boston")
     parser.add_argument('--data_path', type=str, default=os.getcwd())
+    parser.add_argument('--map_path', type=str, default=os.path.join(os.getcwd(), "boston.pt"))
     parser.add_argument('--num_runs', type=int, default=15)
     parser.add_argument('--size_ramping', type=ast.literal_eval, default=False)
     parser.add_argument('--get_map', type=ast.literal_eval, default=True)
@@ -429,6 +431,6 @@ if __name__ == "__main__":
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
     else:
         results = multiple_runs(args.data_path, dataset_class, args.num_runs, args.device, args.num_epochs,
-                                args.output_path, args.fit_swag, **loss_arguments)
+                                args.output_path, args.fit_swag, args.map_path, **loss_arguments)
 
     print("Laplace experiments finished!")

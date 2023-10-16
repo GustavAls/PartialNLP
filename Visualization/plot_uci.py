@@ -26,8 +26,11 @@ def plot_errorbar_percentages(df, errorbar_func, estimator=None, ax=None, y='Lap
 
     sns.pointplot(errorbar=errorbar_func,
                   data=df, x="percentages", y=y,
-                  join=False, capsize=.25,
-                  markers="d", scale=1.0, err_kws={'linewidth': 0.7}, estimator=estimator,
+                  join=False,
+                  capsize=.30 if color_scheme_1 else 0.15,
+                  markers="d",
+                  scale=1.0 if color_scheme_1 else 0.7,
+                  err_kws={'linewidth': 0.7}, estimator=estimator,
                   color=point_err_color,
                   label=y.split('_')[0],
                   ax=ax)
@@ -83,8 +86,9 @@ def plot_partial_percentages(percentages, res, data_name=None, df=None, num_runs
         for key, val in res.items():
             if 'Laplace' in key:
                 df[key + '_nll'] = [nll.item() for nll in val.flatten()]
-            elif 'SWAG' in key:
+            else:
                 df[key + '_nll'] = [(-1) * ll for ll in val.flatten()]
+
 
     # Plot median
     fig, ax = plt.subplots(1, 1)
@@ -134,7 +138,6 @@ def read_data_swag_la(path, include_map = True):
             percentages.append(pcl['percentages'])
             test_mse.append([i.item() if not isinstance(i, float) else i for i in pcl['test_mse']][1:])
 
-
     percentages = percentages[-1]
     if include_map:
         percentages = [0] + percentages
@@ -144,6 +147,7 @@ def read_data_swag_la(path, include_map = True):
 
 
 def read_data_swag_la_combined(path, include_map=True):
+    # TODO: NLL name correction, needs correction in uci_laplace.py for correct keys
     percentages = []
     test_nll_la = []
     test_mse_la = []
@@ -171,51 +175,66 @@ def read_data_swag_la_combined(path, include_map=True):
 
 
 def read_vi_data(path):
-
     percentages = []
-    test_nll = []
+    test_ll = []
     test_mse = []
     for p in os.listdir(path):
-        run_number = int(p.split("_")[-2])
         pcl = pickle.load(open(os.path.join(path, p), 'rb'))
-        test_nll.append(pcl['test_nll'])
-        percentages.append(pcl['percentages'])
-        test_mse.append([i.item() if not isinstance(i, float) else i for i in pcl['val_mse']])
-
+        test_ll.append(pcl['test_ll'])
+        percentages.append(pcl['percentiles'])
     percentages = percentages[-1]
-    test_nll = np.array(test_nll)
-    test_mse = np.array(test_mse)
-    return percentages, test_nll, test_mse
+    test_ll = np.array(test_ll)
+    return percentages, test_ll, test_mse
 
 
 def read_hmc_data(path):
     percentages = ['map_results', '1', '2', '5', '8', '14', '23', '37', '61', '100']
-    test_nll = {key: [] for key in percentages}
+    test_ll = {key: [] for key in percentages}
     test_mse = {key: [] for key in percentages}
 
     for p in os.listdir(path):
         pcl = pickle.load(open(os.path.join(path, p), 'rb'))
-
         for perc in percentages:
             if perc in pcl:
-                test_nll[perc].append(pcl[perc]['test_ll'])
+                test_ll[perc].append(pcl[perc]['test_ll'])
                 test_mse[perc].append(pcl[perc]['test_rmse'])
 
-    dfnll = dict_to_df(test_nll)
-    dfmse = dict_to_df(test_mse)
+    test_ll = dict_to_nparray(test_ll)
+    test_mse = dict_to_nparray(test_mse)
 
-    return dfnll, dfmse
+    return test_ll, test_mse
 
 
-def dict_to_df(dic):
-    dfnll = pd.DataFrame()
+def read_hmc_vi_combined(path):
+    percentages = []
+    test_ll_vi = []
+    hmc_percentiles = ['map_results', '1', '2', '5', '8', '14', '23', '37', '61', '100']
+    test_ll_hmc = {key: [] for key in hmc_percentiles}
+
+    for p in os.listdir(path):
+        pcl = pickle.load(open(os.path.join(path, p), 'rb'))
+        if 'hmc' in p:
+            for perc in hmc_percentiles:
+                if perc in pcl:
+                    test_ll_hmc[perc].append(pcl[perc]['test_ll'])
+        else:
+            test_ll_vi.append(pcl['test_ll'])
+            percentages.append(pcl['percentiles'])
+
+    percentages = percentages[-1]
+    test_ll_vi = np.array(test_ll_vi)
+    test_ll_hmc = dict_to_nparray(test_ll_hmc)
+
+    return percentages, test_ll_vi, test_ll_hmc
+
+
+def dict_to_nparray(dic):
     percentages, data = [], []
     for key, val in dic.items():
-        percentages += [0]*len(val) if 'map' in key else [int(key)] * len(val)
-        data += val
-    dfnll['percentages'] = percentages
-    dfnll['nll'] = [- i for i in data]
-    return dfnll
+        percentages.append([0]*len(val) if 'map' in key else [int(key)] * len(val))
+        data.append(val)
+    data = np.transpose(np.array(data))
+    return data
 
 
 def get_under_folders_and_names(path):
@@ -232,14 +251,23 @@ def plot_hmc_vi(path_hmc, path_vi):
     names, paths_hmc = get_under_folders_and_names(path_hmc)
     _, paths_vi = get_under_folders_and_names(path_vi)
 
-    for name, p_la, p_swag in zip(names, path_hmc, path_vi):
-        # dfnll, dfmse = read_hmc_data(path)
-        percentages, test_nll_la, test_mse_la = read_data_swag_la(p_la, include_map=True)
-        _, test_nll_swag, test_mse_swag = read_data_swag_la(p_swag, include_map=True)
+    for name, p_hmc, p_vi in zip(names, paths_hmc, paths_vi):
+        test_ll_hmc, test_mse_hmc = read_hmc_data(p_hmc)
+        percentages, test_ll_vi, test_mse_vi = read_vi_data(p_vi)
         plot_partial_percentages(percentages=percentages,
-                                 res={'Laplace': test_nll_la, 'SWAG': test_nll_swag},
+                                 res={'HMC': test_ll_hmc, 'VI': test_ll_vi},
                                  data_name=name,
-                                 num_runs=test_nll_la.shape[0])
+                                 num_runs=test_ll_vi.shape[0])
+
+
+def plot_hmc_vi_combined(path):
+    names, paths = get_under_folders_and_names(path)
+    for name, p in zip(names, paths):
+        percentages, test_ll_vi, test_ll_hmc = read_hmc_vi_combined(p)
+        plot_partial_percentages(percentages=percentages,
+                                 res={'HMC': test_ll_hmc, 'VI': test_ll_vi},
+                                 data_name=name,
+                                 num_runs=test_ll_vi.shape[0])
 
 
 def plot_la_swag(path_la, path_swag):
@@ -247,11 +275,10 @@ def plot_la_swag(path_la, path_swag):
     _, paths_swag = get_under_folders_and_names(path_swag)
 
     for name, p_la, p_swag in zip(names, paths_la, paths_swag):
-        # dfnll, dfmse = read_hmc_data(path)
         percentages, test_nll_la, test_mse_la = read_data_swag_la(p_la, include_map=True)
-        _, test_nll_swag, test_mse_swag = read_data_swag_la(p_swag, include_map=True)
+        _, test_ll_swag, test_mse_swag = read_data_swag_la(p_swag, include_map=True)
         plot_partial_percentages(percentages=percentages,
-                                 res={'Laplace': test_nll_la, 'SWAG': test_nll_swag},
+                                 res={'Laplace': test_nll_la, 'SWAG': test_ll_swag},
                                  data_name=name,
                                  num_runs=test_nll_la.shape[0])
 
@@ -263,22 +290,34 @@ def plot_la_swag_combined(path):
         (percentages,
          test_nll_la,
          test_mse_la,
-         test_nll_swag,
+         test_ll_swag,
          test_mse_swag) = read_data_swag_la_combined(p, include_map=True)
         plot_partial_percentages(percentages=percentages,
-                                 res={'Laplace': test_nll_la, 'SWAG': test_nll_swag},
+                                 res={'Laplace': test_nll_la, 'SWAG': test_ll_swag},
                                  data_name=name,
                                  num_runs=test_nll_la.shape[0])
 
 
-if __name__ == '__main__':
-    path_la = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_Laplace_MAP'
-    path_swag = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_SWAG_MAP_nobayes'
-    # plot_la_swag(path_la, path_swag)
-    # path = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_Laplace_SWAG_2'
 
+
+if __name__ == '__main__':
+    # path_la = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_Laplace_MAP'
+    # path_swag = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_SWAG_MAP_nobayes'
+    # plot_la_swag(path_la, path_swag)
+
+    # path = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_Laplace_SWAG_lr_new'
     # plot_la_swag_combined(path)
-    plot_la_swag(path_la, path_swag)
+
+    # plot_la_swag(path_la, path_swag)
+
+
+    # HMC VI
+    # path_hmc = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_HMC'
+    # path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_VI'
+    # plot_hmc_vi(path_hmc, path_vi)
+
+    path_hmc_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_HMC_VI_2'
+    plot_hmc_vi_combined(path_hmc_vi)
 
     breakpoint()
 
