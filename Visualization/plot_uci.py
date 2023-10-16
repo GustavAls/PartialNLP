@@ -305,7 +305,7 @@ if __name__ == '__main__':
     # path_swag = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_SWAG_MAP_nobayes'
     # plot_la_swag(path_la, path_swag)
 
-    path = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_Laplace_SWAG'
+    path = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_Laplace_SWAG_1'
     plot_la_swag_combined(path)
 
     # plot_la_swag(path_la, path_swag)

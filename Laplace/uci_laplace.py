@@ -44,7 +44,7 @@ def calculate_mse(preds, labels):
     return base_pred
 
 
-def calculate_nll(preds, labels, var, y_scale, y_loc):
+def calculate_nll(preds, labels, sigma, y_scale, y_loc):
     """Calculate the negative log likelihood of the predictions.
         Args:
             preds: (np.array) predictions of the model
@@ -54,7 +54,7 @@ def calculate_nll(preds, labels, var, y_scale, y_loc):
             nll: (float) negative log likelihood
     """
     results = []
-    scales = var
+    scales = sigma
     for pred, scale, label in zip(preds, scales, labels):
         dist = Normal(pred * y_scale + y_loc, scale * y_scale)
         results.append(dist.log_prob(label * y_scale + y_loc))
@@ -196,10 +196,10 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
         if p == percentages[0]:
             val_mse.append(calculate_mse(val_preds_mu.flatten(), val_targets))
             val_nll.append(calculate_nll(
-                val_preds_mu.flatten(), val_targets, torch.tile(sigma_noise, (len(val_targets),)), y_scale, y_loc))
+                val_preds_mu.flatten(), val_targets, torch.tile(torch.sqrt(sigma_noise), (len(val_targets),)), y_scale, y_loc))
             test_mse.append(calculate_mse(val_preds_mu.flatten(), val_targets))
             test_nll.append(calculate_nll(
-                test_preds_mu.flatten(), test_targets, torch.tile(sigma_noise, (len(test_targets),)), y_scale, y_loc))
+                test_preds_mu.flatten(), test_targets, torch.tile(torch.sqrt(sigma_noise), (len(test_targets),)), y_scale, y_loc))
 
         pred_std_val = torch.sqrt(predictive_std_val**2 + sigma_noise**2)
         pred_std_test = torch.sqrt(predictive_std_test**2 + sigma_noise**2)

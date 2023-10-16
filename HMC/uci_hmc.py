@@ -272,20 +272,10 @@ def evaluate_samples_properly(model, rng_key, X, y, samples, y_scale=1.0, y_loc=
 
     predictive = Predictive(model, samples)(rng_key, X=X)
 
-    def calculate_ll(labels, mc_matrix):
-        results = []
-        for i in range(mc_matrix.shape[1]):
-            res_temp = []
-            for j in range(mc_matrix.shape[0]):
-                dist = Normal(mc_matrix[j, i] * y_scale.item() + y_loc.item(), sigma_obs.item() * y_scale.item())
-                res_temp.append(dist.log_prob(torch.tensor([labels[i] * y_scale.item() + y_loc.item()])).item())
-            results.append(np.mean(res_temp))
-        return np.mean(results)
-
     predictive_mean = np.array(predictive['mean']).squeeze(-1)
     y = y.squeeze(-1)
 
-    likelihood = calculate_ll(y, predictive_mean)
+    likelihood = calculate_ll_mc(y, predictive_mean)
     return likelihood
 
 
@@ -514,7 +504,7 @@ def calculate_ll_ours(model, params, dataset, bnn, num_mc_samples = 200, delta =
         pval = mle_model(torch.tensor(dataset.X_val, dtype=torch.float32)).detach().numpy()
         train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train // 8)
         sigma = calculate_std(mle_model, train_dataloader, alpha=3, beta=1, beta_prior=False)
-    elif num_mc_samples == 1:
+    if num_mc_samples == 1:
         ptrain = np.asarray(predictive_train['mean'].squeeze(0))
         ptest =  np.asarray(predictive_test['mean'].squeeze(0))
         pval = np.asarray(predictive_val['mean'].squeeze(0))
@@ -525,14 +515,14 @@ def calculate_ll_ours(model, params, dataset, bnn, num_mc_samples = 200, delta =
         pval = np.asarray(predictive_val['mean'].squeeze(-1))
         sigma = np.std(ptrain - ytrain)
 
-    if num_mc_samples == 1:
+    if num_mc_samples == 1 and mle_model is not None:
         test_nll = calculate_nll(torch.tensor(ptest), torch.tensor(ytest),
                                        torch.tile(torch.tensor(sigma), (len(ytest),)), y_scale.item(), y_loc.item())
         val_nll = calculate_nll(torch.tensor(pval), torch.tensor(yval),
                                        torch.tile(torch.tensor(sigma), (len(yval),)), y_scale.item(), y_loc.item())
     else:
-        test_nll = calculate_ll_mc(ytest, ptest, sigma, y_scale.item(), y_loc.item())
-        val_nll = calculate_ll_mc(yval, pval, sigma, y_scale.item(), y_loc.item())
+        test_nll = -calculate_ll_mc(ytest, ptest, sigma, y_scale.item(), y_loc.item())
+        val_nll = -calculate_ll_mc(yval, pval, sigma, y_scale.item(), y_loc.item())
 
 
     return -test_nll, -val_nll
@@ -558,6 +548,7 @@ def calculate_nll(preds, labels, sigma, y_scale, y_loc):
 
 def calculate_ll_mc(labels, mc_matrix, sigma, y_scale, y_loc):
     results = []
+
     for i in range(mc_matrix.shape[1]):
         res_temp = []
         for j in range(mc_matrix.shape[0]):
@@ -633,13 +624,13 @@ def convert_torch_to_pyro_params(torch_params, MAP_params, precision):
         elif "b1" in svi_key:
             MAP_params[svi_key] = tensor_to_jax_array(torch_params['linear1.bias'].detach()).T
         elif "b2" in svi_key:
-            MAP_params[svi_key] = tensor_to_jax_array(torch_params['linear1.bias'].detach()).T
+            MAP_params[svi_key] = tensor_to_jax_array(torch_params['linear2.bias'].detach()).T
         elif "W_output" in svi_key:
             MAP_params[svi_key] = tensor_to_jax_array(torch_params['out.weight'].detach()).T
         elif "b_output" in svi_key:
             MAP_params[svi_key] = tensor_to_jax_array(torch_params['out.bias'].detach()).T
-        elif "prec_obs_auto_loc" in svi_key:
-            MAP_params[svi_key] = jnp.array(precision)
+        # elif "prec_obs_auto_loc" in svi_key:
+        #     MAP_params[svi_key] = jnp.array(precision)
 
     return MAP_params
 
@@ -715,9 +706,10 @@ if __name__ == "__main__":
             # Testing with MAP solution
             # mle_model = train_MAP_solution(mle_model, dataset, args.num_epochs)
             mle_state_dict = mle_model.state_dict()
-            train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train // 8)
-            sigma = calculate_std(mle_model, train_dataloader, alpha=3, beta=1, beta_prior=False)
-            precision = 1 / (sigma ** 2)
+            # train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train // 8)
+            # sigma = calculate_std(mle_model, train_dataloader, alpha=3, beta=1, beta_prior=False)
+            # precision = 1 / (sigma ** 2)
+            precision = None
             MAP_params = convert_torch_to_pyro_params(mle_state_dict, MAP_params, precision)
         else:
             mle_model = None
