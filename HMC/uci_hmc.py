@@ -688,15 +688,15 @@ if __name__ == "__main__":
             n_val = dataset.X_val.shape[0]
             out_dim = dataset.y_train.shape[1]
             mle_model = MapNN(input_size=p, width=50, output_size=out_dim, non_linearity="leaky_relu")
-            # mle_model.load_state_dict(torch.load(args.map_path))
+            mle_model.load_state_dict(torch.load(args.map_path))
             # Testing with MAP solution
-            mle_model = train_MAP_solution(mle_model, dataset, args.num_epochs)
+            # mle_model = train_MAP_solution(mle_model, dataset, args.num_epochs)
             mle_state_dict = mle_model.state_dict()
             MAP_params = convert_torch_to_pyro_params(mle_state_dict, MAP_params)
 
         vi_results_dict = {'percentiles': None, 'test_ll': [], 'val_ll': []}
 
-        test_ll, val_ll = calculate_ll_ours(model, MAP_params, dataset, one_d_bnn, num_mc_samples=1, mle_model=mle_model)
+        test_ll, val_ll = calculate_ll_ours(model, MAP_params, dataset, one_d_bnn, num_mc_samples=1)
 
         vi_results_dict['map_params'] = MAP_params
         vi_results_dict['test_ll'].append(test_ll)
