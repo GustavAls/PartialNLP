@@ -704,7 +704,6 @@ if __name__ == "__main__":
         svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
         svi_results = svi.run(rng_key, args.num_epochs, X=dataset.X_train, y=dataset.y_train)
         MAP_params = svi_results.params
-
         # Overwrite MAP params with the ones from the saved model
         if args.map_path is not None:
             # When completed model is ready
@@ -720,6 +719,8 @@ if __name__ == "__main__":
             sigma = calculate_std(mle_model, train_dataloader, alpha=3, beta=1, beta_prior=False)
             precision = 1 / (sigma ** 2)
             MAP_params = convert_torch_to_pyro_params(mle_state_dict, MAP_params, precision)
+        else:
+            mle_model = None
 
         vi_results_dict = {'percentiles': None, 'test_ll': [], 'val_ll': []}
 
