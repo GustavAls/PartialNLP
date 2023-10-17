@@ -583,7 +583,7 @@ def run_for_percentile(
     return results
 
 
-def make_vi_run(run, dataset, prior_variance, scale, vi_result_dict, save_path, model, MAP_params, mle_model=None):
+def make_vi_run(run, dataset, prior_variance, scale, result_dict, save_path, model, MAP_params, mle_model=None):
 
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
     test_ll_theirs, _ = evaluate_MAP(model, MAP_params, dataset.X_test, dataset.y_test, rng_key, y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
