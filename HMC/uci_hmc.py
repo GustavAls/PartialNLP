@@ -726,7 +726,8 @@ if __name__ == "__main__":
             precision = None
             MAP_params = convert_torch_to_pyro_params(mle_state_dict, MAP_params, precision)
 
-        vi_results_dict = {'percentiles': None, 'test_ll': [], 'val_ll': []}
+        vi_results_dict = {'percentiles': None, 'test_ll_ours': [], 'val_ll_ours': [], 'test_ll_theirs': []}
+
         test_ll_theirs, _ = evaluate_MAP(model, MAP_params, dataset.X_test, dataset.y_test,
                                          rng_key, y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
 
