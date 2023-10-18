@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-
-nn.LayerNorm
+from transformers.modeling_outputs import SequenceClassifierOutput
+from torch.utils.data import DataLoader, Dataset
 
 TRANSFORMER_INCOMPATIBLE_MODULES = (nn.Embedding, nn.LayerNorm, nn.BatchNorm1d,
                                     nn.BatchNorm2d, nn.BatchNorm3d)
@@ -24,6 +24,7 @@ class PartialConstructor:
     def __init__(self, model, module_names):
         self.model = model
         self.module_names = module_names
+        self.subnet_indices = None
 
     def select(self):
         counter = 0
@@ -37,6 +38,10 @@ class PartialConstructor:
         self.model.get_ignore_modules = get_ignore_modules
         setattr(self.model, 'num_partial_layers', counter)
         return None
+
+    def get_subnetwork_indices(self):
+        #  TODO implement subnetwork indices selection for partial within module work
+        return self.subnet_indices
 
     def create_subnet_mask_list(self):
         subnet_mask_list = []
@@ -198,3 +203,112 @@ class PartialConstructorSwag(nn.Module):
 
         predictions = self.reduction(predictions)
         return predictions
+
+
+
+class Extension(nn.Module):
+    """
+    Class to prepare a huggingface model for Laplace transform
+    """
+    def __init__(self, model):
+        super(Extension, self).__init__()
+        self.model = model
+
+    def forward(self, **kwargs):
+        kwargs.pop('labels', None)
+        output_dict = self.model(**kwargs)
+        logits = output_dict['logits']
+        return logits.to(torch.float32)
+
+
+class Truncater(torch.nn.Module):
+
+    """
+    Class to truncate a distilbert model from Huggingface, to make it easier to test validity of methods with
+    Not to be used in any practical applications
+    """
+    def __init__(self, model):
+        super(Truncater, self).__init__()
+
+        self.embeddings = model.distilbert.embeddings
+        self.classifier = model.classifier
+        self.config = model.config
+        self.num_labels = model.num_labels
+        self.another_linear = torch.nn.Linear(768, 20)
+        self.another_linear_v2 = torch.nn.Linear(20, 20)
+        self.classifier = torch.nn.Linear(20, 2)
+
+
+    def forward(
+            self,
+            input_ids =  None,
+            attention_mask = None,
+            head_mask= None,
+            inputs_embeds = None,
+            labels= None,
+            output_attentions= None,
+            output_hidden_states = None,
+            return_dict= None,
+    ):
+        embeddings = self.embeddings(input_ids, inputs_embeds)
+        embeddings = torch.nn.ReLU()(self.another_linear(embeddings))
+        embeddings = torch.nn.ReLU()(self.another_linear_v2(embeddings))
+        logits = self.classifier(embeddings[:, 0])  # (bs, num_labels)
+
+        loss = None
+        if labels is not None:
+            if self.config.problem_type is None:
+                if self.num_labels == 1:
+                    self.config.problem_type = "regression"
+                elif self.num_labels > 1 and (labels.dtype == torch.long or labels.dtype == torch.int):
+                    self.config.problem_type = "single_label_classification"
+                else:
+                    self.config.problem_type = "multi_label_classification"
+
+            if self.config.problem_type == "regression":
+                loss_fct = torch.nn.MSELoss()
+                if self.num_labels == 1:
+                    loss = loss_fct(logits.squeeze(), labels.squeeze())
+                else:
+                    loss = loss_fct(logits, labels)
+            elif self.config.problem_type == "single_label_classification":
+                loss_fct = torch.nn.CrossEntropyLoss()
+                loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+            elif self.config.problem_type == "multi_label_classification":
+                loss_fct = torch.nn.BCEWithLogitsLoss()
+                loss = loss_fct(logits, labels)
+
+
+        return SequenceClassifierOutput(
+            loss=loss,
+            logits=logits,
+            hidden_states=None,
+            attentions=None
+        )
+
+
+class ForfunData(Dataset):
+
+    def __init__(self):
+        self.X = torch.randn(100, 10)
+        y = torch.randint(0, 2, size=(100, 1))
+        self.y = torch.zeros((100, 2))
+        for i in range(y.shape[0]):
+            self.y[y[i]] = 1
+
+        self.return_normal = True
+
+    def get_normal(self, item):
+        return self.X[item], self.y[item]
+
+    def get_unnormal(self, item):
+        return {'x': self.X[item], 'labels': self.y[item]}
+
+    def __len__(self):
+        return len(self.y)
+
+    def __getitem__(self, item):
+        if self.return_normal:
+            return self.X[item], self.y[item].reshape(-1)
+        else:
+            return self.get_unnormal(item)
