@@ -223,6 +223,9 @@ def construct_swag(sentiment_classifier, swag_cfg):
 
 
 def save_object_(obj, output_path, swag_or_laplace='laplace', cfg=None):
+
+    changed_things = check_cfg_status(cfg, swag_or_laplace)
+    breakpoint()
     if swag_or_laplace == 'laplace':
         to_be_saved = {'la': obj, 'cfg': cfg}
     elif swag_or_laplace == 'swag':
@@ -230,9 +233,16 @@ def save_object_(obj, output_path, swag_or_laplace='laplace', cfg=None):
     else:
         raise ValueError("swag_or_laplace should be a string in ['swag', 'laplace']")
 
+
+    if len(changed_things) == 0:
+        filename = swag_or_laplace + "_" + 'default.pkl'
+    else:
+        filename = "_".join([swag_or_laplace] + [it for item in changed_things.items() for it in item])
+
     if os.path.isdir(output_path):
+
         save_name = os.path.join(
-            output_path, ".".join((swag_or_laplace, "pkl"))
+            output_path, ".".join((filename, "pkl"))
         )
     elif output_path.split(".")[-1] in ['pkl', 'pt']:
         save_name = output_path
@@ -244,6 +254,40 @@ def save_object_(obj, output_path, swag_or_laplace='laplace', cfg=None):
     else:
         with open(save_name, 'wb') as handle:
             pickle.dump(to_be_saved, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+def check_cfg_status(cfg, swag_or_laplace = 'laplace'):
+
+    if cfg is None:
+        return {}
+    elif isinstance(cfg, str):
+        try:
+            cfg_dict = yaml.safe_load(open(cfg, 'r'))
+        except:
+            return {}
+    else:
+        cfg_dict = cfg.__dict__
+
+    default_cfg = yaml.safe_load(open("_".join((swag_or_laplace, 'cfg', 'default.yaml')), 'r'))
+
+    changed_things = {}
+    for key, val in default_cfg.items():
+        cfg_vals = cfg_dict[key]
+
+        if val == cfg_vals:
+            continue
+
+        if key == 'module_names':
+            if all(('model.' in module_name for module_name in cfg_vals)):
+                if [module_name.replace("model.") for module_name in cfg_vals] == val:
+                    continue
+
+            changed_things[key] = f'num_of_{len(cfg_vals)}'
+            continue
+
+        changed_things[key] = str(cfg_vals)
+
+    return changed_things
 
 
 if __name__ == "__main__":
@@ -306,15 +350,13 @@ if __name__ == "__main__":
         sentiment_classifier = prepare_sentiment_classifier(args)
         sentiment_classifier = construct_swag(sentiment_classifier, cfg)
         prepare_and_run_sentiment_classifier(args, sentiment_classifier)
-        save_object_(sentiment_classifier.model, args.output_path, 'swag', cfg)
+        save_object_(sentiment_classifier.model, args.output_path, 'swag', args.swag_cfg)
 
     elif args.laplace:
-
         cfg = Namespace(**yaml.safe_load(open(
-            'laplace_cfg.yaml' if args.laplace_cfg is None else args.laplace_cfg, 'r')
+            'laplace_cfg.yaml' if args.la_cfg is None else args.la_cfg, 'r')
         ))
-
         sentiment_classifier = prepare_sentiment_classifier(args)
         la = construct_laplace(sentiment_classifier, cfg, args)
 
-        save_object_(la, args.output_path, 'laplace', cfg)
+        save_object_(la, args.output_path, 'laplace', args.la_cfg)
