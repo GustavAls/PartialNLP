@@ -563,8 +563,8 @@ def run_for_percentile(
         scale=scale,
     )
 
-    nuts_kernel = NUTS(mixed_bnn, max_tree_depth=1)
-    mcmc = MCMC(nuts_kernel, num_warmup=1, num_samples=1, num_chains=1)
+    nuts_kernel = NUTS(mixed_bnn, max_tree_depth=15)
+    mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
     rng_key = random.PRNGKey(1)
     mcmc.run(rng_key, dataset.X_train, dataset.y_train)
 
