@@ -41,13 +41,13 @@ def convert_torch_to_pyro_params(torch_params, MAP_params, precision):
         elif "W2" in svi_key:
             MAP_params[svi_key] = tensor_to_jax_array(torch_params['linear2.weight'].detach()).T
         elif "b1" in svi_key:
-            MAP_params[svi_key] = tensor_to_jax_array(torch_params['linear1.bias'].detach()).T
+            MAP_params[svi_key] = tensor_to_jax_array(torch_params['linear1.bias'].detach()).T[:, None]
         elif "b2" in svi_key:
-            MAP_params[svi_key] = tensor_to_jax_array(torch_params['linear2.bias'].detach()).T
+            MAP_params[svi_key] = tensor_to_jax_array(torch_params['linear2.bias'].detach()).T[:, None]
         elif "W_output" in svi_key:
             MAP_params[svi_key] = tensor_to_jax_array(torch_params['out.weight'].detach()).T
         elif "b_output" in svi_key:
-            MAP_params[svi_key] = tensor_to_jax_array(torch_params['out.bias'].detach()).T
+            MAP_params[svi_key] = tensor_to_jax_array(torch_params['out.bias'].detach()).T[:, None]
         # elif "prec_obs_auto_loc" in svi_key:
         #     MAP_params[svi_key] = jnp.array(precision)
 
@@ -672,6 +672,15 @@ def make_hmc_run(run, dataset, scale_prior, prior_variance, save_path, likelihoo
             pickle.dump(results_dict, open(os.path.join(save_path, f"results_hmc_run_{run}.pkl"), "wb"))
 
 
+def predictive_(model, params, X):
+    predictive = Predictive(
+        model=model,
+        guide=autoguide.AutoDelta(model),
+        params=params,
+        num_samples=1,
+    )(rng_key, X=X)
+    return predictive
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some integers.")
     parser.add_argument("--dataset", type=str, default="boston")
@@ -725,9 +734,9 @@ if __name__ == "__main__":
             n_val = dataset.X_val.shape[0]
             out_dim = dataset.y_train.shape[1]
             mle_model = MapNN(input_size=p, width=50, output_size=out_dim, non_linearity="leaky_relu")
-            mle_model.load_state_dict(torch.load(args.map_path))
+            # mle_model.load_state_dict(torch.load(args.map_path))
             # Testing with MAP solution
-            # mle_model = train_MAP_solution(mle_model, dataset, args.num_epochs)
+            mle_model = train_MAP_solution(mle_model, dataset, args.num_epochs)
             mle_state_dict = mle_model.state_dict()
             # train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train // 8)
             # sigma = calculate_std(mle_model, train_dataloader, alpha=3, beta=1, beta_prior=False)
@@ -737,6 +746,7 @@ if __name__ == "__main__":
             # TODO:
             # 1 Return predictive train, val, test
             # 2. Dataset.__dict__ to add full dataset to pickle
+
 
         vi_results_dict = {'percentiles': None, 'test_ll_ours': [], 'val_ll_ours': [], 'test_ll_theirs': []}
 

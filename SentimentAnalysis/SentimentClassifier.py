@@ -18,7 +18,7 @@ import importlib
 # from  import laplace_partial as lp
 # from laplace_lora.laplace_partial.utils import ModuleNameSubnetMask
 import laplace_partial as lp
-from PartialConstructor import PartialConstructor
+from PartialConstructor import PartialConstructor, PartialConstructorSwag
 import torch.nn as nn
 from Laplace.laplace import Laplace
 from torch.utils.data import Dataset, DataLoader
@@ -29,6 +29,7 @@ class SentimentClassifier:
                                                                         num_labels=2,
                                                                         id2label=id2label,
                                                                         label2id=label2id)
+
         self.model.save_pretrained(os.path.join(os.getcwd(), "model"))
         self.collator = DataCollatorWithPadding(tokenizer=self._tokenizer)
         self.train_size = train_size
@@ -63,6 +64,7 @@ class SentimentClassifier:
         training_args = TrainingArguments(output_dir=output_path,
                                           learning_rate=2e-5,
                                           do_train=train,
+                                          optim='sgd',
                                           per_device_train_batch_size=device_batch_size,
                                           per_device_eval_batch_size=device_batch_size,
                                           num_train_epochs=num_epochs,
@@ -70,6 +72,11 @@ class SentimentClassifier:
                                           save_strategy="epoch",
                                           load_best_model_at_end=True,
                                           weight_decay=0.01)
+
+        self.model = PartialConstructorSwag(self.model, n_iterations_between_snapshots=1,
+                                               module_names=['classifier'],
+                                               num_columns=10)
+        self.model.select()
 
         trainer = Trainer(
             model=self.model,
@@ -80,6 +87,8 @@ class SentimentClassifier:
             data_collator=self.collator,
             compute_metrics=self.compute_metrics
         )
+
+
         if train:
             trainer.train()
             print("Training is done")
@@ -293,21 +302,21 @@ if __name__ == "__main__":
     args = parser.parse_args()
     torch.cuda.is_available()
 
-    tesnet = Tesnet()
-    dataset = ForfunData()
-    dataset2 = copy.deepcopy(dataset)
-    dataset2.return_normal = False
-    dataloader2 = DataLoader(dataset2, batch_size=100)
-    dataloader = DataLoader(dataset, batch_size=100)
-    la1 = Laplace(copy.deepcopy(tesnet), 'classification', subset_of_weights='all')
-    la1.fit(dataloader)
-    tnet2 = TestNetWrapper(copy.deepcopy(tesnet))
-
-    partial_construct = PartialConstructor(tnet2, module_names=['model.layer_one', 'model.layer_two'])
-    partial_construct.select()
-    la2 = lp.Laplace(tnet2, 'classification', 'all')
-    la2.fit(dataloader2)
-    breakpoint()
+    # tesnet = Tesnet()
+    # dataset = ForfunData()
+    # dataset2 = copy.deepcopy(dataset)
+    # dataset2.return_normal = False
+    # dataloader2 = DataLoader(dataset2, batch_size=100)
+    # dataloader = DataLoader(dataset, batch_size=100)
+    # la1 = Laplace(copy.deepcopy(tesnet), 'classification', subset_of_weights='all')
+    # la1.fit(dataloader)
+    # tnet2 = TestNetWrapper(copy.deepcopy(tesnet))
+    #
+    # partial_construct = PartialConstructor(tnet2, module_names=['model.layer_one', 'model.layer_two'])
+    # partial_construct.select()
+    # la2 = lp.Laplace(tnet2, 'classification', 'all')
+    # la2.fit(dataloader2)
+    # breakpoint()
 
     id2label = {0: "NEGATIVE", 1: "POSITIVE"}
     label2id = {"NEGATIVE": 0, "POSITIVE": 1}
@@ -316,6 +325,11 @@ if __name__ == "__main__":
                                                label2id=label2id,
                                                train_size=args.train_size,
                                                test_size=args.test_size)
+    #
+    # sentiment_classifier.model = PartialConstructorSwag(sentiment_classifier.model,
+    #                                                     n_iterations_between_snapshots=10,
+    #                                                     module_names=['classifier'], num_columns=10)
+
     # sentiment_classifier.runner(output_path=args.output_path,
     #                             train_bs=args.train_batch_size,
     #                             eval_bs=args.eval_batch_size,
@@ -323,6 +337,7 @@ if __name__ == "__main__":
     #                             dataset_name=args.dataset_name,
     #                             device_batch_size=args.device_batch_size,
     #                             train=args.train)
+    # breakpoint()
 
     train_loader, trainer = sentiment_classifier.prepare_laplace(output_path=args.output_path,
                                 train_bs=args.train_batch_size,
@@ -330,15 +345,16 @@ if __name__ == "__main__":
                                 dataset_name=args.dataset_name,
                                 device_batch_size=args.device_batch_size,
                                 )
-
+    #
     x = next(iter(train_loader))
+    # breakpoint()
     # out = sentiment_classifier.model(x)
+    #
+    # m = Truncater(sentiment_classifier.model)
+    m = Extension(sentiment_classifier.model)
 
-    m = Truncater(sentiment_classifier.model)
-    m = Extension(m)
-    out = m(**x)
-    breakpoint()
-    partial_constructor = PartialConstructor(m, module_names=['model.classifier'])
+    # breakpoint()
+    partial_constructor = PartialConstructor(m, module_names=['model.pre_classifier'])
     partial_constructor.select()
 
 
@@ -358,7 +374,7 @@ if __name__ == "__main__":
     la._glm_predictive_distribution(x)
 
 
-    breakpoint()
+    # breakpoint()
 
 
     sentiment_classifier.runner(output_path=args.output_path,
