@@ -290,6 +290,26 @@ def evaluate_samples(model, rng_key, X, y, samples, y_scale=1.0, y_loc=0.0):
     return float(log_likelihood), float(rmse)
 
 
+def evaluate_vi_samples(model, params, X, y, rng_key, y_scale=1.0, y_loc=0.0):
+    predictive = Predictive(
+        model=model,
+        guide=autoguide.AutoNormal(model),
+        params=params,
+        num_samples=200,
+    )(rng_key, X=X)
+
+    sigma_obs = 1.0 / jnp.sqrt(params["prec_obs"])
+    predictive_mean = (y_scale * predictive["mean"].mean(axis=0)) + y_loc
+    log_likelihood = (
+        dist.Normal(predictive_mean, y_scale * sigma_obs)
+        .log_prob(y_loc + (y * y_scale))
+        .mean()
+    )
+    rmse = ((y_scale * (predictive["mean"].mean(axis=0).flatten() - y.flatten())) ** 2 ).mean() ** 0.5
+
+    return float(log_likelihood), float(rmse)
+
+
 def evaluate_samples_properly(model, rng_key, X, y, samples, y_scale=1.0, y_loc=0.0):
     sigma_obs = (1.0 / jnp.sqrt(samples["prec_obs"])).mean()
 
@@ -305,7 +325,7 @@ def evaluate_samples_properly(model, rng_key, X, y, samples, y_scale=1.0, y_loc=
 def evaluate_MAP(model, MAP_params, X, y, rng_key, y_scale=1.0, y_loc=0.0):
     predictive = Predictive(
         model=model,
-        guide=autoguide.AutoNormal(model),
+        guide=autoguide.AutoDelta(model),
         params=MAP_params,
         num_samples=1,
     )(rng_key, X=X)
@@ -412,14 +432,24 @@ def generate_mixed_bnn_by_param(
 
 def calculate_ll_mc(labels, mc_matrix, sigma, y_scale, y_loc):
     results = []
-
     for i in range(mc_matrix.shape[1]):
         res_temp = []
         for j in range(mc_matrix.shape[0]):
-            dist = Normal(mc_matrix[j,i].item() * y_scale + y_loc, sigma * y_scale)
+            dist = Normal(mc_matrix[j,i].item() * y_scale + y_loc, np.sqrt(sigma) * y_scale)
             res_temp.append(dist.log_prob(torch.tensor([labels[i].item()]) * y_scale + y_loc).item())
         results.append(np.mean(res_temp))
     return np.mean(results)
+
+
+# def calculate_ll_third(labels, mc_matrix, sigma, y_scale, y_loc):
+#     results = []
+#     for i in range(mc_matrix.shape[1]):
+#         res_temp = []
+#         for j in range(mc_matrix.shape[0]):
+#             dist = Normal(mc_matrix[j, i].item() * y_scale + y_loc, np.sqrt(sigma) * y_scale)
+#             res_temp.append(dist.log_prob(torch.tensor([labels[i].item()]) * y_scale + y_loc).item())
+#         results.append(np.mean(res_temp))
+#     return np.mean(results)
 
 
 def calculate_ll_ours(model, params, dataset, bnn, num_mc_samples = 200, delta = False, mle_model=None):
@@ -583,39 +613,29 @@ def run_for_percentile(
     return results
 
 
-def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, model, MAP_params, mle_model=None):
+def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, MAP_params, mle_model=None):
+    rng_key = random.PRNGKey(0)
+    optimizer = numpyro.optim.Adam(0.01)
+    model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
 
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
-    test_ll_theirs, _ = evaluate_MAP(model, MAP_params, dataset.X_test, dataset.y_test, rng_key, y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
-    test_ll_ours, val_ll_ours = calculate_ll_ours(model, MAP_params, dataset, one_d_bnn, num_mc_samples=1, mle_model=mle_model)
-    results_dict['test_ll_ours'].append(test_ll_ours)
-    results_dict['val_ll_ours'].append(val_ll_ours)
-    results_dict['test_ll_theirs'].append(test_ll_theirs)
-    results_dict['percentiles'] = [0] + percentiles
-
     for percentile in percentiles:
         sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
         optimizer = numpyro.optim.Adam(0.01)
 
         mixed_bnn = generate_mixed_bnn_by_param(
             MAP_params,
-            create_sample_mask_largest_abs_values(percentile, MAP_params),
-            prior_variance,
-            scale=scale,
-        )
-        model = lambda X, y=None: generate_mixed_bnn_by_param(
-            MAP_params,
             sample_mask_tuple,
             prior_variance,
             scale=scale,
-        )(X, y)
+        )
 
-        svi=SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
+        svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
         svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
 
         test_ll_ours, val_ll_ours = calculate_ll_ours(model, svi_results.params, dataset, mixed_bnn, delta=False)
-        test_ll_theirs, _ = evaluate_samples(mixed_bnn, rng_key, dataset.X_test, dataset.y_test,
-                                          mcmc.get_samples(), y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
+        test_ll_theirs, _ = evaluate_vi_samples(model=mixed_bnn, params=svi_results.params, X=dataset.X_test,y=dataset.y_test,
+                                                rng_key=rng_key, y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
 
         results_dict['test_ll_ours'].append(test_ll_ours)
         results_dict['val_ll_ours'].append(val_ll_ours)
@@ -725,7 +745,6 @@ if __name__ == "__main__":
 
         test_ll_theirs, _ = evaluate_MAP(model, MAP_params, dataset.X_test, dataset.y_test,
                                          rng_key, y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
-
         test_ll_ours, val_ll_ours = calculate_ll_ours(model, MAP_params, dataset, one_d_bnn, num_mc_samples=1, mle_model=mle_model)
 
         vi_results_dict['map_params'] = MAP_params
@@ -738,12 +757,13 @@ if __name__ == "__main__":
                                            'test_ll_ours': test_ll_ours,
                                            'test_ll_theirs': test_ll_theirs,
                                            'val_ll_ours': val_ll_ours}}
+
         pickle.dump(vi_results_dict, open(os.path.join(args.output_path, f"results_vi_run_{args.run}.pkl"), "wb"))
         pickle.dump(hmc_result_dict, open(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl"), "wb"))
 
         if args.vi:
             make_vi_run(args.run, dataset, args.prior_variance, args.likelihood_scale, vi_results_dict,
-                        save_path=args.output_path, model=model, MAP_params=MAP_params, mle_model=mle_model)
+                        save_path=args.output_path, MAP_params=MAP_params, mle_model=mle_model)
 
     make_hmc_run(args.run, dataset, args.scale_prior, args.prior_variance,
                  args.output_path, args.likelihood_scale, percentiles,  hmc_result_dict)
