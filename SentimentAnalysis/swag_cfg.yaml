@@ -1,0 +1,7 @@
+module_names: ['classifier']
+n_iterations_between_snapshots: 100
+number_of_columns_in_D: 50
+num_mc_samples: 100
+min_var: 1e-20
+reduction: 'mean'
+num_classes: 2
