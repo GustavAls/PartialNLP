@@ -711,9 +711,9 @@ if __name__ == "__main__":
             n_val = dataset.X_val.shape[0]
             out_dim = dataset.y_train.shape[1]
             mle_model = MapNN(input_size=p, width=50, output_size=out_dim, non_linearity="leaky_relu")
-            mle_model.load_state_dict(torch.load(args.map_path))
+            # mle_model.load_state_dict(torch.load(args.map_path))
             # Testing with MAP solution
-            # mle_model = train_MAP_solution(mle_model, dataset, args.num_epochs)
+            mle_model = train_MAP_solution(mle_model, dataset, args.num_epochs)
             mle_state_dict = mle_model.state_dict()
             # train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train // 8)
             # sigma = calculate_std(mle_model, train_dataloader, alpha=3, beta=1, beta_prior=False)
