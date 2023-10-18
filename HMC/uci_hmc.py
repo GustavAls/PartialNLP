@@ -41,13 +41,13 @@ def convert_torch_to_pyro_params(torch_params, MAP_params, precision):
         elif "W2" in svi_key:
             MAP_params[svi_key] = tensor_to_jax_array(torch_params['linear2.weight'].detach()).T
         elif "b1" in svi_key:
-            MAP_params[svi_key] = tensor_to_jax_array(torch_params['linear1.bias'].detach()).T
+            MAP_params[svi_key] = tensor_to_jax_array(torch_params['linear1.bias'].detach()).T[:, None]
         elif "b2" in svi_key:
-            MAP_params[svi_key] = tensor_to_jax_array(torch_params['linear2.bias'].detach()).T
+            MAP_params[svi_key] = tensor_to_jax_array(torch_params['linear2.bias'].detach()).T[:, None]
         elif "W_output" in svi_key:
             MAP_params[svi_key] = tensor_to_jax_array(torch_params['out.weight'].detach()).T
         elif "b_output" in svi_key:
-            MAP_params[svi_key] = tensor_to_jax_array(torch_params['out.bias'].detach()).T
+            MAP_params[svi_key] = tensor_to_jax_array(torch_params['out.bias'].detach()).T[:, None]
         # elif "prec_obs_auto_loc" in svi_key:
         #     MAP_params[svi_key] = jnp.array(precision)
 
@@ -678,6 +678,15 @@ def make_hmc_run(run, dataset, scale_prior, prior_variance, save_path, likelihoo
             pickle.dump(results_dict, open(os.path.join(save_path, f"results_hmc_run_{run}.pkl"), "wb"))
 
 
+def predictive_(model, params, X):
+    predictive = Predictive(
+        model=model,
+        guide=autoguide.AutoDelta(model),
+        params=params,
+        num_samples=1,
+    )(rng_key, X=X)
+    return predictive
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some integers.")
     parser.add_argument("--dataset", type=str, default="boston")
@@ -740,6 +749,7 @@ if __name__ == "__main__":
             # precision = 1 / (sigma ** 2)
             precision = None
             MAP_params = convert_torch_to_pyro_params(mle_state_dict, MAP_params, precision)
+
 
         vi_results_dict = {'percentiles': None, 'test_ll_ours': [], 'val_ll_ours': [], 'test_ll_theirs': []}
 
