@@ -290,22 +290,25 @@ def evaluate_samples(model, rng_key, X, y, samples, y_scale=1.0, y_loc=0.0):
     return float(log_likelihood), float(rmse)
 
 
-def evaluate_vi_samples(model, params, X, y, rng_key, y_scale=1.0, y_loc=0.0):
-    predictive = Predictive(
+def evaluate_vi_samples(model, params, dataset, rng_key, y_scale=1.0, y_loc=0.0):
+    predictive_test = Predictive(
         model=model,
         guide=autoguide.AutoNormal(model),
         params=params,
         num_samples=200,
-    )(rng_key, X=X)
+    )(rng_key, X=dataset.X_test)
 
-    sigma_obs = 1.0 / jnp.sqrt(params["prec_obs"])
-    predictive_mean = (y_scale * predictive["mean"].mean(axis=0)) + y_loc
+    sigma_obs = (1.0 / jnp.sqrt(params["prec_obs_auto_loc"])).mean()
+    y = dataset.y_test
+
+    # Calculate log likelihood using predictive
+    predictive_mean = (y_scale * predictive_test["mean"].mean(axis=0)) + y_loc
     log_likelihood = (
         dist.Normal(predictive_mean, y_scale * sigma_obs)
         .log_prob(y_loc + (y * y_scale))
         .mean()
     )
-    rmse = ((y_scale * (predictive["mean"].mean(axis=0).flatten() - y.flatten())) ** 2 ).mean() ** 0.5
+    rmse = ((y_scale * (predictive_test["mean"].mean(axis=0).flatten() - y.flatten())) ** 2 ).mean() ** 0.5
 
     return float(log_likelihood), float(rmse)
 
@@ -318,7 +321,7 @@ def evaluate_samples_properly(model, rng_key, X, y, samples, y_scale=1.0, y_loc=
     predictive_mean = np.array(predictive['mean']).squeeze(-1)
     y = y.squeeze(-1)
 
-    likelihood = calculate_ll_mc(y, predictive_mean)
+    likelihood = calculate_ll_mc(y, predictive_mean, sigma_obs, y_scale.item(), y_loc.item())
     return likelihood
 
 
@@ -439,17 +442,6 @@ def calculate_ll_mc(labels, mc_matrix, sigma, y_scale, y_loc):
             res_temp.append(dist.log_prob(torch.tensor([labels[i].item()]) * y_scale + y_loc).item())
         results.append(np.mean(res_temp))
     return np.mean(results)
-
-
-# def calculate_ll_third(labels, mc_matrix, sigma, y_scale, y_loc):
-#     results = []
-#     for i in range(mc_matrix.shape[1]):
-#         res_temp = []
-#         for j in range(mc_matrix.shape[0]):
-#             dist = Normal(mc_matrix[j, i].item() * y_scale + y_loc, np.sqrt(sigma) * y_scale)
-#             res_temp.append(dist.log_prob(torch.tensor([labels[i].item()]) * y_scale + y_loc).item())
-#         results.append(np.mean(res_temp))
-#     return np.mean(results)
 
 
 def calculate_ll_ours(model, params, dataset, bnn, num_mc_samples = 200, delta = False, mle_model=None):
@@ -589,9 +581,9 @@ def run_for_percentile(
         scale=scale,
     )
 
-    nuts_kernel = NUTS(mixed_bnn, max_tree_depth=15)
-    mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
-    rng_key = random.PRNGKey(0)
+    nuts_kernel = NUTS(mixed_bnn, max_tree_depth=1)
+    mcmc = MCMC(nuts_kernel, num_warmup=1, num_samples=1, num_chains=1)
+    rng_key = random.PRNGKey(1)
     mcmc.run(rng_key, dataset.X_train, dataset.y_train)
     test_ll_ours = evaluate_samples_properly(mixed_bnn, rng_key, dataset.X_test, dataset.y_test,
                                              mcmc.get_samples(), y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
@@ -614,10 +606,9 @@ def run_for_percentile(
 
 
 def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, MAP_params, mle_model=None):
-    rng_key = random.PRNGKey(0)
-    optimizer = numpyro.optim.Adam(0.01)
-    model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
 
+    rng_key = random.PRNGKey(1)
+    optimizer = numpyro.optim.Adam(0.01)
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
     for percentile in percentiles:
         sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
@@ -629,12 +620,15 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, MA
             prior_variance,
             scale=scale,
         )
+        model = lambda X, y=None: generate_mixed_bnn_by_param(
+            MAP_params, sample_mask_tuple, prior_variance, scale
+        )(X, y)
 
         svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
         svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
 
         test_ll_ours, val_ll_ours = calculate_ll_ours(model, svi_results.params, dataset, mixed_bnn, delta=False)
-        test_ll_theirs, _ = evaluate_vi_samples(model=mixed_bnn, params=svi_results.params, X=dataset.X_test,y=dataset.y_test,
+        test_ll_theirs, _ = evaluate_vi_samples(model=mixed_bnn, params=svi_results.params, dataset=dataset,
                                                 rng_key=rng_key, y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
 
         results_dict['test_ll_ours'].append(test_ll_ours)
@@ -687,9 +681,9 @@ if __name__ == "__main__":
     parser.add_argument("--run", type=int, default=15)
     parser.add_argument("--num_epochs", type=int, default=20000)
     parser.add_argument("--scale_prior",  type=ast.literal_eval, default=True)
-    parser.add_argument("--prior_variance", type=float, default=1.0) #0.1 is good for yacht, but not for other datasets
+    parser.add_argument("--prior_variance", type=float, default=2.0) #0.1 is good for yacht, but not for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, but not for other datasets
-    parser.add_argument('--vi', type=ast.literal_eval, default=True)
+    parser.add_argument('--vi', type=ast.literal_eval, default=False)
     args = parser.parse_args()
 
     if args.dataset == "yacht":
@@ -740,6 +734,9 @@ if __name__ == "__main__":
             # precision = 1 / (sigma ** 2)
             precision = None
             MAP_params = convert_torch_to_pyro_params(mle_state_dict, MAP_params, precision)
+            # TODO:
+            # 1 Return predictive train, val, test
+            # 2. Dataset.__dict__ to add full dataset to pickle
 
         vi_results_dict = {'percentiles': None, 'test_ll_ours': [], 'val_ll_ours': [], 'test_ll_theirs': []}
 
