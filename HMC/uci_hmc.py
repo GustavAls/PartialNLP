@@ -359,14 +359,14 @@ def generate_mixed_bnn_by_param(
             dist.Normal(0, (prior_variance ** 0.5) * jnp.ones((n_features, width))),
         )
         b_1_noise = numpyro.sample(
-            "b1_noise", dist.Normal(0, (prior_variance ** 0.5) * jnp.ones((width)))
+            "b1_noise", dist.Normal(0, (prior_variance ** 0.5) * jnp.ones_like(MAP_params['b1_auto_loc'])),
         )
         W_2_noise = numpyro.sample(
             "W2_noise",
             dist.Normal(0, (prior_variance ** 0.5) * jnp.ones((width, width))),
         )
         b_2_noise = numpyro.sample(
-            "b2_noise", dist.Normal(0, (prior_variance ** 0.5) * jnp.ones((width)))
+            "b2_noise", dist.Normal(0, (prior_variance ** 0.5) * jnp.ones_like(MAP_params['b2_auto_loc']))
         )
         W_output_noise = numpyro.sample(
             "W_output_noise",
@@ -469,20 +469,6 @@ def create_predictives(model, params, dataset, bnn, num_mc_samples = 200, delta 
     return predictive_train, predictive_val, predictive_test
 
 
-# def create_hmc_predictives(model, rng_key, dataset, )
-#
-#
-#     def evaluate_samples_properly(model, rng_key, X, y, samples, y_scale=1.0, y_loc=0.0):
-#         sigma_obs = (1.0 / jnp.sqrt(samples["prec_obs"])).mean()
-#
-#         predictive = Predictive(model, samples)(rng_key, X=X)
-#
-#         predictive_mean = np.array(predictive['mean']).squeeze(-1)
-#         y = y.squeeze(-1)
-#
-#         likelihood = calculate_ll_mc(y, predictive_mean, sigma_obs, y_scale.item(), y_loc.item())
-#         return likelihood
-
 def calculate_ll_ours(model, params, dataset, bnn, num_mc_samples = 200, delta = False):
     predictive_train, predictive_val, predictive_test = create_predictives(model, params, dataset, bnn, num_mc_samples, delta)
     y_scale = dataset.scl_Y.scale_
@@ -502,7 +488,6 @@ def calculate_ll_ours(model, params, dataset, bnn, num_mc_samples = 200, delta =
 
     test_ll = calculate_ll_mc(ytest, ptest, sigma, y_scale.item(), y_loc.item())
     val_ll = calculate_ll_mc(yval, pval, sigma, y_scale.item(), y_loc.item())
-
 
     return test_ll, val_ll
 
@@ -658,7 +643,6 @@ def make_hmc_run(run, dataset, scale_prior, prior_variance, save_path, likelihoo
                 scale=likelihood_scale,
                 is_svi_map=is_svi_map
             )
-            print(results_dict[f"{percentile}"])
             pickle.dump(results_dict, open(os.path.join(save_path, f"results_hmc_run_{run}.pkl"), "wb"))
 
 
@@ -716,18 +700,9 @@ if __name__ == "__main__":
         model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
 
         # Setup the MAP model
-        if args.map_path is None:
-            svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
-            svi_results = svi.run(rng_key, args.num_epochs, X=dataset.X_train, y=dataset.y_train)
-            MAP_params = svi_results.params
-        else:
-            n_train, p = dataset.X_train.shape
-            n_val = dataset.X_val.shape[0]
-            out_dim = dataset.y_train.shape[1]
-            mle_model = MapNN(input_size=p, width=50, output_size=out_dim, non_linearity="leaky_relu")
-            mle_model.load_state_dict(torch.load(args.map_path))
-            mle_state_dict = mle_model.state_dict()
-            MAP_params = convert_torch_to_pyro_params(mle_state_dict, MAP_params)
+        svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
+        svi_results = svi.run(rng_key, args.num_epochs, X=dataset.X_train, y=dataset.y_train)
+        MAP_params = svi_results.params
 
         if is_svi_map:
             vi_results_dict = {'percentiles': None, 'test_ll_ours': [], 'val_ll_ours': [], 'test_ll_theirs': []}
@@ -745,6 +720,15 @@ if __name__ == "__main__":
                                                'test_ll_theirs': test_ll_theirs,
                                                'val_ll_ours': val_ll_ours}}
         else:
+            # Setup pytorch MAP
+            n_train, p = dataset.X_train.shape
+            n_val = dataset.X_val.shape[0]
+            out_dim = dataset.y_train.shape[1]
+            mle_model = MapNN(input_size=p, width=50, output_size=out_dim, non_linearity="leaky_relu")
+            mle_model.load_state_dict(torch.load(args.map_path))
+            mle_state_dict = mle_model.state_dict()
+            MAP_params = convert_torch_to_pyro_params(mle_state_dict, MAP_params)
+
             predictive_train, predictive_val, predictive_test = create_predictives(model, MAP_params, dataset, one_d_bnn,
                                                                                    num_mc_samples=1, delta=True)
             hmc_result_dict = vi_results_dict =  {
