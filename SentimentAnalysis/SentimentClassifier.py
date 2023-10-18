@@ -294,8 +294,8 @@ if __name__ == "__main__":
     parser.add_argument("--num_epochs", type=int, default=50)
     parser.add_argument("--dataset_name", type=str, default="imdb")
     parser.add_argument("--train", type=ast.literal_eval, default=True)
-    parser.add_argument("--train_size", type=int, default=24)
-    parser.add_argument("--test_size", type=int, default=300)
+    parser.add_argument("--train_size", type=int, default=None) # Set for subset of dataset
+    parser.add_argument("--test_size", type=int, default=None) # Set for subset of dataset
     parser.add_argument("--device_batch_size", type=int, default=12)
 
 
