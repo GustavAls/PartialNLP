@@ -305,8 +305,8 @@ if __name__ == '__main__':
     # path_swag = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_SWAG_MAP_nobayes'
     # plot_la_swag(path_la, path_swag)
 
-    # path = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_Laplace_SWAG_1'
-    # plot_la_swag_combined(path)
+    path = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_Laplace_SWAG_1'
+    plot_la_swag_combined(path)
 
     # plot_la_swag(path_la, path_swag)
 
@@ -316,8 +316,8 @@ if __name__ == '__main__':
     # path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_VI'
     # plot_hmc_vi(path_hmc, path_vi)
 
-    path_hmc_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_HMC_VI'
-    plot_hmc_vi_combined(path_hmc_vi)
+    # path_hmc_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_HMC_VI'
+    # plot_hmc_vi_combined(path_hmc_vi)
 
     breakpoint()
 
