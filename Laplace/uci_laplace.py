@@ -307,7 +307,9 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
                                 val_fraction_of_train=0.1)
 
         data_name = os.path.join(dataset_path, f'data_laplace_run_{run}.pkl')
-        pickle.dump(dataset, open(data_name, 'wb'))
+
+        with open(data_name, 'wb') as handle:
+            pickle.dump(dataset, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         n_train, p = dataset.X_train.shape
         n_val = dataset.X_val.shape[0]
