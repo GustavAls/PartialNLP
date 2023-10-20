@@ -30,7 +30,7 @@ from torch.utils.data import Dataset, DataLoader
 
 
 class SentimentClassifier:
-    def __init__(self, network_name, id2label=None, label2id=None, train_size=None, test_size=None):
+    def __init__(self, network_name, id2label=None, label2id=None, train_size=None, test_size=None, dataset_name="sst2"):
         self._tokenizer = AutoTokenizer.from_pretrained(network_name)
         if id2label is None and label2id is None:
             self.model = AutoModelForSequenceClassification.from_pretrained(network_name,
@@ -44,6 +44,7 @@ class SentimentClassifier:
         self.collator = DataCollatorWithPadding(tokenizer=self._tokenizer)
         self.train_size = train_size
         self.test_size = test_size
+        self.dataset_name = dataset_name
 
     def load_text_dataset(self, dataset_name="imdb", seed=0):
         data = load_dataset(dataset_name)
@@ -53,7 +54,10 @@ class SentimentClassifier:
         return train_data, test_data
 
     def tokenize(self, examples):
-        return self._tokenizer(examples["text"], truncation=True)
+        if self.dataset_name == 'imdb':
+            return self._tokenizer(examples["text"], truncation=True)
+        elif self.dataset_name == 'sst2':
+            return self._tokenizer(examples["sentence"], truncation=True)
 
     @staticmethod
     def compute_metrics(eval_pred):
@@ -154,12 +158,14 @@ def prepare_sentiment_classifier(args, model_name="distilbert-base-uncased"):
                                                    id2label=id2label,
                                                    label2id=label2id,
                                                    train_size=args.train_size,
-                                                   test_size=args.test_size)
+                                                   test_size=args.test_size,
+                                                   dataset_name=args.dataset_name)
 
     else:
         sentiment_classifier = SentimentClassifier(model_name,
                                                    train_size=args.train_size,
-                                                   test_size=args.test_size)
+                                                   test_size=args.test_size,
+                                                   dataset_name=args.dataset_name)
 
     return sentiment_classifier
 
@@ -330,12 +336,12 @@ if __name__ == "__main__":
     parser.add_argument("--train_batch_size", type=int, default=None)
     parser.add_argument("--eval_batch_size", type=int, default=None)
     parser.add_argument("--device", type=str, default="cpu")
-    parser.add_argument("--num_epochs", type=int, default=50)
-    parser.add_argument("--dataset_name", type=str, default="imdb")
+    parser.add_argument("--num_epochs", type=int, default=1)
+    parser.add_argument("--dataset_name", type=str, default="sst2")
     parser.add_argument("--train", type=ast.literal_eval, default=True)
     parser.add_argument("--train_size", type=int, default=None) # Set to number for subset of data
     parser.add_argument("--test_size", type=int, default=None) # Set to number for subset of data
-    parser.add_argument("--device_batch_size", type=int, default=16)
+    parser.add_argument("--device_batch_size", type=int, default=4)
     parser.add_argument("--learning_rate", type=float, default=5e-05)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument('--laplace', type=ast.literal_eval, default=False)
