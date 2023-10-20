@@ -30,13 +30,16 @@ from torch.utils.data import Dataset, DataLoader
 
 
 class SentimentClassifier:
-    def __init__(self, network_name, id2label, label2id, train_size=None, test_size=None):
+    def __init__(self, network_name, id2label=None, label2id=None, train_size=None, test_size=None):
         self._tokenizer = AutoTokenizer.from_pretrained(network_name)
-        self.model = AutoModelForSequenceClassification.from_pretrained(network_name,
-                                                                        num_labels=2,
-                                                                        id2label=id2label,
-                                                                        label2id=label2id)
-
+        if id2label is None and label2id is None:
+            self.model = AutoModelForSequenceClassification.from_pretrained(network_name,
+                                                                            num_labels=2)
+        else:
+            self.model = AutoModelForSequenceClassification.from_pretrained(network_name,
+                                                                            num_labels=2,
+                                                                            label2id=label2id,
+                                                                            id2label=id2label)
         self.model.save_pretrained(os.path.join(os.getcwd(), "model"))
         self.collator = DataCollatorWithPadding(tokenizer=self._tokenizer)
         self.train_size = train_size
