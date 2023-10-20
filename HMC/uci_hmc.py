@@ -839,7 +839,7 @@ def make_hmc_run(run, dataset, scale_prior, prior_variance, save_path, likelihoo
 
 def get_map_if_exists(full_path, result_dict):
     if os.path.exists(full_path):
-        result_dict = pickle.load(open(result_dict, "rb"))
+        result_dict = pickle.load(open(full_path, "rb"))
     return result_dict
 
 
