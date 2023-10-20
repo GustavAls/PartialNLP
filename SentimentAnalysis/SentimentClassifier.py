@@ -30,7 +30,7 @@ from torch.utils.data import Dataset, DataLoader
 
 
 class SentimentClassifier:
-    def __init__(self, network_name, id2label, label2id, train_size=300, test_size=30):
+    def __init__(self, network_name, id2label, label2id, train_size=None, test_size=None):
         self._tokenizer = AutoTokenizer.from_pretrained(network_name)
         self.model = AutoModelForSequenceClassification.from_pretrained(network_name,
                                                                         num_labels=2,
@@ -44,8 +44,8 @@ class SentimentClassifier:
 
     def load_text_dataset(self, dataset_name="imdb"):
         data = load_dataset(dataset_name)
-        train_data = data["train"].shuffle(seed=42).select([i for i in list(range(self.train_size))])
-        test_data = data["test"].shuffle(seed=42).select([i for i in list(range(self.test_size))])
+        train_data = data["train"] if self.train_size is None else data["train"].shuffle(seed=42).select([i for i in list(range(self.train_size))])
+        test_data = data["test"] if self.test_size is None else data["test"].shuffle(seed=42).select([i for i in list(range(self.test_size))])
         del data
         return train_data, test_data
 
@@ -328,8 +328,8 @@ if __name__ == "__main__":
     parser.add_argument("--num_epochs", type=int, default=50)
     parser.add_argument("--dataset_name", type=str, default="imdb")
     parser.add_argument("--train", type=ast.literal_eval, default=True)
-    parser.add_argument("--train_size", type=int, default=24)
-    parser.add_argument("--test_size", type=int, default=300)
+    parser.add_argument("--train_size", type=int, default=None) # Set to number for subset of data
+    parser.add_argument("--test_size", type=int, default=None) # Set to number for subset of data
     parser.add_argument("--device_batch_size", type=int, default=12)
     parser.add_argument('--laplace', type=ast.literal_eval, default=False)
     parser.add_argument('--swag', type=ast.literal_eval, default=False)
