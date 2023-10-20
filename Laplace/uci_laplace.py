@@ -12,8 +12,8 @@ from MAP_baseline.MapNN import MapNN, MapNNRamping
 from torch.utils.data import Dataset, DataLoader
 import pickle
 from torch.distributions import Normal
-from laplace import Laplace
-from laplace.utils import LargestMagnitudeSubnetMask
+from Laplace.laplace import Laplace
+from Laplace.laplace.utils import LargestMagnitudeSubnetMask
 from uci import UCIDataloader, UCIDataset, UCIBostonDataset, UCIEnergyDataset, UCIYachtDataset, UCIWineDataset
 from torch.nn import MSELoss
 from torch.distributions import Gamma
