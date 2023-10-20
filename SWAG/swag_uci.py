@@ -211,6 +211,53 @@ def get_empirical_var(model, dataloader):
     return torch.var(torch.cat(residuals, dim = 0)).item()
 
 
+def compare_map_models(model: nn.Module,model_path, pcl_path):
+    model.load_state_dict(torch.load(model_path))
+    pcl = pickle.load(open(pcl_path, 'rb'))
+    dataset = pcl['dataset']
+
+    n_train, p = dataset.X_train.shape
+    n_val = dataset.X_val.shape[0]
+    out_dim = dataset.y_train.shape[1]
+    n_test = dataset.X_test.shape[0]
+
+    train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train // 8)
+    val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
+    test_dataloader = DataLoader(UCIDataloader(dataset.X_test, dataset.y_test), batch_size=n_test)
+
+    residuals = get_residuals(model, dataloader=train_dataloader)
+    sigma = residuals.std()
+
+    nll, mse =  evaluate_map(model,test_dataloader, sigma,
+                             dataset.scl_Y.scale_, dataset.scl_Y.mean_)
+
+    return nll
+
+def compare_for_all(model):
+
+    path = r'C:\Users\45292\Documents\Master\MAP_models\yacht'
+    model_paths = os.listdir(path)
+    model_runs = []
+    for p in model_paths:
+        model_runs.append(int(p.split("_")[-1].split(".")[0]))
+
+    model_paths = [os.path.join(path, p) for p in model_paths]
+
+    res_path = r'C:\Users\45292\Documents\Master\UCI_HMC_full_tmp\UCI_HMC_VI_torch\yacht_models'
+    res_paths = os.listdir(res_path)
+    res_runs = []
+    for p in res_paths:
+        res_runs.append(int(p.split("_")[-1].split(".")[0]))
+
+    res_paths = [os.path.join(res_path, p) for p in res_paths]
+    nlls = []
+
+    for res, rrun in zip(res_paths, res_runs):
+        model_path = model_paths[model_runs.index(rrun)]
+        nlls.append(compare_map_models(model, model_path, res))
+    breakpoint()
+
+
 def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, percentages, trained_model=None, train_args=None):
 
     if trained_model is None:
@@ -237,7 +284,8 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
         'best_nll_val': [],
         'according_mse_val': []
     }
-
+    compare_for_all(model_)
+    breakpoint()
     residuals = get_residuals(model_, dataloader)
     if bayes_var:
         precision = get_tau_by_conjugacy(residuals, 3, 5)

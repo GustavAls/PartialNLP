@@ -225,7 +225,7 @@ def construct_swag(sentiment_classifier, swag_cfg):
 def save_object_(obj, output_path, swag_or_laplace='laplace', cfg=None):
 
     changed_things = check_cfg_status(cfg, swag_or_laplace)
-    breakpoint()
+
     if swag_or_laplace == 'laplace':
         to_be_saved = {'la': obj, 'cfg': cfg}
     elif swag_or_laplace == 'swag':
