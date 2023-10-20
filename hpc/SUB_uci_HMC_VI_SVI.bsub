@@ -1,24 +1,24 @@
 #!/bin/sh
-### General options
+### Job array
 ### –- specify queue --
 ### CHANGE HERE FOR GPU/CPU
-#BSUB -q hpc
+##BSUB -q hpc
 ### -- set the job Name --
-#BSUB -J la_swag_boston
+#BSUB -J hmc_vi_svi_yacht[1-15]%15
 ### -- ask for number of cores (default: 1) --
-#BSUB -n 4
+#BSUB -n 8
 #BSUB -R "span[block=1]"
 ### -- Select the resources: 1 gpu in exclusive process mode --
 ### CHANGE HERE FOR GPU/CPU
 ##BSUB -gpu "num=1:mode=exclusive_process"
 ### -- set walltime limit: hh:mm --  maximum 24 hours for GPU-queues right now
-#BSUB -W 12:00
+#BSUB -W 24:00
 # request xGB of system-memory
 #BSUB -R "rusage[mem=1GB]"
 ### -- set the email address --
 # please uncomment the following line and put in your e-mail address,
 # if you want to receive e-mail notifications on a non-default address
-##BSUB -u your_email_address
+###BSUB -u your_email_address
 ### -- send notification at start --
 ##BSUB -B
 ### -- send notification at completion--
@@ -29,12 +29,11 @@
 #BSUB -e out/gpu_%J.err
 # -- end of LSF options --
 
-# Activate the python eviorment
+# Activate the python environment
 module load python3/3.9.11
 source ~/PartialNLP/partial_venv/bin/activate
 # Set python path
-export PYTHONPATH=$PYTHONPATH:~/PartialNLP/ 
-export PYTHONPATH=$PYTHONPATH:~/
+export PYTHONPATH=$PYTHONPATH:~/PartialNLP/
 
 # Load the cuda module
 module load cuda/11.6
@@ -44,32 +43,39 @@ echo "Running script..."
 # Send sample job to GPU
 
 ##### ADD INFO HERE ####
-model_name="boston"
+model_name="yacht"
+
+# Get the values for this job array task using LSB_JOBINDEX
+# Running 4 x 15 runs over 4 x 24 hours. Will terminate if all percentiles is already complete
+runs=(0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14)
+
+# Get the values for this job array task using LSB_JOBINDEX
+run="${runs[$LSB_JOBINDEX - 1]}"
+
+#Maybe get this to work if we need even more runs
+#run = "${LSB_JOBINDEX - 1}"
 
 # Create some folders
-dir_outpath="results/UCI_Laplace_SWAG/${model_name}_models"
-dir_datapath="results/UCI_Laplace_SWAG/${model_name}_data"
-dir_map_path="results/MAP_models/${model_name}"
-dir_dataset_path="results/Datasets/${model_name}"
-
+dir_outpath="results/UCI_HMC_VI_SVI/${model_name}_models"
+dir_datapath="results/UCI_HMC_VI_SVI/${model_name}_data"
+dir_map_path="results/MAP_models/${model_name}/run_${run}.pt"
+#
 # Make the directories if they don't exist
 mkdir -p $dir_outpath
 mkdir -p $dir_datapath
-mkdir -p $dir_map_path
-mkdir -p $dir_dataset_path
 
 # Run the training
-python3 Laplace/uci_laplace.py \
+python3 HMC/uci_hmc.py \
     --output_path $dir_outpath \
     --data_path $dir_datapath \
-    --map_path  $dir_map_path \
-    --dataset_path $dir_dataset_path \
     --dataset $model_name \
+    --run $run \
     --num_epochs 20000 \
-    --prior_precision 0.5 \
-    --get_map True \
-    --device "cpu" \
-    --fit_swag True \
+    --scale_prior True \
+    --prior_variance 0.1 \
+    --likelihood_scale 6.0 \
+    --vi True \
+    
 
 if [ $? -eq 0 ]; then
     echo "Success"

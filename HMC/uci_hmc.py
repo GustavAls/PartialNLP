@@ -661,7 +661,6 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=str, default="boston")
     parser.add_argument("--output_path", type=str, default=os.getcwd())
     parser.add_argument("--data_path", type=str, default=os.getcwd())
-    parser.add_argument("--dataset_path", type=str, default=None)
     parser.add_argument("--map_path", type=str, default=None)
     parser.add_argument("--run", type=int, default=15)
     parser.add_argument("--num_epochs", type=int, default=100)
@@ -680,17 +679,14 @@ if __name__ == "__main__":
 
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
 
-    if args.dataset_path is None:
-        rand_seed = np.random.randint(0, 10000)
-        dataset = dataset_class(
-            args.data_path,
-            seed=rand_seed,
-            test_split_type="random",
-            test_size=0.1,
-            val_fraction_of_train=0.1,
-        )
-    else:
-        dataset = pickle.load(open(args.dataset_path, "rb"))
+    rand_seed = np.random.randint(0, 10000)
+    dataset = dataset_class(
+        args.data_path,
+        seed=rand_seed,
+        test_split_type="random",
+        test_size=0.1,
+        val_fraction_of_train=0.1,
+    )
 
     # Allowing for both types of MAP models
     is_svi_map = args.map_path is None
