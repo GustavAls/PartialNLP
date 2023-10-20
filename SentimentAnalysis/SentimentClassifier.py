@@ -42,9 +42,9 @@ class SentimentClassifier:
         self.train_size = train_size
         self.test_size = test_size
 
-    def load_text_dataset(self, dataset_name="imdb"):
+    def load_text_dataset(self, dataset_name="imdb", seed=0):
         data = load_dataset(dataset_name)
-        train_data = data["train"] if self.train_size is None else data["train"].shuffle(seed=42).select([i for i in list(range(self.train_size))])
+        train_data = data["train"].shuffle(seed=seed) if self.train_size is None else data["train"].shuffle(seed=42).select([i for i in list(range(self.train_size))])
         test_data = data["test"] if self.test_size is None else data["test"].shuffle(seed=42).select([i for i in list(range(self.test_size))])
         del data
         return train_data, test_data
@@ -63,8 +63,8 @@ class SentimentClassifier:
         f1 = load_f1.compute(predictions=predictions, references=labels)["f1"]
         return {"accuracy": accuracy, "f1": f1}
 
-    def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, lr=5e-05, train=True):
-        train_data, test_data = self.load_text_dataset(dataset_name=dataset_name)
+    def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, lr=5e-05, seed=0, train=True):
+        train_data, test_data = self.load_text_dataset(dataset_name=dataset_name, seed=seed)
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
 
@@ -171,6 +171,7 @@ def prepare_and_run_sentiment_classifier(args, sentiment_classifier=None):
                                 dataset_name=args.dataset_name,
                                 device_batch_size=args.device_batch_size,
                                 lr=args.learning_rate,
+                                seed=args.seed,
                                 train=args.train)
 
     return None
@@ -332,6 +333,7 @@ if __name__ == "__main__":
     parser.add_argument("--test_size", type=int, default=None) # Set to number for subset of data
     parser.add_argument("--device_batch_size", type=int, default=16)
     parser.add_argument("--learning_rate", type=float, default=5e-05)
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument('--laplace', type=ast.literal_eval, default=False)
     parser.add_argument('--swag', type=ast.literal_eval, default=False)
     parser.add_argument('--swag_cfg', default=None)

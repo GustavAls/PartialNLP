@@ -565,9 +565,9 @@ def run_for_percentile(
         predictive_train = Predictive(mixed_bnn, mcmc.get_samples())(rng_key, X=dataset.X_train)
         predictive_val = Predictive(mixed_bnn, mcmc.get_samples())(rng_key, X=dataset.X_val)
         predictive_test = Predictive(mixed_bnn, mcmc.get_samples())(rng_key, X=dataset.X_test)
-        results =  {'predictive_train': predictive_train,
-                     'predictive_val': predictive_val,
-                     'predictive_test': predictive_test}
+        results =  {'predictive_train': predictive_train["mean"],
+                     'predictive_val': predictive_val["mean"],
+                     'predictive_test': predictive_test["mean"]}
     return results
 
 
@@ -605,9 +605,9 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, MA
         else:
             predictive_train, predictive_val, predictive_test = create_predictives(model, svi_results.params, dataset,
                                                                                    mixed_bnn, num_mc_samples=200, delta=False)
-            results_dict[f"{percentile}"] = {'predictive_train': predictive_train,
-                                             'predictive_val': predictive_val,
-                                             'predictive_test': predictive_test}
+            results_dict[f"{percentile}"] = {'predictive_train': predictive_train["mean"],
+                                             'predictive_val': predictive_val["mean"],
+                                             'predictive_test': predictive_test["mean"]}
 
     save_name = f'results_vi_run_{run}.pkl'
     with open(os.path.join(save_path, save_name), 'wb') as handle:
@@ -661,13 +661,14 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=str, default="boston")
     parser.add_argument("--output_path", type=str, default=os.getcwd())
     parser.add_argument("--data_path", type=str, default=os.getcwd())
+    parser.add_argument("--dataset_path", type=str, default=None)
     parser.add_argument("--map_path", type=str, default=None)
     parser.add_argument("--run", type=int, default=15)
-    parser.add_argument("--num_epochs", type=int, default=20000)
+    parser.add_argument("--num_epochs", type=int, default=100)
     parser.add_argument("--scale_prior",  type=ast.literal_eval, default=True)
     parser.add_argument("--prior_variance", type=float, default=2.0) #0.1 is good for yacht, 2.0 for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, 1.0   for other datasets
-    parser.add_argument('--vi', type=ast.literal_eval, default=True)
+    parser.add_argument('--vi', type=ast.literal_eval, default=False)
     args = parser.parse_args()
 
     if args.dataset == "yacht":
@@ -679,21 +680,21 @@ if __name__ == "__main__":
 
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
 
-    rand_seed = np.random.randint(0, 10000)
-    dataset = dataset_class(
-        args.data_path,
-        seed=rand_seed,
-        test_split_type="random",
-        test_size=0.1,
-        val_fraction_of_train=0.1,
-    )
+    if args.dataset_path is None:
+        rand_seed = np.random.randint(0, 10000)
+        dataset = dataset_class(
+            args.data_path,
+            seed=rand_seed,
+            test_split_type="random",
+            test_size=0.1,
+            val_fraction_of_train=0.1,
+        )
+    else:
+        dataset = pickle.load(open(args.dataset_path, "rb"))
 
     # Allowing for both types of MAP models
     is_svi_map = args.map_path is None
 
-    # TODO: Load dataset as well as model
-
-    ### Train MAP Solution
     if os.path.exists(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")):
         hmc_result_dict = pickle.load(open(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl"), "rb"))
     else:
@@ -736,9 +737,9 @@ if __name__ == "__main__":
             hmc_result_dict = vi_results_dict =  {
                                                     'dataset': dataset,
                                                     'map_results':  {'map_params': MAP_params,
-                                                                     'predictive_train': predictive_train,
-                                                                     'predictive_val': predictive_val,
-                                                                     'predictive_test': predictive_test}
+                                                                     'predictive_train': predictive_train["mean"],
+                                                                     'predictive_val': predictive_val["mean"],
+                                                                     'predictive_test': predictive_test["mean"]}
                                                  }
 
         pickle.dump(vi_results_dict, open(os.path.join(args.output_path, f"results_vi_run_{args.run}.pkl"), "wb"))
