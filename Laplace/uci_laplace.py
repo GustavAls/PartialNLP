@@ -212,7 +212,7 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
     return val_nll, test_nll, val_mse, test_mse
 
 
-def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output_path, fit_swag, map_path, **kwargs):
+def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output_path, fit_swag, map_path, load_map=True, **kwargs):
     """Run the Laplace approximation for different subnetworks.
         Args:
             data_path: (str) path to the data
@@ -403,6 +403,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_runs', type=int, default=15)
     parser.add_argument('--size_ramping', type=ast.literal_eval, default=False)
     parser.add_argument('--get_map', type=ast.literal_eval, default=True)
+    parser.add_argument('--load_map', type=ast.literal_eval, default=True)
     parser.add_argument('--fit_swag', type=ast.literal_eval, default=True)
     parser.add_argument('--prior_precision', type=float, default=0.5)
 
@@ -431,6 +432,6 @@ if __name__ == "__main__":
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
     else:
         results = multiple_runs(args.data_path, dataset_class, args.num_runs, args.device, args.num_epochs,
-                                args.output_path, args.fit_swag, args.map_path, **loss_arguments)
+                                args.output_path, args.fit_swag, args.map_path, args.load_map, **loss_arguments)
 
     print("Laplace experiments finished!")
