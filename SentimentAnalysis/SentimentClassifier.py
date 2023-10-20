@@ -79,10 +79,10 @@ class SentimentClassifier:
                                           load_best_model_at_end=True,
                                           weight_decay=0.01)
 
-        self.model = PartialConstructorSwag(self.model, n_iterations_between_snapshots=1,
-                                            module_names=['classifier'],
-                                            num_columns=10)
-        self.model.select()
+        # self.model = PartialConstructorSwag(self.model, n_iterations_between_snapshots=1,
+        #                                     module_names=['classifier'],
+        #                                     num_columns=10)
+        # self.model.select()
 
         trainer = Trainer(
             model=self.model,
