@@ -880,6 +880,8 @@ if __name__ == "__main__":
     # Allowing for both types of MAP models
     is_svi_map = args.map_path is None
 
+    # TODO: Load dataset as well as model
+
     ### Train MAP Solution
     if os.path.exists(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")) and False:
         hmc_result_dict = pickle.load(open(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl"), "rb"))

@@ -284,8 +284,8 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
         'best_nll_val': [],
         'according_mse_val': []
     }
-    compare_for_all(model_)
-    breakpoint()
+    # compare_for_all(model_)
+    # breakpoint()
     residuals = get_residuals(model_, dataloader)
     if bayes_var:
         precision = get_tau_by_conjugacy(residuals, 3, 5)

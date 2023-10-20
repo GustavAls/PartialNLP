@@ -12,13 +12,87 @@ from MAP_baseline.MapNN import MapNN, MapNNRamping
 from torch.utils.data import Dataset, DataLoader
 import pickle
 from torch.distributions import Normal
-from laplace import Laplace
-from laplace.utils import LargestMagnitudeSubnetMask
+from Laplace.laplace import Laplace
+from Laplace.laplace.utils import LargestMagnitudeSubnetMask
 from uci import UCIDataloader, UCIDataset, UCIBostonDataset, UCIEnergyDataset, UCIYachtDataset, UCIWineDataset
 from torch.nn import MSELoss
 from torch.distributions import Gamma
 import misc.likelihood_losses as ll_losses
 from VI.partial_bnn_functional import train
+
+
+### NOT CURRENTLY USED
+def make_size_ramping(data_path, dataset_class, num_runs, device, num_epochs, output_path, **kwargs):
+    all_res = []
+    widths = [i for i in range(30, 110, 10)]
+    depths = [1, 2, 3]
+    percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
+    for run in range(num_runs):
+        dataset = dataset_class(data_dir=data_path,
+                                test_split_type='random',
+                                test_size=0.1,
+                                seed=np.random.randint(0, 1000),
+                                val_fraction_of_train=0.1)
+        n_train, p = dataset.X_train.shape
+        n_val = dataset.X_val.shape[0]
+        out_dim = dataset.y_train.shape[1]
+        train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train)
+        val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
+        for depth in depths:
+            for width in widths:
+                mle_model = MapNNRamping(
+                    input_size=p,
+                    width=width,
+                    output_size=out_dim,
+                    num_hidden_layers=depth,
+                    non_linearity="leaky_relu",
+                )
+
+                if issubclass(loss := kwargs.get('loss_fn', MSELoss), ll_losses.BaseMAPLoss):
+                    kwargs['model'] = mle_model
+                    loss_fn = loss(**kwargs)
+                else:
+                    loss_fn = loss()
+
+                train_args = {
+                    'device': device,
+                    'epochs': num_epochs,
+                    'save_path': output_path,
+                    'early_stopping_patience': 1000,
+                    'loss_fn': loss_fn
+                }
+
+                mle_model = train(network=mle_model, dataloader_train=train_dataloader, dataloader_val=val_dataloader,
+                                  **train_args)
+
+                val_nll, test_nll, val_mse, test_mse = run_percentiles(mle_model, train_dataloader, dataset,
+                                                                       percentages)
+
+                save_name = os.path.join(output_path,
+                                         f'results_{run}_depth_{depth}_width_{width}_{dataset_class.dataset_name}.pkl')
+
+                results = {
+                    'percentages': percentages,
+                    'x_train': dataset.X_train,
+                    'y_train': dataset.y_train,
+                    'y_val': dataset.y_val,
+                    'x_val': dataset.X_val,
+                    'x_test': dataset.X_test,
+                    'y_test': dataset.y_test,
+                    'val_nll': val_nll,
+                    'test_nll': test_nll,
+                    'val_mse': val_mse,
+                    'test_mse': test_mse,
+                    'run': run,
+                    'width': width,
+                    'depth': depth
+                }
+                # with open(save_name, 'wb') as handle:
+                #     pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+                print("nll for percentages", percentages, 'for width', width, 'and depth', depth, 'was ', test_nll)
+                all_res.append(results)
+    return all_res
+
 
 def count_parameters(model):
     """Count the number of parameters in a model.
@@ -212,7 +286,7 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages):
     return val_nll, test_nll, val_mse, test_mse
 
 
-def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output_path, fit_swag, map_path, **kwargs):
+def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output_path, fit_swag, map_path, dataset_path, load_map=True, **kwargs):
     """Run the Laplace approximation for different subnetworks.
         Args:
             data_path: (str) path to the data
@@ -231,6 +305,11 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
                                 test_size=0.1,
                                 seed=np.random.randint(0, 1000),
                                 val_fraction_of_train=0.1)
+
+        data_name = os.path.join(dataset_path, f'data_laplace_run_{run}.pkl')
+
+        with open(data_name, 'wb') as handle:
+            pickle.dump(dataset, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         n_train, p = dataset.X_train.shape
         n_val = dataset.X_val.shape[0]
@@ -319,79 +398,6 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
 
     return all_res
 
-
-def make_size_ramping(data_path, dataset_class, num_runs, device, num_epochs, output_path, **kwargs):
-    all_res = []
-    widths = [i for i in range(30, 110, 10)]
-    depths = [1, 2, 3]
-    percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
-    for run in range(num_runs):
-        dataset = dataset_class(data_dir=data_path,
-                                test_split_type='random',
-                                test_size=0.1,
-                                seed=np.random.randint(0, 1000),
-                                val_fraction_of_train=0.1)
-        n_train, p = dataset.X_train.shape
-        n_val = dataset.X_val.shape[0]
-        out_dim = dataset.y_train.shape[1]
-        train_dataloader = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train)
-        val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
-        for depth in depths:
-            for width in widths:
-                mle_model = MapNNRamping(
-                    input_size=p,
-                    width=width,
-                    output_size=out_dim,
-                    num_hidden_layers=depth,
-                    non_linearity="leaky_relu",
-                )
-
-                if issubclass(loss := kwargs.get('loss_fn', MSELoss), ll_losses.BaseMAPLoss):
-                    kwargs['model'] = mle_model
-                    loss_fn = loss(**kwargs)
-                else:
-                    loss_fn = loss()
-
-                train_args = {
-                    'device': device,
-                    'epochs': num_epochs,
-                    'save_path': output_path,
-                    'early_stopping_patience': 1000,
-                    'loss_fn': loss_fn
-                }
-
-                mle_model = train(network=mle_model, dataloader_train=train_dataloader, dataloader_val=val_dataloader,
-                                  **train_args)
-
-                val_nll, test_nll, val_mse, test_mse = run_percentiles(mle_model, train_dataloader, dataset,
-                                                                       percentages)
-
-                save_name = os.path.join(output_path,
-                                         f'results_{run}_depth_{depth}_width_{width}_{dataset_class.dataset_name}.pkl')
-
-                results = {
-                    'percentages': percentages,
-                    'x_train': dataset.X_train,
-                    'y_train': dataset.y_train,
-                    'y_val': dataset.y_val,
-                    'x_val': dataset.X_val,
-                    'x_test': dataset.X_test,
-                    'y_test': dataset.y_test,
-                    'val_nll': val_nll,
-                    'test_nll': test_nll,
-                    'val_mse': val_mse,
-                    'test_mse': test_mse,
-                    'run': run,
-                    'width': width,
-                    'depth': depth
-                }
-                # with open(save_name, 'wb') as handle:
-                #     pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
-                print("nll for percentages", percentages, 'for width', width, 'and depth', depth, 'was ', test_nll)
-                all_res.append(results)
-    return all_res
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some integers.")
     parser.add_argument("--output_path", type=str, default=os.getcwd())
@@ -399,14 +405,17 @@ if __name__ == "__main__":
     parser.add_argument("--num_epochs", type=int, default=100)
     parser.add_argument("--dataset", type=str, default="boston")
     parser.add_argument('--data_path', type=str, default=os.getcwd())
-    parser.add_argument('--map_path', type=str, default=os.path.join(os.getcwd(), "boston.pt"))
+    parser.add_argument('--map_path', type=str, default=os.getcwd())
+    parser.add_argument('--dataset_path', type=str, default=os.getcwd())
     parser.add_argument('--num_runs', type=int, default=15)
     parser.add_argument('--size_ramping', type=ast.literal_eval, default=False)
     parser.add_argument('--get_map', type=ast.literal_eval, default=True)
+    parser.add_argument('--load_map', type=ast.literal_eval, default=True)
     parser.add_argument('--fit_swag', type=ast.literal_eval, default=True)
     parser.add_argument('--prior_precision', type=float, default=0.5)
 
-    # TODO implement initialisation corresponding to prior precision
+
+    # TODO: Save dataset such that it can be loaded in uci_hmc.py
 
     args = parser.parse_args()
 
@@ -431,6 +440,6 @@ if __name__ == "__main__":
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
     else:
         results = multiple_runs(args.data_path, dataset_class, args.num_runs, args.device, args.num_epochs,
-                                args.output_path, args.fit_swag, args.map_path, **loss_arguments)
+                                args.output_path, args.fit_swag, args.map_path, args.data_path, args.load_map, **loss_arguments)
 
     print("Laplace experiments finished!")

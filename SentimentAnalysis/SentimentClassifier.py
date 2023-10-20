@@ -30,7 +30,7 @@ from torch.utils.data import Dataset, DataLoader
 
 
 class SentimentClassifier:
-    def __init__(self, network_name, id2label, label2id, train_size=300, test_size=30):
+    def __init__(self, network_name, id2label, label2id, train_size=None, test_size=None):
         self._tokenizer = AutoTokenizer.from_pretrained(network_name)
         self.model = AutoModelForSequenceClassification.from_pretrained(network_name,
                                                                         num_labels=2,
@@ -44,8 +44,8 @@ class SentimentClassifier:
 
     def load_text_dataset(self, dataset_name="imdb"):
         data = load_dataset(dataset_name)
-        train_data = data["train"].shuffle(seed=42).select([i for i in list(range(self.train_size))])
-        test_data = data["test"].shuffle(seed=42).select([i for i in list(range(self.test_size))])
+        train_data = data["train"] if self.train_size is None else data["train"].shuffle(seed=42).select([i for i in list(range(self.train_size))])
+        test_data = data["test"] if self.test_size is None else data["test"].shuffle(seed=42).select([i for i in list(range(self.test_size))])
         del data
         return train_data, test_data
 
@@ -63,15 +63,14 @@ class SentimentClassifier:
         f1 = load_f1.compute(predictions=predictions, references=labels)["f1"]
         return {"accuracy": accuracy, "f1": f1}
 
-    def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, train=True):
+    def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, lr=5e-05, train=True):
         train_data, test_data = self.load_text_dataset(dataset_name=dataset_name)
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
 
         training_args = TrainingArguments(output_dir=output_path,
-                                          learning_rate=2e-5,
+                                          learning_rate=lr,
                                           do_train=train,
-                                          optim='sgd',
                                           per_device_train_batch_size=device_batch_size,
                                           per_device_eval_batch_size=device_batch_size,
                                           num_train_epochs=num_epochs,
@@ -80,10 +79,10 @@ class SentimentClassifier:
                                           load_best_model_at_end=True,
                                           weight_decay=0.01)
 
-        self.model = PartialConstructorSwag(self.model, n_iterations_between_snapshots=1,
-                                            module_names=['classifier'],
-                                            num_columns=10)
-        self.model.select()
+        # self.model = PartialConstructorSwag(self.model, n_iterations_between_snapshots=1,
+        #                                     module_names=['classifier'],
+        #                                     num_columns=10)
+        # self.model.select()
 
         trainer = Trainer(
             model=self.model,
@@ -102,7 +101,7 @@ class SentimentClassifier:
             trainer.evaluate()
             print("Evaluation is done")
 
-    def prepare_laplace(self, output_path, train_bs, eval_bs, dataset_name, device_batch_size):
+    def prepare_laplace(self, output_path, train_bs, eval_bs, dataset_name, device_batch_size, lr=5e-05):
         """
 
         :param output_path: Ouput path, for compatibility with other function calls, this function does not save
@@ -117,7 +116,7 @@ class SentimentClassifier:
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
 
         training_args = TrainingArguments(output_dir=output_path,
-                                          learning_rate=2e-5,
+                                          learning_rate=lr,
                                           do_train=True,
                                           per_device_train_batch_size=device_batch_size,
                                           per_device_eval_batch_size=device_batch_size,
@@ -171,6 +170,7 @@ def prepare_and_run_sentiment_classifier(args, sentiment_classifier=None):
                                 num_epochs=args.num_epochs,
                                 dataset_name=args.dataset_name,
                                 device_batch_size=args.device_batch_size,
+                                lr=args.learning_rate,
                                 train=args.train)
 
     return None
@@ -182,7 +182,7 @@ def construct_laplace(sent_class, laplace_cfg, args):
                                                        eval_bs=args.eval_batch_size,
                                                        dataset_name=args.dataset_name,
                                                        device_batch_size=args.device_batch_size,
-                                                       )
+                                                       lr=args.learning_rate)
 
     if not isinstance(sent_class.model, Extension):
         model = Extension(sent_class.model)
@@ -328,9 +328,10 @@ if __name__ == "__main__":
     parser.add_argument("--num_epochs", type=int, default=50)
     parser.add_argument("--dataset_name", type=str, default="imdb")
     parser.add_argument("--train", type=ast.literal_eval, default=True)
-    parser.add_argument("--train_size", type=int, default=24)
-    parser.add_argument("--test_size", type=int, default=300)
-    parser.add_argument("--device_batch_size", type=int, default=12)
+    parser.add_argument("--train_size", type=int, default=None) # Set to number for subset of data
+    parser.add_argument("--test_size", type=int, default=None) # Set to number for subset of data
+    parser.add_argument("--device_batch_size", type=int, default=16)
+    parser.add_argument("--learning_rate", type=float, default=5e-05)
     parser.add_argument('--laplace', type=ast.literal_eval, default=False)
     parser.add_argument('--swag', type=ast.literal_eval, default=False)
     parser.add_argument('--swag_cfg', default=None)
