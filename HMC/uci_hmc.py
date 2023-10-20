@@ -854,8 +854,8 @@ if __name__ == "__main__":
     parser.add_argument("--scale_prior",  type=ast.literal_eval, default=True)
     parser.add_argument("--prior_variance", type=float, default=2.0) #0.1 is good for yacht, 2.0 for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, 1.0   for other datasets
-    parser.add_argument('--vi', type=ast.literal_eval, default=True)
-    parser.add_argument('--node_based', type=ast.literal_eval, default=True)
+    parser.add_argument('--vi', type=ast.literal_eval, default=False)
+    parser.add_argument('--node_based', type=ast.literal_eval, default=False)
     args = parser.parse_args()
 
     if args.dataset == "yacht":
@@ -926,7 +926,7 @@ if __name__ == "__main__":
                                              }
 
     pickle.dump(vi_results_dict, open(os.path.join(args.output_path, f"results_vi_run_{args.run}.pkl"), "wb"))
-    pickle.dump(vi_results_dict, open(os.path.join(args.output_path, f"results_vi_node_based_run_{args.run}.pkl"), "wb"))
+    pickle.dump(vi_results_dict, open(os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl"), "wb"))
     pickle.dump(hmc_result_dict, open(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl"), "wb"))
 
     if args.vi:
@@ -943,4 +943,3 @@ if __name__ == "__main__":
     make_hmc_run(args.run, dataset, args.scale_prior, args.prior_variance,
                  args.output_path, likelihood_scale=args.likelihood_scale, percentiles=percentiles,
                  results_dict=hmc_result_dict, is_svi_map=is_svi_map)
-
