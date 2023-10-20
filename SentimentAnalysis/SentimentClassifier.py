@@ -147,15 +147,16 @@ def prepare_sentiment_classifier(args, model_name="distilbert-base-uncased"):
     if args.dataset_name.lower() == 'imdb':
         id2label = {0: "NEGATIVE", 1: "POSITIVE"}
         label2id = {"NEGATIVE": 0, "POSITIVE": 1}
+        sentiment_classifier = SentimentClassifier(model_name,
+                                                   id2label=id2label,
+                                                   label2id=label2id,
+                                                   train_size=args.train_size,
+                                                   test_size=args.test_size)
 
     else:
-        raise NotImplementedError("Only implemented so far for dataset_name == 'imdb'")
-
-    sentiment_classifier = SentimentClassifier(model_name,
-                                               id2label=id2label,
-                                               label2id=label2id,
-                                               train_size=args.train_size,
-                                               test_size=args.test_size)
+        sentiment_classifier = SentimentClassifier(model_name,
+                                                   train_size=args.train_size,
+                                                   test_size=args.test_size)
 
     return sentiment_classifier
 
