@@ -795,7 +795,7 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, MA
                                              'predictive_val': predictive_val,
                                              'predictive_test': predictive_test}
 
-    save_name = f'results_vi_run_{run}.pkl'
+    save_name = f'results_vi_run_{run}.pkl' if not node_based else f'results_node_based_run_{run}.pkl'
     with open(os.path.join(save_path, save_name), 'wb') as handle:
         pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
