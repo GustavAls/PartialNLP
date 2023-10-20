@@ -733,7 +733,8 @@ def run_for_percentile(
     return results
 
 
-def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, MAP_params, is_svi_map=True, node_based= True):
+def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, MAP_params, num_epochs,
+                is_svi_map=True, node_based=True):
     rng_key = random.PRNGKey(1)
     optimizer = numpyro.optim.Adam(0.01)
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
@@ -776,7 +777,7 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, MA
             )(X, y)
 
         svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
-        svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
+        svi_results = svi.run(rng_key, num_epochs, X=dataset.X_train, y=dataset.y_train)
 
         # Evaluate the model
         if is_svi_map:
@@ -853,7 +854,7 @@ if __name__ == "__main__":
     parser.add_argument("--scale_prior",  type=ast.literal_eval, default=True)
     parser.add_argument("--prior_variance", type=float, default=2.0) #0.1 is good for yacht, 2.0 for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, 1.0   for other datasets
-    parser.add_argument('--vi', type=ast.literal_eval, default=False)
+    parser.add_argument('--vi', type=ast.literal_eval, default=True)
     parser.add_argument('--node_based', type=ast.literal_eval, default=True)
     args = parser.parse_args()
 
@@ -934,11 +935,13 @@ if __name__ == "__main__":
         if args.vi:
             # VI run
             make_vi_run(args.run, dataset, args.prior_variance, args.likelihood_scale, vi_results_dict,
-                        save_path=args.output_path, MAP_params=MAP_params, is_svi_map=is_svi_map)
+                        save_path=args.output_path, MAP_params=MAP_params, num_epochs=args.num_epochs,
+                        is_svi_map=is_svi_map, node_based=False)
         if args.node_based:
             # Node based
             make_vi_run(args.run, dataset, args.prior_variance, args.likelihood_scale, vi_results_dict,
-                        save_path = args.output_path, MAP_params = MAP_params, is_svi_map = is_svi_map, node_based = True)
+                        save_path = args.output_path, MAP_params = MAP_params, num_epochs=args.num_epochs,
+                        is_svi_map = is_svi_map, node_based = True)
 
     make_hmc_run(args.run, dataset, args.scale_prior, args.prior_variance,
                  args.output_path, likelihood_scale=args.likelihood_scale, percentiles=percentiles,
