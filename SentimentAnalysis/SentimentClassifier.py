@@ -20,6 +20,7 @@ import importlib
 import laplace_partial as lp
 from PartialConstructor import PartialConstructor, PartialConstructorSwag
 import torch.nn as nn
+import ast
 from Laplace.laplace import Laplace
 from torch.utils.data import Dataset, DataLoader
 class SentimentClassifier:
