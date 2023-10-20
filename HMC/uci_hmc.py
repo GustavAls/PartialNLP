@@ -428,6 +428,135 @@ def generate_mixed_bnn_by_param(
     return mixed_bnn
 
 
+def generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale=1.0):
+
+    (
+        W1_sample_mask,
+        W2_sample_mask,
+        W_output_sample_mask,
+        b1_sample_mask,
+        b2_sample_mask,
+        b_output_sample_mask
+    ) = sample_mask_tuple
+
+
+    def mixed_bnn(X, y=None, prior_variance=prior_variance, width=50, scale=scale):
+        nB, n_features = X.shape
+
+        W_1_node_noise = numpyro.sample(
+            "W1_node_noise",
+            dist.Normal(0, (prior_variance ** 0.5) * jnp.ones((n_features, 1))),
+        )
+        b_1_node_noise = numpyro.sample(
+            "b1_node_noise", dist.Normal(0, (prior_variance ** 0.5) * jnp.ones_like(MAP_params['b1_auto_loc'])),
+        )
+        W_2_node_noise = numpyro.sample(
+            "W2_node_noise",
+            dist.Normal(0, (prior_variance ** 0.5) * jnp.ones((width, 1))),
+        )
+        b_2_node_noise = numpyro.sample(
+            "b2_node_noise", dist.Normal(0, (prior_variance ** 0.5) * jnp.ones_like(MAP_params['b2_auto_loc']))
+        )
+        W_output_node_noise = numpyro.sample(
+            "W_output_node_noise",
+            dist.Normal(0, (prior_variance ** 0.5) * jnp.ones((width, 1))),
+        )
+        b_output_node_noise = numpyro.sample(
+            "b_output_node_noise", dist.Normal(0, (prior_variance ** 0.5) * jnp.ones((1, 1)))
+        )
+
+        W_1_map = MAP_params["W1_auto_loc"]
+        b_1_map = MAP_params["b1_auto_loc"]
+        W_2_map = MAP_params["W2_auto_loc"]
+        b_2_map = MAP_params["b2_auto_loc"]
+        W_output_map = MAP_params["W_output_auto_loc"]
+        b_output_map = MAP_params["b_output_auto_loc"]
+
+        # W_1 = numpyro.deterministic(
+        #     "W1", (W_1_map * (1 - W1_sample_mask)) + (W_1_noise * W1_sample_mask)
+        # )
+        # W_2 = numpyro.deterministic(
+        #     "W2", (W_2_map * (1 - W2_sample_mask)) + (W_2_noise * W2_sample_mask)
+        # )
+        # W_output = numpyro.deterministic(
+        #     "W_output",
+        #     (W_output_map * (1 - W_output_sample_mask))
+        #     + (W_output_noise * W_output_sample_mask),
+        # )
+        #
+        # b_1 = numpyro.deterministic(
+        #     "b1", (b_1_map * (1 - b1_sample_mask)) + (b_1_noise * b1_sample_mask)
+        # )
+        # b_2 = numpyro.deterministic(
+        #     "b2", (b_2_map * (1 - b2_sample_mask)) + (b_2_noise * b2_sample_mask)
+        # )
+        # b_output = numpyro.deterministic(
+        #     "b_output",
+        #     (b_output_map * (1 - b_output_sample_mask))
+        #     + (b_output_noise * b_output_sample_mask),
+        # )
+
+
+        W_1_node = numpyro.deterministic(
+            "W_1_node", (jnp.ones_like(W1_sample_mask) * (1 - W1_sample_mask)) + (W_1_node_noise * W1_sample_mask)
+        )
+
+        W_2_node = numpyro.deterministic(
+            "W_2_node", (jnp.ones_like(W2_sample_mask) * (1 - W2_sample_mask)) + (W_2_node_noise * W2_sample_mask)
+        )
+        W_output_node = numpyro.deterministic(
+                "W_output_node",
+                (jnp.ones_like(W_output_sample_mask) * (1 - W_output_sample_mask))
+                + (W_output_node_noise * W_output_sample_mask),
+            )
+
+        b_1_node = numpyro.deterministic(
+            "b_1_node", (jnp.ones_like(b1_sample_mask) * (1 - b1_sample_mask)) + (b_1_node_noise * b1_sample_mask)
+        )
+
+        b_2_node = numpyro.deterministic(
+            "b_2_node", (jnp.ones_like(b2_sample_mask) * (1 - b2_sample_mask)) + (b_2_node_noise * b2_sample_mask)
+        )
+
+        b_output_node = numpyro.deterministic(
+            "b_output_node",
+            (jnp.ones_like(b_output_sample_mask) * (1 - b_output_sample_mask))
+            + (b_output_node_noise * b_output_sample_mask),
+        )
+
+        z1 = ((X * W_1_node.reshape(1, -1).repeat(nB, axis=0)) @ W_1_map) \
+             + b_1_map.reshape((1, width)).repeat(nB, axis=0)
+
+        z1 = z1 * b_1_node.reshape((1, width)).repeat(nB, axis=0)
+        # z1 = ((X @ W_1_map) * W_1_node + b_1_map.reshape((1, width)).repeat(nB, axis=0))*b_1_node
+        h1 = jax.nn.leaky_relu(z1)
+        z2 = ((h1 * W_2_node.reshape(1, -1).repeat(nB, axis=0)) @ W_2_map) + \
+             b_2_map.reshape((1, width)).repeat(nB, axis=0)
+
+        z2 = z2 * b_2_node.reshape((1, width)).repeat(nB, axis=0)
+        # z2 = ((h1 @ W_2_map) * W_2_node + b_2_map.reshape((1, width)).repeat(nB, axis=0)) * b_2_node
+        h2 = jax.nn.leaky_relu(z2)
+        output = ((h2 * W_output_node.reshape(1, -1).repeat(nB, axis=0)) @ W_output_map) \
+                 + b_output_map.repeat(nB, axis=0)
+
+        output = output * b_output_node.repeat(nB, axis=0)
+        # output = ((h2 @ W_output_map)*W_output_node + b_output_map.repeat(nB, axis=0)) * b_output_node
+
+        mean = numpyro.deterministic("mean", output)
+
+        # output precision
+        prec_obs = numpyro.sample(
+            "prec_obs", dist.Gamma(3.0, 1.0)
+        )  # MAP outperforms full BNN, even if we freeze the prior precision. That's interesting here, I think.
+        sigma_obs = 1.0 / jnp.sqrt(prec_obs)
+
+        with numpyro.handlers.scale(scale=scale):
+            y_obs = numpyro.sample("y_obs", dist.Normal(mean, sigma_obs), obs=y)
+
+    return mixed_bnn
+
+
+
 def calculate_ll_mc(labels, mc_matrix, sigma, y_scale, y_loc):
     results = []
     for i in range(mc_matrix.shape[1]):
@@ -491,6 +620,39 @@ def calculate_ll_ours(model, params, dataset, bnn, num_mc_samples = 200, delta =
 
     return test_ll, val_ll
 
+
+def create_sample_mask_random(percentile, MAP_params, vals):
+    keys = [
+        "W1_auto_loc",
+        "W2_auto_loc",
+        "W_output_auto_loc",
+        "b1_auto_loc",
+        "b2_auto_loc",
+        "b_output_auto_loc",
+    ]
+
+    # masks = [np.zeros((MAP_params[key].shape[0], )) for key in keys]
+    masks_rng = vals
+    param_abs_values = np.abs(np.concatenate(masks_rng))
+    val = np.percentile(param_abs_values, 100 - percentile)
+
+    W1_sample_mask = np.abs(masks_rng[0]) >= val
+    W2_sample_mask = np.abs(masks_rng[1]) >= val
+    W_output_sample_mask = np.abs(masks_rng[2]) >= val
+    b1_sample_mask = np.abs(masks_rng[3]) >= val
+    b2_sample_mask = np.abs(masks_rng[4]) >= val
+    b_output_sample_mask = np.abs(masks_rng[5]) >= val
+
+    sample_mask_tuple = (
+            W1_sample_mask[:, None],
+            W2_sample_mask[:, None],
+            W_output_sample_mask[:, None],
+            b1_sample_mask[:, None],
+            b2_sample_mask[:, None],
+            b_output_sample_mask[:, None],
+        )
+
+    return sample_mask_tuple
 
 def create_sample_mask_largest_abs_values(percentile, MAP_params):
     keys = [
@@ -571,13 +733,20 @@ def run_for_percentile(
     return results
 
 
-def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, MAP_params, is_svi_map=True):
-
+def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, MAP_params, is_svi_map=True, node_based= True):
     rng_key = random.PRNGKey(1)
     optimizer = numpyro.optim.Adam(0.01)
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
+    if node_based:
+        keys = ["W1_auto_loc", "W2_auto_loc", "W_output_auto_loc", "b1_auto_loc", "b2_auto_loc", "b_output_auto_loc"]
+        mask_values = [np.random.normal(0, 1, size=(MAP_params[key].shape[0],)) for key in keys]
     for percentile in percentiles:
         sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
+        if node_based:
+            sample_mask_tuple = create_sample_mask_random(percentile, MAP_params, mask_values)
+        else:
+            sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
+
         optimizer = numpyro.optim.Adam(0.01)
 
         mixed_bnn = generate_mixed_bnn_by_param(
@@ -589,6 +758,22 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, MA
         model = lambda X, y=None: generate_mixed_bnn_by_param(
             MAP_params, sample_mask_tuple, prior_variance, scale
         )(X, y)
+        if node_based:
+            mixed_bnn = generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale=scale)
+
+            model = lambda X, y=None: generate_node_based_bnn(
+                MAP_params, sample_mask_tuple, prior_variance, scale
+            )(X, y)
+        else:
+            mixed_bnn = generate_mixed_bnn_by_param(
+                MAP_params,
+                sample_mask_tuple,
+                prior_variance,
+                scale=scale,
+            )
+            model = lambda X, y=None: generate_mixed_bnn_by_param(
+                MAP_params, sample_mask_tuple, prior_variance, scale
+            )(X, y)
 
         svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
         svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
@@ -668,6 +853,7 @@ if __name__ == "__main__":
     parser.add_argument("--prior_variance", type=float, default=2.0) #0.1 is good for yacht, 2.0 for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, 1.0   for other datasets
     parser.add_argument('--vi', type=ast.literal_eval, default=False)
+    parser.add_argument('--node_based', type=ast.literal_eval, default=True)
     args = parser.parse_args()
 
     if args.dataset == "yacht":
@@ -742,8 +928,13 @@ if __name__ == "__main__":
         pickle.dump(hmc_result_dict, open(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl"), "wb"))
 
         if args.vi:
+            # VI run
             make_vi_run(args.run, dataset, args.prior_variance, args.likelihood_scale, vi_results_dict,
                         save_path=args.output_path, MAP_params=MAP_params, is_svi_map=is_svi_map)
+        if args.node_based:
+            # Node based
+            make_vi_run(args.run, dataset, args.prior_variance, args.likelihood_scale, vi_results_dict,
+                        save_path = args.output_path, MAP_params = MAP_params, is_svi_map = is_svi_map, node_based = True)
 
     make_hmc_run(args.run, dataset, args.scale_prior, args.prior_variance,
                  args.output_path, likelihood_scale=args.likelihood_scale, percentiles=percentiles,
