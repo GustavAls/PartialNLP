@@ -24,7 +24,7 @@ import ast
 from Laplace.laplace import Laplace
 from torch.utils.data import Dataset, DataLoader
 class SentimentClassifier:
-    def __init__(self, network_name, id2label, label2id, train_size=300, test_size=30):
+    def __init__(self, network_name, id2label, label2id, train_size=10000, test_size=1000):
         self._tokenizer = AutoTokenizer.from_pretrained(network_name)
         self.model = AutoModelForSequenceClassification.from_pretrained(network_name,
                                                                         num_labels=2,
@@ -38,8 +38,8 @@ class SentimentClassifier:
 
     def load_text_dataset(self, dataset_name="imdb"):
         data = load_dataset(dataset_name)
-        train_data = data["train"].shuffle(seed=42).select([i for i in list(range(self.train_size))])
-        test_data = data["test"].shuffle(seed=42).select([i for i in list(range(self.test_size))])
+        train_data = data["train"].shuffle(seed=42).select([i for i in list(range(self.train_size))]) if self.train_size is not None else data["train"]
+        test_data = data["test"].shuffle(seed=42).select([i for i in list(range(self.test_size))]) if self.test_size is not None else data["test"]
         del data
         return train_data, test_data
 
