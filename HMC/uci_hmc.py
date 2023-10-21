@@ -727,7 +727,7 @@ def run_for_percentile(
         predictive_train = Predictive(mixed_bnn, mcmc.get_samples())(rng_key, X=dataset.X_train)
         predictive_val = Predictive(mixed_bnn, mcmc.get_samples())(rng_key, X=dataset.X_val)
         predictive_test = Predictive(mixed_bnn, mcmc.get_samples())(rng_key, X=dataset.X_test)
-        results =  {'predictive_train': predictive_train["mean"],
+        results = {'predictive_train': predictive_train["mean"],
                      'predictive_val': predictive_val["mean"],
                      'predictive_test': predictive_test["mean"]}
     return results
@@ -867,7 +867,7 @@ if __name__ == "__main__":
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, 1.0   for other datasets
     parser.add_argument('--vi', type=ast.literal_eval, default=True)
     parser.add_argument('--node_based', type=ast.literal_eval, default=True)
-    parser.add_argument('--hmc', type=ast.literal_eval, default=True)
+    parser.add_argument('--hmc', type=ast.literal_eval, default=False)
     args = parser.parse_args()
 
     if args.dataset == "yacht":
@@ -897,6 +897,7 @@ if __name__ == "__main__":
     optimizer = numpyro.optim.Adam(0.01)
     model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
 
+    # Allows for re-runs
     if not (os.path.exists(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")) and
         os.path.exists(os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl")) and
         os.path.exists(os.path.join(args.output_path, f"results_vi_run_{args.run}.pkl"))):
@@ -941,23 +942,22 @@ if __name__ == "__main__":
                                                                      'predictive_val': predictive_val["mean"],
                                                                      'predictive_test': predictive_test["mean"]}
                                                  }
-    else:
-        if args.vi:
-            vi_results_dict = pickle.load(open(os.path.join(args.output_path, f"results_vi_run_{args.run}.pkl"), "rb"))
-            # VI run
-            make_vi_run(run=args.run, dataset=vi_results_dict['dataset'], prior_variance=args.prior_variance,scale= args.likelihood_scale, results_dict=vi_results_dict,
-                        save_path=args.output_path,  num_epochs=args.num_epochs, is_svi_map=is_svi_map, node_based=False)
+    if args.vi:
+        vi_results_dict = get_map_if_exists(os.path.join(args.output_path, f"results_vi_run_{args.run}.pkl"), vi_results_dict)
+        # VI run
+        make_vi_run(run=args.run, dataset=vi_results_dict['dataset'], prior_variance=args.prior_variance,scale= args.likelihood_scale, results_dict=vi_results_dict,
+                    save_path=args.output_path,  num_epochs=args.num_epochs, is_svi_map=is_svi_map, node_based=False)
 
-        if args.node_based:
-            vi_results_dict = pickle.load(open(os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl"), "rb"))
-            # Node based
-            make_vi_run(run=args.run, dataset=vi_results_dict['dataset'], prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=vi_results_dict,
-                        save_path=args.output_path, num_epochs=args.num_epochs,
-                        is_svi_map=is_svi_map, node_based=True)
+    if args.node_based:
+        vi_results_dict = get_map_if_exists(os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl"), vi_results_dict)
+        # Node based
+        make_vi_run(run=args.run, dataset=vi_results_dict['dataset'], prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=vi_results_dict,
+                    save_path=args.output_path, num_epochs=args.num_epochs,
+                    is_svi_map=is_svi_map, node_based=True)
 
-        if args.hmc:
-            hmc_result_dict = pickle.load(open(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl"), "rb"))
-            # HMC run
-            make_hmc_run(run=args.run, dataset=hmc_result_dict['dataset'], scale_prior=args.scale_prior, prior_variance=args.prior_variance,
-                         save_path=args.output_path, likelihood_scale=args.likelihood_scale, percentiles=percentiles,
-                         results_dict=hmc_result_dict, is_svi_map=is_svi_map)
+    if args.hmc:
+        hmc_result_dict = get_map_if_exists(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl"), hmc_result_dict)
+        # HMC run
+        make_hmc_run(run=args.run, dataset=hmc_result_dict['dataset'], scale_prior=args.scale_prior, prior_variance=args.prior_variance,
+                     save_path=args.output_path, likelihood_scale=args.likelihood_scale, percentiles=percentiles,
+                     results_dict=hmc_result_dict, is_svi_map=is_svi_map)

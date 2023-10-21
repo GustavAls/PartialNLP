@@ -151,7 +151,7 @@ class SentimentClassifier:
 
 
 def prepare_sentiment_classifier(args, model_name="distilbert-base-uncased"):
-    if args.dataset_name.lower() == 'imdb':
+    if args.dataset_name == 'imdb' or args.dataset_name == 'sst2':
         id2label = {0: "NEGATIVE", 1: "POSITIVE"}
         label2id = {"NEGATIVE": 0, "POSITIVE": 1}
         sentiment_classifier = SentimentClassifier(model_name,
