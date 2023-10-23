@@ -24,6 +24,7 @@ from jax import random
 numpyro.set_platform("cpu")
 numpyro.set_host_device_count(8)
 import argparse
+import copy
 from torch.distributions import Normal
 
 
@@ -710,8 +711,8 @@ def run_for_percentile(
         scale=scale,
     )
 
-    nuts_kernel = NUTS(mixed_bnn, max_tree_depth=1)
-    mcmc = MCMC(nuts_kernel, num_warmup=1, num_samples=1, num_chains=1)
+    nuts_kernel = NUTS(mixed_bnn, max_tree_depth=15)
+    mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
     rng_key = random.PRNGKey(1)
     mcmc.run(rng_key, dataset.X_train, dataset.y_train)
 
@@ -739,10 +740,16 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
     rng_key = random.PRNGKey(1)
     optimizer = numpyro.optim.Adam(0.01)
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
+
     if node_based:
         keys = ["W1_auto_loc", "W2_auto_loc", "W_output_auto_loc", "b1_auto_loc", "b2_auto_loc", "b_output_auto_loc"]
         mask_values = [np.random.normal(0, 1, size=(MAP_params[key].shape[0],)) for key in keys]
+        save_name = os.path.join(save_path, f"results_vi_node_run_{run}.pkl")
+    else:
+        save_name = os.path.join(save_path, f"results_vi_run_{run}.pkl")
+
     for percentile in percentiles:
+        print("Running for percentile: ", percentile, "%")
         if str(percentile) not in results_dict.keys():
             sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
             if node_based:
@@ -797,13 +804,8 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
                                                  'predictive_val': predictive_val["mean"],
                                                  'predictive_test': predictive_test["mean"]}
 
-    if node_based:
-        save_name = os.path.join(save_path, f"results_vi_node_run_{run}.pkl")
-    else:
-        save_name = os.path.join(save_path, f"results_vi_run_{run}.pkl")
-
-    with open(os.path.join(save_path, save_name), 'wb') as handle:
-        pickle.dump(results_dict, handle,protocol=pickle.HIGHEST_PROTOCOL)
+            with open(os.path.join(save_path, save_name), 'wb') as handle:
+                pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 def train_MAP_solution(mle_model, dataset, num_epochs):
@@ -856,19 +858,19 @@ def predictive_(model, params, X):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some integers.")
-    parser.add_argument("--dataset", type=str, default="boston")
+    parser.add_argument("--dataset", type=str, default="yacht")
     parser.add_argument("--output_path", type=str, default=os.getcwd())
     parser.add_argument("--data_path", type=str, default=os.getcwd())
     parser.add_argument("--dataset_path", type=str, default=None)
     parser.add_argument("--map_path", type=str, default=None)
-    parser.add_argument("--run", type=int, default=15)
+    parser.add_argument("--run", type=int, default=0)
     parser.add_argument("--num_epochs", type=int, default=100)
     parser.add_argument("--scale_prior",  type=ast.literal_eval, default=True)
     parser.add_argument("--prior_variance", type=float, default=2.0) #0.1 is good for yacht, 2.0 for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, 1.0   for other datasets
-    parser.add_argument('--vi', type=ast.literal_eval, default=False)
-    parser.add_argument('--node_based', type=ast.literal_eval, default=False)
-    parser.add_argument('--hmc', type=ast.literal_eval, default=True)
+    parser.add_argument('--vi', type=ast.literal_eval, default=True)
+    parser.add_argument('--node_based', type=ast.literal_eval, default=True)
+    parser.add_argument('--hmc', type=ast.literal_eval, default=False)
     args = parser.parse_args()
 
     if args.dataset == "yacht":
