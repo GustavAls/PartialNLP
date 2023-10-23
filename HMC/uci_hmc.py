@@ -835,9 +835,9 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
     if node_based:
         keys = ["W1_auto_loc", "W2_auto_loc", "W_output_auto_loc", "b1_auto_loc", "b2_auto_loc", "b_output_auto_loc"]
         mask_values = [np.random.normal(0, 1, size=(MAP_params[key].shape[0],)) for key in keys]
-        save_name = os.path.join(save_path, f"results_vi_node_run_{run}.pkl")
+        save_name = os.path.join(save_path, f"results_vi_node_run_{run}_{str(l_scale) if l_scale != 1.0 else str()}.pkl")
     else:
-        save_name = os.path.join(save_path, f"results_vi_run_{run}.pkl")
+        save_name = os.path.join(save_path, f"results_vi_run_{run}_{str(l_scale) if l_scale != 1.0 else str()}.pkl")
 
     for percentile in percentiles:
         print("Running for percentile: ", percentile, "%")
@@ -948,9 +948,9 @@ if __name__ == "__main__":
     parser.add_argument("--run", type=int, default=0)
     parser.add_argument("--num_epochs", type=int, default=100)
     parser.add_argument("--scale_prior",  type=ast.literal_eval, default=True)
-    parser.add_argument("--prior_variance", type=float, default=2.0) #0.1 is good for yacht, 2.0 for other datasets
+    parser.add_argument("--prior_variance", type=float, default=4.0) #0.1 is good for yacht, 2.0 for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, 1.0   for other datasets
-    parser.add_argument('--vi', type=ast.literal_eval, default=False)
+    parser.add_argument('--vi', type=ast.literal_eval, default=True)
     parser.add_argument('--node_based', type=ast.literal_eval, default=False)
     parser.add_argument('--hmc', type=ast.literal_eval, default=True)
     parser.add_argument('--l_var', type=float, default=1.0)
@@ -1030,14 +1030,14 @@ if __name__ == "__main__":
 
     dict_length = 11
     if args.vi:
-        vi_results_dict = get_map_if_exists(os.path.join(args.output_path, f"results_vi_run_{args.run}_{str(args.l_var) if args.l_var != 1.0 else str()}.pkl"), vi_results_dict if new_map else None)
+        vi_results_dict = get_map_if_exists(os.path.join(args.output_path, f"results_vi_run_{args.run}.pkl"), vi_results_dict if new_map else None)
         if len(vi_results_dict.keys()) < dict_length:
             # VI run
             make_vi_run(run=args.run, dataset=vi_results_dict['dataset'], prior_variance=args.prior_variance,scale= args.likelihood_scale, results_dict=vi_results_dict,
                         save_path=args.output_path,  num_epochs=args.num_epochs, is_svi_map=is_svi_map, node_based=False, l_scale=args.l_var)
 
     if args.node_based:
-        vi_results_dict = get_map_if_exists(os.path.join(args.output_path, f"results_vi_node_run_{args.run}_{str(args.l_var) if args.l_var != 1.0 else str()}.pkl"), vi_results_dict if new_map else None)
+        vi_results_dict = get_map_if_exists(os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl"), vi_results_dict if new_map else None)
         if len(vi_results_dict.keys()) < dict_length:
             # Node based
             make_vi_run(run=args.run, dataset=vi_results_dict['dataset'], prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=vi_results_dict,
