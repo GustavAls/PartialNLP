@@ -757,17 +757,6 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
             else:
                 sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
 
-            optimizer = numpyro.optim.Adam(0.01)
-
-            mixed_bnn = generate_mixed_bnn_by_param(
-                MAP_params,
-                sample_mask_tuple,
-                prior_variance,
-                scale=scale,
-            )
-            model = lambda X, y=None: generate_mixed_bnn_by_param(
-                MAP_params, sample_mask_tuple, prior_variance, scale
-            )(X, y)
             if node_based:
                 mixed_bnn = generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale=scale)
 
@@ -793,10 +782,9 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
                 test_ll_ours, val_ll_ours = calculate_ll_ours(model, svi_results.params, dataset, mixed_bnn, delta=False)
                 test_ll_theirs, _ = evaluate_vi_samples(model=mixed_bnn, params=svi_results.params, dataset=dataset,
                                                         rng_key=rng_key, y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
-
-                results_dict['test_ll_ours'].append(test_ll_ours)
-                results_dict['val_ll_ours'].append(val_ll_ours)
-                results_dict['test_ll_theirs'].append(test_ll_theirs)
+                results_dict[f"{percentile}"] = {'test_ll_ours': test_ll_ours,
+                                                 'val_ll_ours': val_ll_ours,
+                                                 'test_ll_theirs': test_ll_theirs}
             else:
                 predictive_train, predictive_val, predictive_test = create_predictives(model, svi_results.params, dataset,
                                                                                        mixed_bnn, num_mc_samples=200, delta=False)
@@ -914,21 +902,16 @@ if __name__ == "__main__":
         MAP_params = svi_results.params
 
         if is_svi_map:
-            vi_results_dict = {'percentiles': None, 'test_ll_ours': [], 'val_ll_ours': [], 'test_ll_theirs': []}
             test_ll_theirs, _ = evaluate_MAP(model, MAP_params, dataset.X_test, dataset.y_test,
                                              rng_key, y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
             test_ll_ours, val_ll_ours = calculate_ll_ours(model, MAP_params, dataset, one_d_bnn,
                                                           num_mc_samples=1, delta=True)
-            vi_results_dict['map_params'] = MAP_params
-            vi_results_dict['test_ll_ours'].append(test_ll_ours)
-            vi_results_dict['val_ll_ours'].append(val_ll_ours)
-            vi_results_dict['test_ll_theirs'].append(test_ll_theirs)
-            vi_results_dict['percentiles'] = [0] + percentiles
             hmc_result_dict = { 'dataset': dataset,
                                 'map_results': {'map_params': MAP_params,
                                                'test_ll_ours': test_ll_ours,
                                                'test_ll_theirs': test_ll_theirs,
                                                'val_ll_ours': val_ll_ours}}
+            vi_results_dict = copy.deepcopy(hmc_result_dict)
         else:
             # Setup pytorch MAP
             n_train, p = dataset.X_train.shape
