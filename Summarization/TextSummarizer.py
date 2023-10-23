@@ -96,7 +96,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     torch.cuda.is_available()
-    text_summarizer = TextSummarizer(checkpoint="t5-small",prefix="summarizer: ")
+    text_summarizer = TextSummarizer(checkpoint="t5-small", prefix="summarizer: ")
 
     text_summarizer.runner(output_path=args.output_path,
                            num_epochs=args.num_epochs,
