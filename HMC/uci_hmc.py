@@ -433,7 +433,7 @@ def evaluate_MAP(model, MAP_params, X, y, rng_key, y_scale=1.0, y_loc=0.0):
 
 
 def generate_mixed_bnn_by_param(
-    MAP_params, sample_mask_tuple, prior_variance, scale=1.0, l_scale = 1
+    MAP_params, sample_mask_tuple, prior_variance, scale=1.0, l_scale = 1.0, use_prior = False
 ):
     (
         W1_sample_mask,
@@ -510,10 +510,11 @@ def generate_mixed_bnn_by_param(
         mean = numpyro.deterministic("mean", output)
 
         # output precision
-        # prec_obs = numpyro.sample(
-        #     "prec_obs", dist.Gamma(3.0, 1.0)
-        # )  # MAP outperforms full BNN, even if we freeze the prior precision. That's interesting here, I think.
-        # sigma_obs = 1.0 / jnp.sqrt(prec_obs)
+        if use_prior:
+            prec_obs = numpyro.sample(
+                "prec_obs", dist.Gamma(3.0, 1.0)
+            )  # MAP outperforms full BNN, even if we freeze the prior precision. That's interesting here, I think.
+            sigma_obs = 1.0 / jnp.sqrt(prec_obs)
 
         with numpyro.handlers.scale(scale=scale):
             y_obs = numpyro.sample("y_obs", dist.Normal(mean, l_scale), obs=y)
@@ -800,10 +801,11 @@ def run_for_percentile(
         create_sample_mask_largest_abs_values(percentile, MAP_params),
         prior_variance_used,
         scale=scale,
+        use_prior=True
     )
 
-    nuts_kernel = NUTS(mixed_bnn, max_tree_depth=1)
-    mcmc = MCMC(nuts_kernel, num_warmup=1, num_samples=1, num_chains=1)
+    nuts_kernel = NUTS(mixed_bnn, max_tree_depth=15)
+    mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
     rng_key = random.PRNGKey(1)
     mcmc.run(rng_key, dataset.X_train, dataset.y_train)
 
@@ -948,9 +950,9 @@ if __name__ == "__main__":
     parser.add_argument("--run", type=int, default=0)
     parser.add_argument("--num_epochs", type=int, default=100)
     parser.add_argument("--scale_prior",  type=ast.literal_eval, default=True)
-    parser.add_argument("--prior_variance", type=float, default=4.0) #0.1 is good for yacht, 2.0 for other datasets
+    parser.add_argument("--prior_variance", type=float, default=4.0) #0.1 is good for yacht, 4.0 for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, 1.0   for other datasets
-    parser.add_argument('--vi', type=ast.literal_eval, default=True)
+    parser.add_argument('--vi', type=ast.literal_eval, default=False)
     parser.add_argument('--node_based', type=ast.literal_eval, default=False)
     parser.add_argument('--hmc', type=ast.literal_eval, default=True)
     parser.add_argument('--l_var', type=float, default=1.0)
