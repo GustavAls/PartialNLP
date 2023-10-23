@@ -25,8 +25,99 @@ numpyro.set_platform("cpu")
 numpyro.set_host_device_count(8)
 import argparse
 from torch.distributions import Normal
+import copy
+
+from tqdm import tqdm
+
+class PlotHelper:
+
+    def __init__(self, path_to_models):
+        self.path_to_models = path_to_models
 
 
+    def get_data(self):
+        nlls = np.array(self.run_for_dataset())
+        percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
+        if np.min(nlls.shape) == 10:
+            percentages = [0] + percentages
+        return nlls, percentages
+
+    def get_residuals(self, predictions, labels):
+        return predictions.mean(1).flatten() - labels.flatten()
+
+    def calculate_nll_(self, mc_matrix, labels, y_scale, y_loc, sigma):
+        results = []
+        labs = torch.from_numpy(labels * y_scale + y_loc)
+
+        for i in range(mc_matrix.shape[0]):
+            res_temp = []
+            for j in range(mc_matrix.shape[1]):
+                dist = Normal(mc_matrix[i, j] * y_scale + y_loc, np.sqrt(sigma) * y_scale)
+                res_temp.append(dist.log_prob(labs[i].view(1,1)).item())
+            results.append(np.mean(res_temp))
+        return np.mean(results)
+
+    @staticmethod
+    def convert_to_proper_format(run):
+
+        preds_train = np.asarray(run['predictive_train']).squeeze(-1).transpose(1, 0)
+        preds_val = np.asarray(run['predictive_val']).squeeze(-1).transpose(1, 0)
+        preds_test = np.asarray(run['predictive_test']).squeeze(-1).transpose(1, 0)
+
+        return preds_train, preds_val, preds_test
+
+    @staticmethod
+    def get_labels(dataset):
+        y_train, y_val, y_test = dataset.y_train, dataset.y_val, dataset.y_test
+        return y_train, y_val, y_test
+
+
+    @staticmethod
+    def get_sigma(residuals):
+        return residuals.std()
+
+    def run_for_key(self, pcl, key):
+
+        dataset = pcl['dataset']
+        y_train, y_val, y_test = self.get_labels(dataset)
+        preds_train, preds_val, preds_test = self.convert_to_proper_format(pcl[key])
+        sigma = self.get_sigma(self.get_residuals(preds_train, y_train))
+        mse = np.mean(self.get_residuals(preds_test, y_test)**2)
+        if 'map' in key:
+            nll = self.calculate_nll_(preds_test, y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(), sigma)
+        else:
+            nll = self.calculate_nll_(preds_test, y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(),
+                                      sigma**2)
+        print(mse)
+        return nll
+
+    def run_for_all_keys(self,pcl):
+        all_keys = ['map_results', '1', '2', '5', '8', '14', '23', '37', '61', '100']
+        nlls = []
+        for key in all_keys:
+            nlls.append(self.run_for_key(pcl, key))
+        return nlls
+
+    def run_for_multiple_files(self, paths):
+
+        nlls = []
+        pbar = tqdm(paths, desc='Running through files')
+        for path in pbar:
+            pcl = pickle.load(open(path, 'rb'))
+            nlls.append(self.run_for_all_keys(pcl))
+        return nlls
+
+    def get_paths(self, path, criteria = None):
+        if criteria is None:
+            criteria = ""
+        paths = [os.path.join(path, p) for p in os.listdir(path) if criteria in p]
+        return paths
+
+    def run_for_dataset(self, criteria= None):
+
+        paths = self.get_paths(self.path_to_models, criteria)
+        nlls = self.run_for_multiple_files(paths)
+        return nlls
 def tensor_to_jax_array(tensor):
     return jnp.array(tensor.cpu().detach().numpy())
 
@@ -340,7 +431,7 @@ def evaluate_MAP(model, MAP_params, X, y, rng_key, y_scale=1.0, y_loc=0.0):
 
 
 def generate_mixed_bnn_by_param(
-    MAP_params, sample_mask_tuple, prior_variance, scale=1.0
+    MAP_params, sample_mask_tuple, prior_variance, scale=1.0, l_scale = 1
 ):
     (
         W1_sample_mask,
@@ -417,18 +508,18 @@ def generate_mixed_bnn_by_param(
         mean = numpyro.deterministic("mean", output)
 
         # output precision
-        prec_obs = numpyro.sample(
-            "prec_obs", dist.Gamma(3.0, 1.0)
-        )  # MAP outperforms full BNN, even if we freeze the prior precision. That's interesting here, I think.
-        sigma_obs = 1.0 / jnp.sqrt(prec_obs)
+        # prec_obs = numpyro.sample(
+        #     "prec_obs", dist.Gamma(3.0, 1.0)
+        # )  # MAP outperforms full BNN, even if we freeze the prior precision. That's interesting here, I think.
+        # sigma_obs = 1.0 / jnp.sqrt(prec_obs)
 
         with numpyro.handlers.scale(scale=scale):
-            y_obs = numpyro.sample("y_obs", dist.Normal(mean, sigma_obs), obs=y)
+            y_obs = numpyro.sample("y_obs", dist.Normal(mean, l_scale), obs=y)
 
     return mixed_bnn
 
 
-def generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale=1.0):
+def generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale=1.0, l_scale = 1):
 
     (
         W1_sample_mask,
@@ -545,13 +636,13 @@ def generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale
         mean = numpyro.deterministic("mean", output)
 
         # output precision
-        prec_obs = numpyro.sample(
-            "prec_obs", dist.Gamma(3.0, 1.0)
-        )  # MAP outperforms full BNN, even if we freeze the prior precision. That's interesting here, I think.
-        sigma_obs = 1.0 / jnp.sqrt(prec_obs)
+        # prec_obs = numpyro.sample(
+        #     "prec_obs", dist.Gamma(3.0, 1.0)
+        # )  # MAP outperforms full BNN, even if we freeze the prior precision. That's interesting here, I think.
+        # sigma_obs = 1.0 / jnp.sqrt(prec_obs)
 
         with numpyro.handlers.scale(scale=scale):
-            y_obs = numpyro.sample("y_obs", dist.Normal(mean, sigma_obs), obs=y)
+            y_obs = numpyro.sample("y_obs", dist.Normal(mean, l_scale), obs=y)
 
     return mixed_bnn
 
@@ -734,7 +825,7 @@ def run_for_percentile(
 
 
 def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, num_epochs,
-                is_svi_map=True, node_based=True):
+                is_svi_map=True, node_based=True, l_scale = 1):
     MAP_params = results_dict['map_results']['map_params']
     rng_key = random.PRNGKey(1)
     optimizer = numpyro.optim.Adam(0.01)
@@ -757,9 +848,10 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
                 sample_mask_tuple,
                 prior_variance,
                 scale=scale,
+                l_scale = l_scale
             )
             model = lambda X, y=None: generate_mixed_bnn_by_param(
-                MAP_params, sample_mask_tuple, prior_variance, scale
+                MAP_params, sample_mask_tuple, prior_variance, scale, l_scale
             )(X, y)
             if node_based:
                 mixed_bnn = generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale=scale)
@@ -779,7 +871,7 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
                 )(X, y)
 
             svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
-            svi_results = svi.run(rng_key, num_epochs, X=dataset.X_train, y=dataset.y_train)
+            svi_results = svi.run(rng_key, args.num_epochs, X=dataset.X_train, y=dataset.y_train)
 
             # Evaluate the model
             if is_svi_map:
@@ -793,6 +885,17 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
             else:
                 predictive_train, predictive_val, predictive_test = create_predictives(model, svi_results.params, dataset,
                                                                                        mixed_bnn, num_mc_samples=200, delta=False)
+                #
+                # tp = PlotHelper("")
+                # run = {'predictive_train': predictive_train['mean'], 'predictive_val': predictive_val['mean'],
+                #        'predictive_test': predictive_test['mean']}
+                # train, val, test = tp.convert_to_proper_format(run)
+                # sigma = tp.get_sigma(tp.get_residuals(train, dataset.y_train))
+                # nll_one = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(), sigma**2)
+                # nll_two = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(),
+                #                             dataset.scl_Y.mean_.item(), sigma)
+                # print(nll_one, nll_two)
+                # print(np.mean((predictive_test['mean'] - dataset.y_test)**2))
                 results_dict[f"{percentile}"] = {'predictive_train': predictive_train["mean"],
                                                  'predictive_val': predictive_val["mean"],
                                                  'predictive_test': predictive_test["mean"]}
@@ -869,6 +972,7 @@ if __name__ == "__main__":
     parser.add_argument('--vi', type=ast.literal_eval, default=False)
     parser.add_argument('--node_based', type=ast.literal_eval, default=False)
     parser.add_argument('--hmc', type=ast.literal_eval, default=True)
+    parser.add_argument('--l_var', type = float, default=1)
     args = parser.parse_args()
 
     if args.dataset == "yacht":
@@ -952,7 +1056,8 @@ if __name__ == "__main__":
         if len(vi_results_dict.keys()) < 11:
             # VI run
             make_vi_run(run=args.run, dataset=vi_results_dict['dataset'], prior_variance=args.prior_variance,scale= args.likelihood_scale, results_dict=vi_results_dict,
-                        save_path=args.output_path,  num_epochs=args.num_epochs, is_svi_map=is_svi_map, node_based=False)
+                        save_path=args.output_path,  num_epochs=args.num_epochs, is_svi_map=is_svi_map, node_based=False,
+                        l_scale=args.l_var)
 
     if args.node_based:
         vi_results_dict = get_map_if_exists(os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl"), vi_results_dict if new_map else None)
@@ -960,7 +1065,7 @@ if __name__ == "__main__":
             # Node based
             make_vi_run(run=args.run, dataset=vi_results_dict['dataset'], prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=vi_results_dict,
                         save_path=args.output_path, num_epochs=args.num_epochs,
-                        is_svi_map=is_svi_map, node_based=True)
+                        is_svi_map=is_svi_map, node_based=True, l_scale=args.l_var)
 
     if args.hmc:
         hmc_result_dict = get_map_if_exists(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl"), hmc_result_dict if new_map else None)
