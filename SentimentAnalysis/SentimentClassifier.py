@@ -214,7 +214,7 @@ def construct_laplace(sent_class, laplace_cfg, args):
                     subnetwork_indices=partial_constructor.get_subnetwork_indices())
 
     la.fit(train_loader)
-
+    la.__call__()
     return la
 
 
