@@ -1026,7 +1026,8 @@ if __name__ == "__main__":
             vi_results_dict['val_ll_ours'].append(val_ll_ours)
             vi_results_dict['test_ll_theirs'].append(test_ll_theirs)
             vi_results_dict['percentiles'] = [0] + percentiles
-            hmc_result_dict = {'map_results': {'map_params': MAP_params,
+            hmc_result_dict = { 'dataset': dataset,
+                                'map_results': {'map_params': MAP_params,
                                                'test_ll_ours': test_ll_ours,
                                                'test_ll_theirs': test_ll_theirs,
                                                'val_ll_ours': val_ll_ours}}
@@ -1051,9 +1052,10 @@ if __name__ == "__main__":
                              }
             vi_results_dict = copy.deepcopy(hmc_result_dict)
 
+    dict_length = len(percentiles) + 2
     if args.vi:
         vi_results_dict = get_map_if_exists(os.path.join(args.output_path, f"results_vi_run_{args.run}.pkl"), vi_results_dict if new_map else None)
-        if len(vi_results_dict.keys()) < 11:
+        if len(vi_results_dict.keys()) < dict_length:
             # VI run
             make_vi_run(run=args.run, dataset=vi_results_dict['dataset'], prior_variance=args.prior_variance,scale= args.likelihood_scale, results_dict=vi_results_dict,
                         save_path=args.output_path,  num_epochs=args.num_epochs, is_svi_map=is_svi_map, node_based=False,
@@ -1061,7 +1063,7 @@ if __name__ == "__main__":
 
     if args.node_based:
         vi_results_dict = get_map_if_exists(os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl"), vi_results_dict if new_map else None)
-        if len(vi_results_dict.keys()) < 11:
+        if len(vi_results_dict.keys()) < dict_length:
             # Node based
             make_vi_run(run=args.run, dataset=vi_results_dict['dataset'], prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=vi_results_dict,
                         save_path=args.output_path, num_epochs=args.num_epochs,
@@ -1069,7 +1071,7 @@ if __name__ == "__main__":
 
     if args.hmc:
         hmc_result_dict = get_map_if_exists(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl"), hmc_result_dict if new_map else None)
-        if len(hmc_result_dict.keys()) < 11:
+        if len(hmc_result_dict.keys()) < dict_length:
             # HMC run
             make_hmc_run(run=args.run, dataset=hmc_result_dict['dataset'], scale_prior=args.scale_prior, prior_variance=args.prior_variance,
                          save_path=args.output_path, likelihood_scale=args.likelihood_scale, percentiles=percentiles,
