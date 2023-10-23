@@ -802,8 +802,8 @@ def run_for_percentile(
         scale=scale,
     )
 
-    nuts_kernel = NUTS(mixed_bnn, max_tree_depth=15)
-    mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
+    nuts_kernel = NUTS(mixed_bnn, max_tree_depth=1)
+    mcmc = MCMC(nuts_kernel, num_warmup=1, num_samples=1, num_chains=1)
     rng_key = random.PRNGKey(1)
     mcmc.run(rng_key, dataset.X_train, dataset.y_train)
 
@@ -950,9 +950,9 @@ if __name__ == "__main__":
     parser.add_argument("--scale_prior",  type=ast.literal_eval, default=True)
     parser.add_argument("--prior_variance", type=float, default=2.0) #0.1 is good for yacht, 2.0 for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, 1.0   for other datasets
-    parser.add_argument('--vi', type=ast.literal_eval, default=True)
+    parser.add_argument('--vi', type=ast.literal_eval, default=False)
     parser.add_argument('--node_based', type=ast.literal_eval, default=False)
-    parser.add_argument('--hmc', type=ast.literal_eval, default=False)
+    parser.add_argument('--hmc', type=ast.literal_eval, default=True)
     parser.add_argument('--l_var', type=float, default=1.0)
     args = parser.parse_args()
 
@@ -1028,7 +1028,7 @@ if __name__ == "__main__":
                              }
             vi_results_dict = copy.deepcopy(hmc_result_dict)
 
-    dict_length = len(percentiles) + 2
+    dict_length = 11
     if args.vi:
         vi_results_dict = get_map_if_exists(os.path.join(args.output_path, f"results_vi_run_{args.run}_{str(args.l_var) if args.l_var != 1.0 else str()}.pkl"), vi_results_dict if new_map else None)
         if len(vi_results_dict.keys()) < dict_length:
