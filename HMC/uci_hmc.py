@@ -804,7 +804,7 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
                                                  'predictive_val': predictive_val["mean"],
                                                  'predictive_test': predictive_test["mean"]}
 
-            with open(os.path.join(save_path, save_name), 'wb') as handle:
+            with open(save_name, 'wb') as handle:
                 pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
@@ -961,8 +961,7 @@ if __name__ == "__main__":
         if len(vi_results_dict.keys()) < 11:
             # Node based
             make_vi_run(run=args.run, dataset=vi_results_dict['dataset'], prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=vi_results_dict,
-                        save_path=args.output_path, num_epochs=args.num_epochs,
-                        is_svi_map=is_svi_map, node_based=True)
+                        save_path=args.output_path, num_epochs=args.num_epochs, is_svi_map=is_svi_map, node_based=True)
 
     if args.hmc:
         hmc_result_dict = get_map_if_exists(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl"), hmc_result_dict if new_map else None)
