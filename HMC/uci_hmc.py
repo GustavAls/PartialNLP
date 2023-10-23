@@ -851,7 +851,7 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
                 l_scale = l_scale
             )
             model = lambda X, y=None: generate_mixed_bnn_by_param(
-                MAP_params, sample_mask_tuple, prior_variance, scale, l_scale
+                MAP_params, sample_mask_tuple, prior_variance, scale, l_scale=l_scale
             )(X, y)
             if node_based:
                 mixed_bnn = generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale=scale)
@@ -865,9 +865,10 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
                     sample_mask_tuple,
                     prior_variance,
                     scale=scale,
+                    l_scale=l_scale
                 )
                 model = lambda X, y=None: generate_mixed_bnn_by_param(
-                    MAP_params, sample_mask_tuple, prior_variance, scale
+                    MAP_params, sample_mask_tuple, prior_variance, scale, l_scale=l_scale
                 )(X, y)
 
             svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
@@ -886,16 +887,16 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
                 predictive_train, predictive_val, predictive_test = create_predictives(model, svi_results.params, dataset,
                                                                                        mixed_bnn, num_mc_samples=200, delta=False)
                 #
-                # tp = PlotHelper("")
-                # run = {'predictive_train': predictive_train['mean'], 'predictive_val': predictive_val['mean'],
-                #        'predictive_test': predictive_test['mean']}
-                # train, val, test = tp.convert_to_proper_format(run)
-                # sigma = tp.get_sigma(tp.get_residuals(train, dataset.y_train))
-                # nll_one = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(), sigma**2)
-                # nll_two = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(),
-                #                             dataset.scl_Y.mean_.item(), sigma)
-                # print(nll_one, nll_two)
-                # print(np.mean((predictive_test['mean'] - dataset.y_test)**2))
+                tp = PlotHelper("")
+                run = {'predictive_train': predictive_train['mean'], 'predictive_val': predictive_val['mean'],
+                       'predictive_test': predictive_test['mean']}
+                train, val, test = tp.convert_to_proper_format(run)
+                sigma = tp.get_sigma(tp.get_residuals(train, dataset.y_train))
+                nll_one = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(), sigma**2)
+                nll_two = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(),
+                                            dataset.scl_Y.mean_.item(), sigma)
+                print(nll_one, nll_two)
+                print(np.mean((predictive_test['mean'] - dataset.y_test)**2))
                 results_dict[f"{percentile}"] = {'predictive_train': predictive_train["mean"],
                                                  'predictive_val': predictive_val["mean"],
                                                  'predictive_test': predictive_test["mean"]}
