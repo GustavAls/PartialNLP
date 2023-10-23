@@ -317,12 +317,12 @@ if __name__ == '__main__':
     # path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_VI'
     # plot_hmc_vi(path_hmc, path_vi)
     # path = r'C:\Users\45292\Documents\Master\HMC\UCI_HMC_VI_torch\yact_models_full'
-    path = r'C:\Users\45292\Documents\Master\VI_NODE_TORCH\boston_models'
+    path = r'C:\Users\45292\Documents\Master\VI_NODE_TORCH\energy_models'
     vi = PlotHelper(path)
     nlls_vi = vi.run_for_dataset(criteria='vi_r')
     nlls_node = vi.run_for_dataset(criteria='node')
 
-    with open(r'C:\Users\45292\Documents\Master\VI_NODE_TORCH\NLLS\boston_vi_node.pkl', 'wb') as h:
+    with open(r'C:\Users\45292\Documents\Master\VI_NODE_TORCH\NLLS\ener_vi_node.pkl', 'wb') as h:
         pickle.dump({'vi': nlls_vi, 'node': nlls_node}, h, protocol=pickle.HIGHEST_PROTOCOL)
 
     min_runs = min((len(nlls_vi), len(nlls_node)))
