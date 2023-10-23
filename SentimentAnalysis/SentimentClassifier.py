@@ -30,27 +30,34 @@ from torch.utils.data import Dataset, DataLoader
 
 
 class SentimentClassifier:
-    def __init__(self, network_name, id2label, label2id, train_size=None, test_size=None):
+    def __init__(self, network_name, id2label=None, label2id=None, train_size=None, test_size=None, dataset_name="sst2"):
         self._tokenizer = AutoTokenizer.from_pretrained(network_name)
-        self.model = AutoModelForSequenceClassification.from_pretrained(network_name,
-                                                                        num_labels=2,
-                                                                        id2label=id2label,
-                                                                        label2id=label2id)
-
+        if id2label is None and label2id is None:
+            self.model = AutoModelForSequenceClassification.from_pretrained(network_name,
+                                                                            num_labels=2)
+        else:
+            self.model = AutoModelForSequenceClassification.from_pretrained(network_name,
+                                                                            num_labels=2,
+                                                                            label2id=label2id,
+                                                                            id2label=id2label)
         self.model.save_pretrained(os.path.join(os.getcwd(), "model"))
         self.collator = DataCollatorWithPadding(tokenizer=self._tokenizer)
         self.train_size = train_size
         self.test_size = test_size
+        self.dataset_name = dataset_name
 
-    def load_text_dataset(self, dataset_name="imdb"):
+    def load_text_dataset(self, dataset_name="imdb", seed=0):
         data = load_dataset(dataset_name)
-        train_data = data["train"] if self.train_size is None else data["train"].shuffle(seed=42).select([i for i in list(range(self.train_size))])
+        train_data = data["train"].shuffle(seed=seed) if self.train_size is None else data["train"].shuffle(seed=42).select([i for i in list(range(self.train_size))])
         test_data = data["test"] if self.test_size is None else data["test"].shuffle(seed=42).select([i for i in list(range(self.test_size))])
         del data
         return train_data, test_data
 
     def tokenize(self, examples):
-        return self._tokenizer(examples["text"], truncation=True)
+        if self.dataset_name == 'imdb':
+            return self._tokenizer(examples["text"], truncation=True)
+        elif self.dataset_name == 'sst2':
+            return self._tokenizer(examples["sentence"], truncation=True)
 
     @staticmethod
     def compute_metrics(eval_pred):
@@ -63,8 +70,8 @@ class SentimentClassifier:
         f1 = load_f1.compute(predictions=predictions, references=labels)["f1"]
         return {"accuracy": accuracy, "f1": f1}
 
-    def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, lr=5e-05, train=True):
-        train_data, test_data = self.load_text_dataset(dataset_name=dataset_name)
+    def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, lr=5e-05, seed=0, train=True):
+        train_data, test_data = self.load_text_dataset(dataset_name=dataset_name, seed=seed)
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
 
@@ -144,18 +151,21 @@ class SentimentClassifier:
 
 
 def prepare_sentiment_classifier(args, model_name="distilbert-base-uncased"):
-    if args.dataset_name.lower() == 'imdb':
+    if args.dataset_name == 'imdb' or args.dataset_name == 'sst2':
         id2label = {0: "NEGATIVE", 1: "POSITIVE"}
         label2id = {"NEGATIVE": 0, "POSITIVE": 1}
+        sentiment_classifier = SentimentClassifier(model_name,
+                                                   id2label=id2label,
+                                                   label2id=label2id,
+                                                   train_size=args.train_size,
+                                                   test_size=args.test_size,
+                                                   dataset_name=args.dataset_name)
 
     else:
-        raise NotImplementedError("Only implemented so far for dataset_name == 'imdb'")
-
-    sentiment_classifier = SentimentClassifier(model_name,
-                                               id2label=id2label,
-                                               label2id=label2id,
-                                               train_size=args.train_size,
-                                               test_size=args.test_size)
+        sentiment_classifier = SentimentClassifier(model_name,
+                                                   train_size=args.train_size,
+                                                   test_size=args.test_size,
+                                                   dataset_name=args.dataset_name)
 
     return sentiment_classifier
 
@@ -171,6 +181,7 @@ def prepare_and_run_sentiment_classifier(args, sentiment_classifier=None):
                                 dataset_name=args.dataset_name,
                                 device_batch_size=args.device_batch_size,
                                 lr=args.learning_rate,
+                                seed=args.seed,
                                 train=args.train)
 
     return None
@@ -325,13 +336,14 @@ if __name__ == "__main__":
     parser.add_argument("--train_batch_size", type=int, default=None)
     parser.add_argument("--eval_batch_size", type=int, default=None)
     parser.add_argument("--device", type=str, default="cpu")
-    parser.add_argument("--num_epochs", type=int, default=50)
-    parser.add_argument("--dataset_name", type=str, default="imdb")
+    parser.add_argument("--num_epochs", type=int, default=1)
+    parser.add_argument("--dataset_name", type=str, default="sst2")
     parser.add_argument("--train", type=ast.literal_eval, default=True)
     parser.add_argument("--train_size", type=int, default=None) # Set to number for subset of data
     parser.add_argument("--test_size", type=int, default=None) # Set to number for subset of data
-    parser.add_argument("--device_batch_size", type=int, default=16)
+    parser.add_argument("--device_batch_size", type=int, default=4)
     parser.add_argument("--learning_rate", type=float, default=5e-05)
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument('--laplace', type=ast.literal_eval, default=False)
     parser.add_argument('--swag', type=ast.literal_eval, default=False)
     parser.add_argument('--swag_cfg', default=None)

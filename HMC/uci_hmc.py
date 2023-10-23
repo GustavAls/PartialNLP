@@ -1,6 +1,5 @@
 import ast
 import sys, os, time, requests
-
 sys.path.append(os.getcwd())
 import torch
 import numpy as np
@@ -22,7 +21,6 @@ import jax.numpy as jnp
 import jax.nn
 from Laplace.uci_laplace import calculate_std
 from jax import random
-
 numpyro.set_platform("cpu")
 numpyro.set_host_device_count(8)
 import argparse
@@ -60,7 +58,7 @@ def _gap_train_test_split(X, y, gap_column, test_size):
     train_idxs = np.concatenate(
         (
             sorted_idxs[: int(n_data * 0.5 * (1 - test_size))],
-            sorted_idxs[-int(n_data * 0.5 * (1 - test_size)):],
+            sorted_idxs[-int(n_data * 0.5 * (1 - test_size)) :],
         )
     )
     test_idxs = np.array(list(set(sorted_idxs.tolist()) - set(train_idxs.tolist())))
@@ -73,15 +71,15 @@ def _gap_train_test_split(X, y, gap_column, test_size):
 
 class UCIDataset:
     def __init__(
-            self,
-            data_dir,
-            test_split_type="random",
-            gap_column=0,
-            test_size=0.2,
-            val_fraction_of_train=0.1,
-            seed=42,
-            *args,
-            **kwargs,
+        self,
+        data_dir,
+        test_split_type="random",
+        gap_column=0,
+        test_size=0.2,
+        val_fraction_of_train=0.1,
+        seed=42,
+        *args,
+        **kwargs,
     ):
         self.data_dir = data_dir
         self.download()
@@ -129,7 +127,7 @@ class UCIDataset:
         n_total = n_train + n_val + n_test
 
         print(
-            f"Train set: {n_train} examples, {100 * (n_train / n_total):.2f}% of all examples."
+            f"Train set: {n_train} examples, {100*(n_train/n_total):.2f}% of all examples."
         )
         print(
             f"Val set: {n_val} examples, {100 * (n_val / n_total):.2f}% of all examples."
@@ -193,7 +191,6 @@ class UCIEnergyDataset(UCIDataset):
 
         return X, y
 
-
 class UCIBostonDataset(UCIDataset):
     url = "https://archive.ics.uci.edu/ml/machine-learning-databases/housing/housing.data"
     filename = "housing.data"
@@ -207,7 +204,6 @@ class UCIBostonDataset(UCIDataset):
         y = df.values[:-1, -1].reshape((nD, 1))
 
         return X, y
-
 
 class UCIConcreteDataset(UCIDataset):
     url = "https://archive.ics.uci.edu/ml/machine-learning-databases/concrete/compressive/Concrete_Data.xls"
@@ -283,8 +279,8 @@ def evaluate_samples(model, rng_key, X, y, samples, y_scale=1.0, y_loc=0.0):
         .mean()
     )
     rmse = (
-                   (y_scale * (predictive["mean"].mean(axis=0).flatten() - y.flatten())) ** 2
-           ).mean() ** 0.5
+        (y_scale * (predictive["mean"].mean(axis=0).flatten() - y.flatten())) ** 2
+    ).mean() ** 0.5
 
     return float(log_likelihood), float(rmse)
 
@@ -307,7 +303,7 @@ def evaluate_vi_samples(model, params, dataset, rng_key, y_scale=1.0, y_loc=0.0)
         .log_prob(y_loc + (y * y_scale))
         .mean()
     )
-    rmse = ((y_scale * (predictive_test["mean"].mean(axis=0).flatten() - y.flatten())) ** 2).mean() ** 0.5
+    rmse = ((y_scale * (predictive_test["mean"].mean(axis=0).flatten() - y.flatten())) ** 2 ).mean() ** 0.5
 
     return float(log_likelihood), float(rmse)
 
@@ -344,7 +340,7 @@ def evaluate_MAP(model, MAP_params, X, y, rng_key, y_scale=1.0, y_loc=0.0):
 
 
 def generate_mixed_bnn_by_param(
-        MAP_params, sample_mask_tuple, prior_variance, scale=1.0
+    MAP_params, sample_mask_tuple, prior_variance, scale=1.0
 ):
     (
         W1_sample_mask,
@@ -560,18 +556,19 @@ def generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale
     return mixed_bnn
 
 
+
 def calculate_ll_mc(labels, mc_matrix, sigma, y_scale, y_loc):
     results = []
     for i in range(mc_matrix.shape[1]):
         res_temp = []
         for j in range(mc_matrix.shape[0]):
-            dist = Normal(mc_matrix[j, i].item() * y_scale + y_loc, np.sqrt(sigma) * y_scale)
+            dist = Normal(mc_matrix[j,i].item() * y_scale + y_loc, np.sqrt(sigma) * y_scale)
             res_temp.append(dist.log_prob(torch.tensor([labels[i].item()]) * y_scale + y_loc).item())
         results.append(np.mean(res_temp))
     return np.mean(results)
 
 
-def create_predictives(model, params, dataset, bnn, num_mc_samples=200, delta=False):
+def create_predictives(model, params, dataset, bnn, num_mc_samples = 200, delta = False):
     if delta:
         guide = lambda: autoguide.AutoDelta(bnn)
     else:
@@ -601,21 +598,20 @@ def create_predictives(model, params, dataset, bnn, num_mc_samples=200, delta=Fa
     return predictive_train, predictive_val, predictive_test
 
 
-def calculate_ll_ours(model, params, dataset, bnn, num_mc_samples=200, delta=False):
-    predictive_train, predictive_val, predictive_test = create_predictives(model, params, dataset, bnn, num_mc_samples,
-                                                                           delta)
+def calculate_ll_ours(model, params, dataset, bnn, num_mc_samples = 200, delta = False):
+    predictive_train, predictive_val, predictive_test = create_predictives(model, params, dataset, bnn, num_mc_samples, delta)
     y_scale = dataset.scl_Y.scale_
     y_loc = dataset.scl_Y.mean_
     ytrain, yval, ytest = dataset.y_train.squeeze(), dataset.y_val.squeeze(), dataset.y_test.squeeze()
 
     if num_mc_samples == 1:
         ptrain = np.asarray(predictive_train['mean'].squeeze(0))
-        ptest = np.asarray(predictive_test['mean'].squeeze(0))
+        ptest =  np.asarray(predictive_test['mean'].squeeze(0))
         pval = np.asarray(predictive_val['mean'].squeeze(0))
         sigma = np.std(ptrain - ytrain)
     else:
         ptrain = np.asarray(predictive_train['mean'].squeeze(-1))
-        ptest = np.asarray(predictive_test['mean'].squeeze(-1))
+        ptest =  np.asarray(predictive_test['mean'].squeeze(-1))
         pval = np.asarray(predictive_val['mean'].squeeze(-1))
         sigma = np.std(ptrain - ytrain)
 
@@ -692,16 +688,14 @@ def create_sample_mask_largest_abs_values(percentile, MAP_params):
 
 
 def run_for_percentile(
-        dataset,
-        percentile,
-        MAP_params,
-        prior_variance=0.8,
-        prior_variance_scaled=True,
-        scale=1.0,
-        is_svi_map=True,
-
+    dataset,
+    percentile,
+    MAP_params,
+    prior_variance=0.8,
+    prior_variance_scaled=True,
+    scale=1.0,
+    is_svi_map=True
 ):
-
     sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
     prior_variance_used = (
         prior_variance
@@ -716,54 +710,48 @@ def run_for_percentile(
         scale=scale,
     )
 
-    nuts_kernel = NUTS(mixed_bnn, max_tree_depth=15)
-    mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
+    nuts_kernel = NUTS(mixed_bnn, max_tree_depth=1)
+    mcmc = MCMC(nuts_kernel, num_warmup=1, num_samples=1, num_chains=1)
     rng_key = random.PRNGKey(1)
     mcmc.run(rng_key, dataset.X_train, dataset.y_train)
 
     if is_svi_map:
         test_ll_ours = evaluate_samples_properly(mixed_bnn, rng_key, dataset.X_test, dataset.y_test,
-                                                 mcmc.get_samples(), y_scale=dataset.scl_Y.scale_,
-                                                 y_loc=dataset.scl_Y.mean_)
+                                                 mcmc.get_samples(), y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
 
         test_ll_theirs, _ = evaluate_samples(mixed_bnn, rng_key, dataset.X_test, dataset.y_test,
-                                             mcmc.get_samples(), y_scale=dataset.scl_Y.scale_,
-                                             y_loc=dataset.scl_Y.mean_)
-        results = {'test_ll_ours': test_ll_ours,
-                   'test_ll_theirs': test_ll_theirs}
+                                          mcmc.get_samples(), y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
+        results = { 'test_ll_ours': test_ll_ours,
+                    'test_ll_theirs': test_ll_theirs}
     else:
         predictive_train = Predictive(mixed_bnn, mcmc.get_samples())(rng_key, X=dataset.X_train)
         predictive_val = Predictive(mixed_bnn, mcmc.get_samples())(rng_key, X=dataset.X_val)
         predictive_test = Predictive(mixed_bnn, mcmc.get_samples())(rng_key, X=dataset.X_test)
-        results = {'predictive_train': predictive_train,
-                   'predictive_val': predictive_val,
-                   'predictive_test': predictive_test}
+        results = {'predictive_train': predictive_train["mean"],
+                     'predictive_val': predictive_val["mean"],
+                     'predictive_test': predictive_test["mean"]}
     return results
 
 
-def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, MAP_params, is_svi_map=True,
-                node_based = True):
+def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, num_epochs,
+                is_svi_map=True, node_based=True):
+    MAP_params = results_dict['map_results']['map_params']
     rng_key = random.PRNGKey(1)
     optimizer = numpyro.optim.Adam(0.01)
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
     if node_based:
-        keys = ["W1_auto_loc", "W2_auto_loc", "W_output_auto_loc", "b1_auto_loc", "b2_auto_loc","b_output_auto_loc"]
-        mask_values = [np.random.normal(0, 1, size = (MAP_params[key].shape[0], )) for key in keys]
+        keys = ["W1_auto_loc", "W2_auto_loc", "W_output_auto_loc", "b1_auto_loc", "b2_auto_loc", "b_output_auto_loc"]
+        mask_values = [np.random.normal(0, 1, size=(MAP_params[key].shape[0],)) for key in keys]
     for percentile in percentiles:
-        if node_based:
-            sample_mask_tuple = create_sample_mask_random(percentile, MAP_params, mask_values)
-        else:
+        if str(percentile) not in results_dict.keys():
             sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
+            if node_based:
+                sample_mask_tuple = create_sample_mask_random(percentile, MAP_params, mask_values)
+            else:
+                sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
 
-        optimizer = numpyro.optim.Adam(0.01)
+            optimizer = numpyro.optim.Adam(0.01)
 
-        if node_based:
-            mixed_bnn = generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale=scale)
-
-            model = lambda X, y=None: generate_node_based_bnn(
-                                        MAP_params, sample_mask_tuple, prior_variance, scale
-                                    )(X, y)
-        else:
             mixed_bnn = generate_mixed_bnn_by_param(
                 MAP_params,
                 sample_mask_tuple,
@@ -773,35 +761,53 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, MA
             model = lambda X, y=None: generate_mixed_bnn_by_param(
                 MAP_params, sample_mask_tuple, prior_variance, scale
             )(X, y)
+            if node_based:
+                mixed_bnn = generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale=scale)
 
-        svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
-        svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
+                model = lambda X, y=None: generate_node_based_bnn(
+                    MAP_params, sample_mask_tuple, prior_variance, scale
+                )(X, y)
+            else:
+                mixed_bnn = generate_mixed_bnn_by_param(
+                    MAP_params,
+                    sample_mask_tuple,
+                    prior_variance,
+                    scale=scale,
+                )
+                model = lambda X, y=None: generate_mixed_bnn_by_param(
+                    MAP_params, sample_mask_tuple, prior_variance, scale
+                )(X, y)
 
-        # Evaluate the model
-        if is_svi_map:
-            test_ll_ours, val_ll_ours = calculate_ll_ours(model, svi_results.params, dataset, mixed_bnn, delta=False)
-            test_ll_theirs, _ = evaluate_vi_samples(model=mixed_bnn, params=svi_results.params, dataset=dataset,
-                                                    rng_key=rng_key, y_scale=dataset.scl_Y.scale_,
-                                                    y_loc=dataset.scl_Y.mean_)
+            svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
+            svi_results = svi.run(rng_key, num_epochs, X=dataset.X_train, y=dataset.y_train)
 
-            results_dict['test_ll_ours'].append(test_ll_ours)
-            results_dict['val_ll_ours'].append(val_ll_ours)
-            results_dict['test_ll_theirs'].append(test_ll_theirs)
-        else:
-            predictive_train, predictive_val, predictive_test = create_predictives(model, svi_results.params, dataset,
-                                                                                   mixed_bnn, num_mc_samples=200,
-                                                                                   delta=False)
-            results_dict[f"{percentile}"] = {'predictive_train': predictive_train,
-                                             'predictive_val': predictive_val,
-                                             'predictive_test': predictive_test}
+            # Evaluate the model
+            if is_svi_map:
+                test_ll_ours, val_ll_ours = calculate_ll_ours(model, svi_results.params, dataset, mixed_bnn, delta=False)
+                test_ll_theirs, _ = evaluate_vi_samples(model=mixed_bnn, params=svi_results.params, dataset=dataset,
+                                                        rng_key=rng_key, y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
 
-    save_name = f'results_vi_run_{run}.pkl' if not node_based else f'results_node_based_run_{run}.pkl'
+                results_dict['test_ll_ours'].append(test_ll_ours)
+                results_dict['val_ll_ours'].append(val_ll_ours)
+                results_dict['test_ll_theirs'].append(test_ll_theirs)
+            else:
+                predictive_train, predictive_val, predictive_test = create_predictives(model, svi_results.params, dataset,
+                                                                                       mixed_bnn, num_mc_samples=200, delta=False)
+                results_dict[f"{percentile}"] = {'predictive_train': predictive_train["mean"],
+                                                 'predictive_val': predictive_val["mean"],
+                                                 'predictive_test': predictive_test["mean"]}
+
+    if node_based:
+        save_name = os.path.join(save_path, f"results_vi_node_run_{run}.pkl")
+    else:
+        save_name = os.path.join(save_path, f"results_vi_run_{run}.pkl")
+
     with open(os.path.join(save_path, save_name), 'wb') as handle:
-        pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        pickle.dump(results_dict, handle,protocol=pickle.HIGHEST_PROTOCOL)
 
 
 def train_MAP_solution(mle_model, dataset, num_epochs):
-    loss_arguments = {'loss': GLLGP_loss_swag, 'prior_sigma': 1}
+    loss_arguments = {'loss': GLLGP_loss_swag , 'prior_sigma': 1}
     if issubclass(loss := loss_arguments.get('loss', MSELoss), BaseMAPLossSwag):
         loss_arguments['model'] = mle_model
         loss_fn = loss(**loss_arguments)
@@ -810,13 +816,11 @@ def train_MAP_solution(mle_model, dataset, num_epochs):
     val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
 
     mle_model = train(network=mle_model, dataloader_train=train_dataloader, dataloader_val=val_dataloader,
-                      model_old=None, vi=False, device='cpu', epochs=num_epochs, return_best_model=True,
-                      criterion=loss_fn)
+                      model_old=None, vi=False, device='cpu', epochs=num_epochs, return_best_model=True, criterion=loss_fn)
     return mle_model
 
 
-def make_hmc_run(run, dataset, scale_prior, prior_variance, save_path, likelihood_scale, percentiles, results_dict,
-                 is_svi_map=True):
+def make_hmc_run(run, dataset, scale_prior, prior_variance, save_path, likelihood_scale, percentiles, results_dict, is_svi_map=True):
     MAP_params = results_dict['map_results']['map_params']
     for percentile in percentiles:
         # If update runs are done
@@ -834,6 +838,12 @@ def make_hmc_run(run, dataset, scale_prior, prior_variance, save_path, likelihoo
             pickle.dump(results_dict, open(os.path.join(save_path, f"results_hmc_run_{run}.pkl"), "wb"))
 
 
+def get_map_if_exists(full_path, result_dict):
+    if os.path.exists(full_path):
+        result_dict = pickle.load(open(full_path, "rb"))
+    return result_dict
+
+
 def predictive_(model, params, X):
     predictive = Predictive(
         model=model,
@@ -849,14 +859,16 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=str, default="boston")
     parser.add_argument("--output_path", type=str, default=os.getcwd())
     parser.add_argument("--data_path", type=str, default=os.getcwd())
+    parser.add_argument("--dataset_path", type=str, default=None)
     parser.add_argument("--map_path", type=str, default=None)
     parser.add_argument("--run", type=int, default=15)
-    parser.add_argument("--num_epochs", type=int, default=20000)
-    parser.add_argument("--scale_prior", type=ast.literal_eval, default=True)
-    parser.add_argument("--prior_variance", type=float, default=2.0)  # 0.1 is good for yacht, 2.0 for other datasets
-    parser.add_argument("--likelihood_scale", type=float,
-                        default=1.0)  # 6.0 is good for yacht, 1.0   for other datasets
-    parser.add_argument('--vi', type=ast.literal_eval, default=True)
+    parser.add_argument("--num_epochs", type=int, default=100)
+    parser.add_argument("--scale_prior",  type=ast.literal_eval, default=True)
+    parser.add_argument("--prior_variance", type=float, default=2.0) #0.1 is good for yacht, 2.0 for other datasets
+    parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, 1.0   for other datasets
+    parser.add_argument('--vi', type=ast.literal_eval, default=False)
+    parser.add_argument('--node_based', type=ast.literal_eval, default=False)
+    parser.add_argument('--hmc', type=ast.literal_eval, default=True)
     args = parser.parse_args()
 
     if args.dataset == "yacht":
@@ -868,31 +880,35 @@ if __name__ == "__main__":
 
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
 
-    rand_seed = np.random.randint(0, 10000)
-    dataset = dataset_class(
-        args.data_path,
-        seed=rand_seed,
-        test_split_type="random",
-        test_size=0.1,
-        val_fraction_of_train=0.1,
-    )
+    if args.dataset_path is None:
+        rand_seed = np.random.randint(0, 10000)
+        dataset = dataset_class(
+            args.data_path,
+            seed=rand_seed,
+            test_split_type="random",
+            test_size=0.1,
+            val_fraction_of_train=0.1,
+        )
+    else:
+        dataset = pickle.load(open(args.dataset_path, "rb"))
 
     # Allowing for both types of MAP models
     is_svi_map = args.map_path is None
+    rng_key = random.PRNGKey(1)
+    optimizer = numpyro.optim.Adam(0.01)
+    model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
+    new_map = False
+    # Allows for re-runs
+    if not (os.path.exists(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")) and
+        os.path.exists(os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl")) and
+        os.path.exists(os.path.join(args.output_path, f"results_vi_run_{args.run}.pkl"))):
 
-    # TODO: Load dataset as well as model
-
-    ### Train MAP Solution
-    if os.path.exists(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")) and False:
-        hmc_result_dict = pickle.load(open(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl"), "rb"))
-    else:
-        rng_key = random.PRNGKey(1)
-        optimizer = numpyro.optim.Adam(0.01)
-        model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
+        new_map = True
 
         # Setup the MAP model
         svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
         svi_results = svi.run(rng_key, args.num_epochs, X=dataset.X_train, y=dataset.y_train)
+
         MAP_params = svi_results.params
 
         if is_svi_map:
@@ -920,26 +936,36 @@ if __name__ == "__main__":
             mle_state_dict = mle_model.state_dict()
             MAP_params = convert_torch_to_pyro_params(mle_state_dict, MAP_params)
 
-            predictive_train, predictive_val, predictive_test = create_predictives(model, MAP_params, dataset,
-                                                                                   one_d_bnn,
+            predictive_train, predictive_val, predictive_test = create_predictives(model, MAP_params, dataset, one_d_bnn,
                                                                                    num_mc_samples=1, delta=True)
-            hmc_result_dict = vi_results_dict = {
-                'dataset': dataset,
-                'map_results': {'map_params': MAP_params,
-                                'predictive_train': predictive_train,
-                                'predictive_val': predictive_val,
-                                'predictive_test': predictive_test}
-            }
+            hmc_result_dict =  {
+                                'dataset': dataset,
+                                'map_results':  {'map_params': MAP_params,
+                                                 'predictive_train': predictive_train["mean"],
+                                                 'predictive_val': predictive_val["mean"],
+                                                 'predictive_test': predictive_test["mean"]}
+                             }
+            vi_results_dict = copy.deepcopy(hmc_result_dict)
 
-        pickle.dump(vi_results_dict, open(os.path.join(args.output_path, f"results_vi_run_{args.run}.pkl"), "wb"))
-        pickle.dump(hmc_result_dict, open(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl"), "wb"))
+    if args.vi:
+        vi_results_dict = get_map_if_exists(os.path.join(args.output_path, f"results_vi_run_{args.run}.pkl"), vi_results_dict if new_map else None)
+        if len(vi_results_dict.keys()) < 11:
+            # VI run
+            make_vi_run(run=args.run, dataset=vi_results_dict['dataset'], prior_variance=args.prior_variance,scale= args.likelihood_scale, results_dict=vi_results_dict,
+                        save_path=args.output_path,  num_epochs=args.num_epochs, is_svi_map=is_svi_map, node_based=False)
 
-        if args.vi:
-            make_vi_run(args.run, dataset, args.prior_variance, args.likelihood_scale, vi_results_dict,
-                        save_path=args.output_path, MAP_params=MAP_params, is_svi_map=is_svi_map, node_based=False)
-            make_vi_run(args.run, dataset, args.prior_variance, args.likelihood_scale, vi_results_dict,
-                        save_path=args.output_path, MAP_params=MAP_params, is_svi_map=is_svi_map, node_based=True)
+    if args.node_based:
+        vi_results_dict = get_map_if_exists(os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl"), vi_results_dict if new_map else None)
+        if len(vi_results_dict.keys()) < 11:
+            # Node based
+            make_vi_run(run=args.run, dataset=vi_results_dict['dataset'], prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=vi_results_dict,
+                        save_path=args.output_path, num_epochs=args.num_epochs,
+                        is_svi_map=is_svi_map, node_based=True)
 
-    make_hmc_run(args.run, dataset, args.scale_prior, args.prior_variance,
-                 args.output_path, likelihood_scale=args.likelihood_scale, percentiles=percentiles,
-                 results_dict=hmc_result_dict, is_svi_map=is_svi_map)
+    if args.hmc:
+        hmc_result_dict = get_map_if_exists(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl"), hmc_result_dict if new_map else None)
+        if len(hmc_result_dict.keys()) < 11:
+            # HMC run
+            make_hmc_run(run=args.run, dataset=hmc_result_dict['dataset'], scale_prior=args.scale_prior, prior_variance=args.prior_variance,
+                         save_path=args.output_path, likelihood_scale=args.likelihood_scale, percentiles=percentiles,
+                         results_dict=hmc_result_dict, is_svi_map=is_svi_map)
