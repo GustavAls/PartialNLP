@@ -963,8 +963,8 @@ if __name__ == "__main__":
                         is_svi_map=is_svi_map, node_based=True)
 
     if args.hmc:
+        hmc_result_dict = get_map_if_exists(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl"), hmc_result_dict if new_map else None)
         if len(hmc_result_dict.keys()) < 11:
-            hmc_result_dict = get_map_if_exists(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl"), hmc_result_dict if new_map else None)
             # HMC run
             make_hmc_run(run=args.run, dataset=hmc_result_dict['dataset'], scale_prior=args.scale_prior, prior_variance=args.prior_variance,
                          save_path=args.output_path, likelihood_scale=args.likelihood_scale, percentiles=percentiles,
