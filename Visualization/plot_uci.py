@@ -8,7 +8,6 @@ import pickle
 import os
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from plot_utils_comb import PlotHelper
 
 def get_cmap(n, name='hsv'):
     '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct
@@ -63,8 +62,8 @@ def plot_estimator(df, errorbar_func, estimator=None, ax=None, data_name=None):
                                       ax=ax,
                                       color_scheme_1=color_scheme_1)
             color_scheme_1 = not color_scheme_1
-    title = " & ".join(method_names)
-    title = title + " - " + estimator.__name__ + " - " + data_name
+
+    title = method_names[0] + " & " + method_names[1] + " - " + estimator.__name__ + " - " + data_name
     ax.set_title(label=title, fontsize=12, pad=-20)
 
     # Set labels and legend
@@ -316,29 +315,10 @@ if __name__ == '__main__':
     # path_hmc = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_HMC'
     # path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_VI'
     # plot_hmc_vi(path_hmc, path_vi)
-    # path = r'C:\Users\45292\Documents\Master\HMC\UCI_HMC_VI_torch\yact_models_full'
-    path = r'C:\Users\45292\Documents\Master\lvar_test_boston\boston_models_lvar'
-    vi = PlotHelper(path)
-    # nlls_vi = vi.run_for_dataset(criteria='0.001')
-    # nlls_node = vi.run_for_dataset(criteria='0.1')
-    nlls_3 = vi.run_for_dataset(criteria='1e-05')
-    #
-    # with open(r'C:\Users\45292\Documents\Master\VI_NODE_TORCH\NLLS\ramping_likelihood.pkl', 'wb') as h:
-    #     pickle.dump({'0.001': nlls_vi, '0.1': nlls_node, '1e-5': nlls_3}, h, protocol=pickle.HIGHEST_PROTOCOL)
 
-    # pcl = pickle.load(open(r'C:\Users\45292\Documents\Master\VI_NODE_TORCH\NLLS\ramping_likelihood.pkl', 'rb'))
-    #
-    # nlls_vi = pcl['0.001']
-    # nlls_node = pcl['0.1']
+    with open(r'C:\Users\45292\Documents\Master\VI_NODE_TORCH\NLLS\ener_vi_node.pkl', 'wb') as h:
+        pickle.dump({'vi': nlls_vi, 'node': nlls_node}, h, protocol=pickle.HIGHEST_PROTOCOL)
 
-    plot_partial_percentages(percentages=[0,1,2,5, 8, 14, 23, 37, 61, 100],
-                             res = {'e-5': np.array(nlls_3)},
-                             data_name='boston',
-                             num_runs=5)
-    breakpoint()
-    path_hmc_vi = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG'
-    # plot_hmc_vi_combined(path_hmc_vi)
-    plot_la_swag_combined(path_hmc_vi)
     breakpoint()
 
 
