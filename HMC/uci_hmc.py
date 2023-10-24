@@ -515,9 +515,11 @@ def generate_mixed_bnn_by_param(
                 "prec_obs", dist.Gamma(3.0, 1.0)
             )  # MAP outperforms full BNN, even if we freeze the prior precision. That's interesting here, I think.
             sigma_obs = 1.0 / jnp.sqrt(prec_obs)
+        else:
+            sigma_obs = l_scale
 
         with numpyro.handlers.scale(scale=scale):
-            y_obs = numpyro.sample("y_obs", dist.Normal(mean, l_scale), obs=y)
+            y_obs = numpyro.sample("y_obs", dist.Normal(mean, sigma_obs), obs=y)
 
     return mixed_bnn
 
@@ -806,7 +808,7 @@ def run_for_percentile(
 
     nuts_kernel = NUTS(mixed_bnn, max_tree_depth=15)
     mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
-    rng_key = random.PRNGKey(1)
+    rng_key = random.PRNGKey(0)
     mcmc.run(rng_key, dataset.X_train, dataset.y_train)
 
     if is_svi_map:
