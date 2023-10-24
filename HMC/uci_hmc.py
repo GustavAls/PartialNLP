@@ -921,7 +921,9 @@ def make_hmc_run(run, dataset, scale_prior, prior_variance, save_path, likelihoo
                 scale=likelihood_scale,
                 is_svi_map=is_svi_map
             )
-            pickle.dump(results_dict, open(os.path.join(save_path, f"results_hmc_run_{run}.pkl"), "wb"))
+            with open(os.path.join(save_path, f"results_hmc_run_{run}.pkl"), "wb") as handle:
+                pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            print("Saved results for ", percentile, "%")
 
 
 def predictive_(model, params, X):
