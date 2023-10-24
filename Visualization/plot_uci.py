@@ -317,22 +317,24 @@ if __name__ == '__main__':
     # path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_VI'
     # plot_hmc_vi(path_hmc, path_vi)
     # path = r'C:\Users\45292\Documents\Master\HMC\UCI_HMC_VI_torch\yact_models_full'
-    path = r'C:\Users\45292\Documents\Master\VI_NODE_TORCH\energy_models'
+    path = r'C:\Users\45292\Documents\Master\lvar_test_boston\boston_models_lvar'
     vi = PlotHelper(path)
-    nlls_vi = vi.run_for_dataset(criteria='vi_r')
-    nlls_node = vi.run_for_dataset(criteria='node')
+    # nlls_vi = vi.run_for_dataset(criteria='0.001')
+    # nlls_node = vi.run_for_dataset(criteria='0.1')
+    nlls_3 = vi.run_for_dataset(criteria='1e-05')
+    #
+    # with open(r'C:\Users\45292\Documents\Master\VI_NODE_TORCH\NLLS\ramping_likelihood.pkl', 'wb') as h:
+    #     pickle.dump({'0.001': nlls_vi, '0.1': nlls_node, '1e-5': nlls_3}, h, protocol=pickle.HIGHEST_PROTOCOL)
 
-    with open(r'C:\Users\45292\Documents\Master\VI_NODE_TORCH\NLLS\ener_vi_node.pkl', 'wb') as h:
-        pickle.dump({'vi': nlls_vi, 'node': nlls_node}, h, protocol=pickle.HIGHEST_PROTOCOL)
+    # pcl = pickle.load(open(r'C:\Users\45292\Documents\Master\VI_NODE_TORCH\NLLS\ramping_likelihood.pkl', 'rb'))
+    #
+    # nlls_vi = pcl['0.001']
+    # nlls_node = pcl['0.1']
 
-    min_runs = min((len(nlls_vi), len(nlls_node)))
-
-    nlls_vi = nlls_vi[:min_runs]
-    nlls_node = nlls_node[:min_runs]
     plot_partial_percentages(percentages=[0,1,2,5, 8, 14, 23, 37, 61, 100],
-                             res = {'vi': np.array(nlls_vi), 'node': np.array(nlls_node)},
+                             res = {'e-5': np.array(nlls_3)},
                              data_name='boston',
-                             num_runs=min_runs)
+                             num_runs=5)
     breakpoint()
     path_hmc_vi = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG'
     # plot_hmc_vi_combined(path_hmc_vi)
