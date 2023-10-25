@@ -42,7 +42,9 @@ class PlotHelper:
             percentages = [0] + percentages
         return nlls, percentages
 
-    def get_residuals(self, predictions, labels):
+    def get_residuals(self, predictions, labels, full = False):
+        if full:
+            return predictions - labels
         return predictions.mean(1).flatten() - labels.flatten()
 
     def calculate_nll_(self, mc_matrix, labels, y_scale, y_loc, sigma):
@@ -81,13 +83,13 @@ class PlotHelper:
         dataset = pcl['dataset']
         y_train, y_val, y_test = self.get_labels(dataset)
         preds_train, preds_val, preds_test = self.convert_to_proper_format(pcl[key])
-        sigma = self.get_sigma(self.get_residuals(preds_train, y_train))
+        sigma = self.get_sigma(self.get_residuals(preds_train, y_train, full = True))
         mse = np.mean(self.get_residuals(preds_test, y_test)**2)
         if 'map' in key:
-            nll = self.calculate_nll_(preds_test, y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(), sigma)
+            nll = self.calculate_nll_(preds_test, y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(), sigma**2)
         else:
             nll = self.calculate_nll_(preds_test, y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(),
-                                      sigma**2)
+                                      sigma)
         print(mse)
         return nll
 

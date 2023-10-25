@@ -19,7 +19,7 @@ from torch.nn import MSELoss
 from torch.distributions import Gamma
 import misc.likelihood_losses as ll_losses
 from VI.partial_bnn_functional import train
-
+from HMC.uci_hmc import PlotHelper
 
 ### NOT CURRENTLY USED
 def make_size_ramping(data_path, dataset_class, num_runs, device, num_epochs, output_path, **kwargs):
@@ -299,7 +299,7 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
     all_res = []
     tmp_res = []
     for run in range(num_runs):
-        percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
+        percentages = [0.2,0.5, 1, 2, 5, 8, 14, 23, 37, 61, 100]
         dataset = dataset_class(data_dir=data_path,
                                 test_split_type='random',
                                 test_size=0.1,
@@ -346,7 +346,8 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
             'val_nll': val_nll,
             'test_nll': test_nll,
             'val_mse': val_mse,
-            'test_mse': test_mse
+            'test_mse': test_mse,
+            'test_var': None
         }
         with open(save_name, 'wb') as handle:
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
