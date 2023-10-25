@@ -19,7 +19,7 @@ from torch.nn import MSELoss
 from torch.distributions import Gamma
 import misc.likelihood_losses as ll_losses
 from VI.partial_bnn_functional import train
-
+from HMC.uci_hmc import PlotHelper
 
 ### NOT CURRENTLY USED
 def make_size_ramping(data_path, dataset_class, num_runs, device, num_epochs, output_path, **kwargs):

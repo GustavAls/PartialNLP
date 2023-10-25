@@ -19,20 +19,75 @@ import pickle
 import jax
 import jax.numpy as jnp
 import jax.nn
-from Laplace.uci_laplace import calculate_std
+# from Laplace.uci_laplace import calculate_std
 from jax import random
 numpyro.set_platform("cpu")
 numpyro.set_host_device_count(8)
 import argparse
 import copy
 from torch.distributions import Normal
-
-
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
 class PlotHelper:
 
     def __init__(self, path_to_models):
         self.path_to_models = path_to_models
+        self.pca = None
+        self.scaler = None
 
+
+    def inverse_transform(self, x):
+        if self.scaler is None:
+            return x
+        else:
+            return self.scaler.inverse_transform(x)
+    def PCA(self, X, scaler = None, x_test = None):
+
+        if scaler is not None:
+            self.scaler = scaler
+            x_trans = scaler.inverse_transform(X)
+        else:
+            x_trans = X.copy()
+        self.pca = PCA(n_components=2).fit(x_trans)
+        if x_test is not None:
+            return self.pca.transform(x_test)
+        return None
+
+    def plot(self, fmu, fvar, labels, scale, loc, x_test = None):
+        x_axis = range(len(labels))
+        fmu, fvar, labels = fmu.flatten(), fvar.flatten(), labels.flatten()
+        if x_test is not None and x_test.ndim > 1:
+            if self.pca is not None:
+                x_axis= self.pca.transform(self.inverse_transform(x_test))[:, 0]
+            else:
+                UserWarning("x_test provided to the function without PCA having been fitted")
+
+        fig, ax = plt.subplots(1, 1)
+        ax.plot(x_axis, labels, 'bo', label = 'Labels')
+        ax.plot(x_axis, fmu * scale + loc, 'k*', label = 'Predictions')
+        ax.fill_between(x_axis, fmu * scale + loc - fvar * scale, fmu * scale + loc + fvar * scale, alpha = 0.25)
+        ax.set_ylim(*np.percentile(np.concatenate((fmu * scale + loc - fvar * scale, fmu * scale + loc + fvar * scale,
+                                           labels)), q = [0, 100]))
+        ax.legend()
+
+        plt.show()
+    def glm_predictive(self, preds, std = True):
+        fmu = preds.mean(1)
+        if std:
+            f_var = preds.std(1)
+        else:
+            f_var = preds.var(1)
+        return fmu, f_var
+    def glm_nll(self, fmu, fvar, labels, scale, loc):
+        nlls = []
+        labels = torch.from_numpy(labels * scale + loc)
+        for mu, var, lab in zip(fmu, fvar, labels):
+            dist = Normal(mu*scale + loc, var * scale)
+            nlls.append(
+                dist.log_prob(lab.view(1,1)).item()
+            )
+
+        return np.mean(nlls)
 
     def get_data(self):
         nlls = np.array(self.run_for_dataset())
@@ -41,7 +96,9 @@ class PlotHelper:
             percentages = [0] + percentages
         return nlls, percentages
 
-    def get_residuals(self, predictions, labels):
+    def get_residuals(self, predictions, labels, full = False):
+        if full:
+            return predictions - labels
         return predictions.mean(1).flatten() - labels.flatten()
 
     def calculate_nll_(self, mc_matrix, labels, y_scale, y_loc, sigma):
@@ -312,6 +369,8 @@ class UCIConcreteDataset(UCIDataset):
         return X, y
 
 
+
+
 def one_d_bnn(X, y=None, prior_variance=0.1, width=50, scale=1.0):
     nB, n_features = X.shape
 
@@ -516,8 +575,11 @@ def generate_mixed_bnn_by_param(
             )  # MAP outperforms full BNN, even if we freeze the prior precision. That's interesting here, I think.
             sigma_obs = 1.0 / jnp.sqrt(prec_obs)
 
-        with numpyro.handlers.scale(scale=scale):
-            y_obs = numpyro.sample("y_obs", dist.Normal(mean, l_scale), obs=y)
+            with numpyro.handlers.scale(scale=scale):
+                y_obs = numpyro.sample("y_obs", dist.Normal(mean, sigma_obs), obs=y)
+        else:
+            with numpyro.handlers.scale(scale=scale):
+                y_obs = numpyro.sample("y_obs", dist.Normal(mean, l_scale), obs=y)
 
     return mixed_bnn
 
@@ -840,7 +902,10 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
     else:
         save_name = os.path.join(save_path, f"results_vi_run_{run}_{str(l_scale) if l_scale != 1.0 else str()}.pkl")
 
+
     for percentile in percentiles:
+        prior_variance = 100 - percentile + 1
+
         print("Running for percentile: ", percentile, "%")
         if str(percentile) not in results_dict.keys():
             sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
@@ -861,16 +926,18 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
                     sample_mask_tuple,
                     prior_variance,
                     scale=scale,
-                    l_scale=l_scale
+                    l_scale=l_scale,
+                    use_prior=True
                 )
                 model = lambda X, y=None: generate_mixed_bnn_by_param(
-                    MAP_params, sample_mask_tuple, prior_variance, scale
+                    MAP_params, sample_mask_tuple, prior_variance, scale, use_prior=True
                 )(X, y)
 
             svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
-            svi_results = svi.run(rng_key, num_epochs, X=dataset.X_train, y=dataset.y_train)
+            svi_results = svi.run(rng_key, 30000, X=dataset.X_train, y=dataset.y_train)
 
             # Evaluate the model
+
             if is_svi_map:
                 test_ll_ours, val_ll_ours = calculate_ll_ours(model, svi_results.params, dataset, mixed_bnn,
                                                               delta=False)
@@ -883,9 +950,37 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
             else:
                 predictive_train, predictive_val, predictive_test = create_predictives(model, svi_results.params, dataset,
                                                                                        mixed_bnn, num_mc_samples=200, delta=False)
+
+                rr = {'predictive_train': predictive_train['mean'], 'predictive_val': predictive_val['mean'],
+                      'predictive_test': predictive_test['mean']}
+                tp = PlotHelper("")
+                train, val, test = tp.convert_to_proper_format(rr)
+                fmu, fvar = tp.glm_predictive(test, std=True)
+                nll_glm = tp.glm_nll(fmu, fvar, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item())
+                residuals = tp.get_residuals(train, dataset.y_train, full = True)
+                # print(f"MSE {np.mean(residuals.mean(1)**2)}")
+                res_test = tp.get_residuals(test, dataset.y_test, full = True)
+                # print(f"MSE TEST {np.mean(res_test.mean(1)**2)}")
+                sigma = tp.get_sigma(residuals.mean(1))
+                # tp.plot(fmu, fvar, dataset.y_test * dataset.scl_Y.scale_.item() + dataset.scl_Y.mean_.item(),
+                #         dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item())
+                elpd = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(), sigma**2)
+                elpd_sqrt = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(),
+                                            sigma)
+
+                elpd_gamma_prior = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(),
+                                            dataset.scl_Y.mean_.item(),
+                                            (svi_results.params['prec_obs_auto_scale']**(-1)).item())
+
+                print('nll glm', nll_glm, 'elpd', elpd, 'elpd spourious sqrt', elpd_sqrt,'elpd gamma', elpd_gamma_prior)
                 results_dict[f"{percentile}"] = {'predictive_train': predictive_train["mean"],
                                                  'predictive_val': predictive_val["mean"],
-                                                 'predictive_test': predictive_test["mean"]}
+                                                 'predictive_test': predictive_test["mean"],
+                                                 'glm_nll': nll_glm,
+                                                 'elpd': elpd,
+                                                 'elpd_spurious_sqrt': elpd_sqrt,
+                                                 'elpd_gamma_prior': elpd_gamma_prior}
+
 
             with open(save_name, 'wb') as handle:
                 pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -986,7 +1081,7 @@ if __name__ == "__main__":
 
     # Setup the MAP model
     svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
-    svi_results = svi.run(rng_key, args.num_epochs, X=dataset.X_train, y=dataset.y_train)
+    svi_results = svi.run(rng_key, 2, X=dataset.X_train, y=dataset.y_train)
 
     MAP_params = svi_results.params
 
@@ -995,6 +1090,27 @@ if __name__ == "__main__":
                                          rng_key, y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
         test_ll_ours, val_ll_ours = calculate_ll_ours(model, MAP_params, dataset, one_d_bnn,
                                                       num_mc_samples=1, delta=True)
+
+        predictive_train, predictive_val, predictive_test = create_predictives(model, MAP_params, dataset, one_d_bnn,
+                                                                               num_mc_samples=1, delta=True)
+        rr = {'predictive_train': predictive_train['mean'], 'predictive_val': predictive_val['mean'],
+              'predictive_test': predictive_test['mean']}
+        tp = PlotHelper("")
+        train, val, test = tp.convert_to_proper_format(rr)
+        residuals = tp.get_residuals(train, dataset.y_train, full=True)
+        print(f"MSE {np.mean(residuals.mean(1) ** 2)}")
+        res_test = tp.get_residuals(test, dataset.y_test, full=True)
+        print("MSE Test", np.mean(res_test.mean(1) ** 2))
+        sigma = tp.get_sigma(residuals.mean(1))
+        print("SIGMA", sigma)
+
+        nll_one = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(),
+                                    sigma ** 2)
+
+        nll_two = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(),
+                                    sigma)
+        print(nll_one, nll_two)
+        is_svi_map = False
         hmc_result_dict = {'dataset': dataset,
                            'map_results': {'map_params': MAP_params,
                                            'test_ll_ours': test_ll_ours,
@@ -1013,14 +1129,54 @@ if __name__ == "__main__":
 
         predictive_train, predictive_val, predictive_test = create_predictives(model, MAP_params, dataset, one_d_bnn,
                                                                                num_mc_samples=1, delta=True)
-        hmc_result_dict =  {
+        rr = {'predictive_train': predictive_train['mean'], 'predictive_val': predictive_val['mean'],
+              'predictive_test': predictive_test['mean']}
+        tp = PlotHelper("")
+
+        train, val, test = tp.convert_to_proper_format(rr)
+        residuals = tp.get_residuals(train, dataset.y_train, full=True)
+        print(f"MSE {np.mean(residuals.mean(1) ** 2)}")
+        res_test = tp.get_residuals(test, dataset.y_test, full = True)
+        print("MSE Test", np.mean(res_test.mean(1)**2))
+        sigma = tp.get_sigma(residuals.mean(1))
+        print("SIGMA", sigma)
+        fvar = np.ones_like(test)*np.sqrt(sigma)
+
+        # tp.plot(test, fvar, dataset.y_test * dataset.scl_Y.scale_.item() + dataset.scl_Y.mean_.item(),
+        #         dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item())
+
+        nll_one = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(),
+                                    sigma ** 2)
+        nll_two = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(),
+                                    sigma)
+        print(nll_one, nll_two)
+
+        hmc_result_dict = {
                             'dataset': dataset,
                             'map_results':  {'map_params': MAP_params,
                                              'predictive_train': predictive_train["mean"],
                                              'predictive_val': predictive_val["mean"],
-                                             'predictive_test': predictive_test["mean"]}
+                                             'predictive_test': predictive_test["mean"],
+                                             'glm_nll': nll_one,
+                                             'elpd': nll_one,
+                                             'elpd_spurious_sqrt': nll_two,
+                                             'elpd_gamma_prior': nll_one
+                                             }
                          }
-        vi_results_dict = copy.deepcopy(hmc_result_dict)
+
+        vi_result_dict = {
+                            'dataset': dataset,
+                            'map_results':  {'map_params': MAP_params,
+                                             'predictive_train': predictive_train["mean"],
+                                             'predictive_val': predictive_val["mean"],
+                                             'predictive_test': predictive_test["mean"],
+                                             'glm_nll': nll_one,
+                                             'elpd': nll_one,
+                                             'elpd_spurious_sqrt': nll_two,
+                                             'elpd_gamma_prior': nll_one
+                                             }
+                         }
+
 
     dict_length = 11
     if args.vi:
