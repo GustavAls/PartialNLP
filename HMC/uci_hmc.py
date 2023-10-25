@@ -819,13 +819,16 @@ def create_sample_mask_largest_abs_values(percentile, MAP_params):
     return sample_mask_tuple
 
 
-def compute_metrics(predictive_train, predictive_val, predictive_test, dataset, svi_results):
+def compute_metrics(predictive_train, predictive_val, predictive_test, dataset, sigma_obs):
     rr = {'predictive_train': predictive_train['mean'], 'predictive_val': predictive_val['mean'],
           'predictive_test': predictive_test['mean']}
     tp = PlotHelper("")
     train, val, test = tp.convert_to_proper_format(rr)
     fmu, fvar = tp.glm_predictive(test, std=True)
-    nll_glm = tp.glm_nll(fmu, fvar, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item())
+    try:
+        nll_glm = tp.glm_nll(fmu, fvar, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item())
+    except:
+        nll_glm = np.inf
     residuals = tp.get_residuals(train, dataset.y_train, full=True)
     # print(f"MSE {np.mean(residuals.mean(1)**2)}")
     res_test = tp.get_residuals(test, dataset.y_test, full=True)
@@ -839,7 +842,7 @@ def compute_metrics(predictive_train, predictive_val, predictive_test, dataset, 
 
     elpd_gamma_prior = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(),
                                          dataset.scl_Y.mean_.item(),
-                                         (svi_results.params['prec_obs_auto_scale'] ** (-1)).item())
+                                         sigma_obs)
     return nll_glm, elpd, elpd_sqrt, elpd_gamma_prior
 
 
@@ -882,18 +885,25 @@ def run_for_percentile(
         results = { 'test_ll_ours': test_ll_ours,
                     'test_ll_theirs': test_ll_theirs}
     else:
-        predictive_train = Predictive(mixed_bnn, mcmc.get_samples())(rng_key, X=dataset.X_train)
-        predictive_val = Predictive(mixed_bnn, mcmc.get_samples())(rng_key, X=dataset.X_val)
-        predictive_test = Predictive(mixed_bnn, mcmc.get_samples())(rng_key, X=dataset.X_test)
+        samples = mcmc.get_samples()
+        predictive_train = Predictive(mixed_bnn, samples)(rng_key, X=dataset.X_train)
+        predictive_val = Predictive(mixed_bnn, samples)(rng_key, X=dataset.X_val)
+        predictive_test = Predictive(mixed_bnn, samples)(rng_key, X=dataset.X_test)
 
-        # nll_glm, elpd, elpd_sqrt, elpd_gamma_prior = compute_metrics(predictive_train, predictive_val, predictive_test, dataset, mcmc.get_samples())
+        nll_glm, elpd, elpd_sqrt, elpd_gamma_prior = compute_metrics(predictive_train, predictive_val, predictive_test,
+                                                                     dataset, sigma_obs = (1.0 / jnp.sqrt(samples["prec_obs"])).mean())
 
         test_ll_ours = evaluate_samples_properly(mixed_bnn, rng_key, dataset.X_test, dataset.y_test,
                                                  mcmc.get_samples(), y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
         results = { 'test_ll_ours': test_ll_ours,
                     'predictive_train': predictive_train["mean"],
                     'predictive_val': predictive_val["mean"],
-                    'predictive_test': predictive_test["mean"]}
+                    'predictive_test': predictive_test["mean"],
+                    'glm_nll': nll_glm,
+                    'elpd': elpd,
+                    'elpd_spurious_sqrt': elpd_sqrt,
+                    'elpd_gamma_prior': elpd_gamma_prior
+                    }
     return results
 
 
@@ -965,7 +975,9 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
                 predictive_train, predictive_val, predictive_test = create_predictives(model, svi_results.params, dataset,
                                                                                        mixed_bnn, num_mc_samples=200, delta=False)
 
-                nll_glm, elpd, elpd_sqrt, elpd_gamma_prior = compute_metrics(predictive_train, predictive_val, predictive_test, dataset, svi_results)
+                nll_glm, elpd, elpd_sqrt, elpd_gamma_prior = compute_metrics(predictive_train, predictive_val,
+                                                                             predictive_test, dataset,
+                                                                             sigma_obs=(svi_results.params['prec_obs_auto_scale'] ** (-1)).item())
 
                 print('nll glm', nll_glm, 'elpd', elpd, 'elpd spourious sqrt', elpd_sqrt,'elpd gamma', elpd_gamma_prior)
                 results_dict[f"{percentile}"] = {'predictive_train': predictive_train["mean"],
@@ -1037,7 +1049,7 @@ if __name__ == "__main__":
     parser.add_argument("--prior_variance", type=float, default=4.0) #0.1 is good for yacht, 4.0 for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, 1.0   for other datasets
     parser.add_argument('--vi', type=ast.literal_eval, default=False)
-    parser.add_argument('--node_based', type=ast.literal_eval, default=True)
+    parser.add_argument('--node_based', type=ast.literal_eval, default=False)
     parser.add_argument('--hmc', type=ast.literal_eval, default=False)
     parser.add_argument('--l_var', type=float, default=1.0)
     args = parser.parse_args()
