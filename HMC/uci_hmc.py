@@ -1152,7 +1152,7 @@ if __name__ == "__main__":
                                              }
                          }
 
-        vi_result_dict = {
+        vi_results_dict = {
                             'dataset': dataset,
                             'map_results':  {'map_params': MAP_params,
                                              'predictive_train': predictive_train["mean"],
