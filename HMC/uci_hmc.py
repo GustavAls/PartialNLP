@@ -584,7 +584,7 @@ def generate_mixed_bnn_by_param(
     return mixed_bnn
 
 
-def generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale=1.0, l_scale = 1):
+def generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale=1.0, l_scale = 1, use_prior=True):
 
     (
         W1_sample_mask,
@@ -627,31 +627,6 @@ def generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale
         b_2_map = MAP_params["b2_auto_loc"]
         W_output_map = MAP_params["W_output_auto_loc"]
         b_output_map = MAP_params["b_output_auto_loc"]
-
-        # W_1 = numpyro.deterministic(
-        #     "W1", (W_1_map * (1 - W1_sample_mask)) + (W_1_noise * W1_sample_mask)
-        # )
-        # W_2 = numpyro.deterministic(
-        #     "W2", (W_2_map * (1 - W2_sample_mask)) + (W_2_noise * W2_sample_mask)
-        # )
-        # W_output = numpyro.deterministic(
-        #     "W_output",
-        #     (W_output_map * (1 - W_output_sample_mask))
-        #     + (W_output_noise * W_output_sample_mask),
-        # )
-        #
-        # b_1 = numpyro.deterministic(
-        #     "b1", (b_1_map * (1 - b1_sample_mask)) + (b_1_noise * b1_sample_mask)
-        # )
-        # b_2 = numpyro.deterministic(
-        #     "b2", (b_2_map * (1 - b2_sample_mask)) + (b_2_noise * b2_sample_mask)
-        # )
-        # b_output = numpyro.deterministic(
-        #     "b_output",
-        #     (b_output_map * (1 - b_output_sample_mask))
-        #     + (b_output_noise * b_output_sample_mask),
-        # )
-
 
         W_1_node = numpyro.deterministic(
             "W_1_node", (jnp.ones_like(W1_sample_mask) * (1 - W1_sample_mask)) + (W_1_node_noise * W1_sample_mask)
@@ -700,14 +675,16 @@ def generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale
 
         mean = numpyro.deterministic("mean", output)
 
-        # output precision
-        # prec_obs = numpyro.sample(
-        #     "prec_obs", dist.Gamma(3.0, 1.0)
-        # )  # MAP outperforms full BNN, even if we freeze the prior precision. That's interesting here, I think.
-        # sigma_obs = 1.0 / jnp.sqrt(prec_obs)
-
-        with numpyro.handlers.scale(scale=scale):
-            y_obs = numpyro.sample("y_obs", dist.Normal(mean, l_scale), obs=y)
+        if use_prior:
+            prec_obs = numpyro.sample(
+                "prec_obs", dist.Gamma(3.0, 1.0)
+            )  # MAP outperforms full BNN, even if we freeze the prior precision. That's interesting here, I think.
+            sigma_obs = 1.0 / jnp.sqrt(prec_obs)
+            with numpyro.handlers.scale(scale=scale):
+                y_obs = numpyro.sample("y_obs", dist.Normal(mean, sigma_obs), obs=y)
+        else:
+            with numpyro.handlers.scale(scale=scale):
+                y_obs = numpyro.sample("y_obs", dist.Normal(mean, l_scale), obs=y)
 
     return mixed_bnn
 
@@ -866,8 +843,8 @@ def run_for_percentile(
         use_prior=True
     )
 
-    nuts_kernel = NUTS(mixed_bnn, max_tree_depth=1)
-    mcmc = MCMC(nuts_kernel, num_warmup=1, num_samples=1, num_chains=1)
+    nuts_kernel = NUTS(mixed_bnn, max_tree_depth=15)
+    mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=15)
     rng_key = random.PRNGKey(0)
     mcmc.run(rng_key, dataset.X_train, dataset.y_train)
 
@@ -907,7 +884,7 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
 
 
     for percentile in percentiles:
-        prior_variance = 100 - percentile + 1
+        prior_variance = prior_variance * (100 / percentile)
 
         print("Running for percentile: ", percentile, "%")
         if str(percentile) not in results_dict.keys():
@@ -918,7 +895,13 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
                 sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
 
             if node_based:
-                mixed_bnn = generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale=scale, l_scale=l_scale)
+                mixed_bnn = generate_node_based_bnn(
+                    MAP_params,
+                    sample_mask_tuple,
+                    prior_variance,
+                    scale=scale,
+                    l_scale=l_scale,
+                    use_prior=True)
 
                 model = lambda X, y=None: generate_node_based_bnn(
                     MAP_params, sample_mask_tuple, prior_variance, scale
@@ -937,7 +920,7 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
                 )(X, y)
 
             svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
-            svi_results = svi.run(rng_key, 30000, X=dataset.X_train, y=dataset.y_train)
+            svi_results = svi.run(rng_key, num_epochs, X=dataset.X_train, y=dataset.y_train)
 
             # Evaluate the model
 
