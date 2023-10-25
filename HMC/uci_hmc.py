@@ -806,8 +806,8 @@ def run_for_percentile(
         use_prior=True
     )
 
-    nuts_kernel = NUTS(mixed_bnn, max_tree_depth=15)
-    mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
+    nuts_kernel = NUTS(mixed_bnn, max_tree_depth=1)
+    mcmc = MCMC(nuts_kernel, num_warmup=1, num_samples=1, num_chains=1)
     rng_key = random.PRNGKey(0)
     mcmc.run(rng_key, dataset.X_train, dataset.y_train)
 
@@ -823,9 +823,12 @@ def run_for_percentile(
         predictive_train = Predictive(mixed_bnn, mcmc.get_samples())(rng_key, X=dataset.X_train)
         predictive_val = Predictive(mixed_bnn, mcmc.get_samples())(rng_key, X=dataset.X_val)
         predictive_test = Predictive(mixed_bnn, mcmc.get_samples())(rng_key, X=dataset.X_test)
-        results = {'predictive_train': predictive_train["mean"],
-                     'predictive_val': predictive_val["mean"],
-                     'predictive_test': predictive_test["mean"]}
+        test_ll_ours = evaluate_samples_properly(mixed_bnn, rng_key, dataset.X_test, dataset.y_test,
+                                                 mcmc.get_samples(), y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
+        results = { 'test_': test_ll_ours,
+                    'predictive_train': predictive_train["mean"],
+                    'predictive_val': predictive_val["mean"],
+                    'predictive_test': predictive_test["mean"]}
     return results
 
 
