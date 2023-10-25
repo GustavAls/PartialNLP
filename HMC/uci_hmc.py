@@ -28,6 +28,7 @@ import copy
 from torch.distributions import Normal
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
+from tqdm import tqdm
 class PlotHelper:
 
     def __init__(self, path_to_models):
@@ -574,9 +575,6 @@ def generate_mixed_bnn_by_param(
                 "prec_obs", dist.Gamma(3.0, 1.0)
             )  # MAP outperforms full BNN, even if we freeze the prior precision. That's interesting here, I think.
             sigma_obs = 1.0 / jnp.sqrt(prec_obs)
-        else:
-            sigma_obs = l_scale
-
             with numpyro.handlers.scale(scale=scale):
                 y_obs = numpyro.sample("y_obs", dist.Normal(mean, sigma_obs), obs=y)
         else:
