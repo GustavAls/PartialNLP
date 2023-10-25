@@ -819,6 +819,31 @@ def create_sample_mask_largest_abs_values(percentile, MAP_params):
     return sample_mask_tuple
 
 
+def compute_metrics(predictive_train, predictive_val, predictive_test, dataset, svi_results):
+    rr = {'predictive_train': predictive_train['mean'], 'predictive_val': predictive_val['mean'],
+          'predictive_test': predictive_test['mean']}
+    tp = PlotHelper("")
+    train, val, test = tp.convert_to_proper_format(rr)
+    fmu, fvar = tp.glm_predictive(test, std=True)
+    nll_glm = tp.glm_nll(fmu, fvar, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item())
+    residuals = tp.get_residuals(train, dataset.y_train, full=True)
+    # print(f"MSE {np.mean(residuals.mean(1)**2)}")
+    res_test = tp.get_residuals(test, dataset.y_test, full=True)
+    # print(f"MSE TEST {np.mean(res_test.mean(1)**2)}")
+    sigma = tp.get_sigma(residuals.mean(1))
+    # tp.plot(fmu, fvar, dataset.y_test * dataset.scl_Y.scale_.item() + dataset.scl_Y.mean_.item(),
+    #         dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item())
+    elpd = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(), sigma ** 2)
+    elpd_sqrt = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(),
+                                  sigma)
+
+    elpd_gamma_prior = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(),
+                                         dataset.scl_Y.mean_.item(),
+                                         (svi_results.params['prec_obs_auto_scale'] ** (-1)).item())
+    return nll_glm, elpd, elpd_sqrt, elpd_gamma_prior
+
+
+
 def run_for_percentile(
     dataset,
     percentile,
@@ -844,7 +869,7 @@ def run_for_percentile(
     )
 
     nuts_kernel = NUTS(mixed_bnn, max_tree_depth=15)
-    mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=15)
+    mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
     rng_key = random.PRNGKey(0)
     mcmc.run(rng_key, dataset.X_train, dataset.y_train)
 
@@ -860,9 +885,12 @@ def run_for_percentile(
         predictive_train = Predictive(mixed_bnn, mcmc.get_samples())(rng_key, X=dataset.X_train)
         predictive_val = Predictive(mixed_bnn, mcmc.get_samples())(rng_key, X=dataset.X_val)
         predictive_test = Predictive(mixed_bnn, mcmc.get_samples())(rng_key, X=dataset.X_test)
+
+        # nll_glm, elpd, elpd_sqrt, elpd_gamma_prior = compute_metrics(predictive_train, predictive_val, predictive_test, dataset, mcmc.get_samples())
+
         test_ll_ours = evaluate_samples_properly(mixed_bnn, rng_key, dataset.X_test, dataset.y_test,
                                                  mcmc.get_samples(), y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
-        results = { 'test_': test_ll_ours,
+        results = { 'test_ll_ours': test_ll_ours,
                     'predictive_train': predictive_train["mean"],
                     'predictive_val': predictive_val["mean"],
                     'predictive_test': predictive_test["mean"]}
@@ -904,7 +932,7 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
                     use_prior=True)
 
                 model = lambda X, y=None: generate_node_based_bnn(
-                    MAP_params, sample_mask_tuple, prior_variance, scale
+                    MAP_params, sample_mask_tuple, prior_variance, scale, use_prior=True
                 )(X, y)
             else:
                 mixed_bnn = generate_mixed_bnn_by_param(
@@ -937,26 +965,7 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
                 predictive_train, predictive_val, predictive_test = create_predictives(model, svi_results.params, dataset,
                                                                                        mixed_bnn, num_mc_samples=200, delta=False)
 
-                rr = {'predictive_train': predictive_train['mean'], 'predictive_val': predictive_val['mean'],
-                      'predictive_test': predictive_test['mean']}
-                tp = PlotHelper("")
-                train, val, test = tp.convert_to_proper_format(rr)
-                fmu, fvar = tp.glm_predictive(test, std=True)
-                nll_glm = tp.glm_nll(fmu, fvar, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item())
-                residuals = tp.get_residuals(train, dataset.y_train, full = True)
-                # print(f"MSE {np.mean(residuals.mean(1)**2)}")
-                res_test = tp.get_residuals(test, dataset.y_test, full = True)
-                # print(f"MSE TEST {np.mean(res_test.mean(1)**2)}")
-                sigma = tp.get_sigma(residuals.mean(1))
-                # tp.plot(fmu, fvar, dataset.y_test * dataset.scl_Y.scale_.item() + dataset.scl_Y.mean_.item(),
-                #         dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item())
-                elpd = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(), sigma**2)
-                elpd_sqrt = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(),
-                                            sigma)
-
-                elpd_gamma_prior = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(),
-                                            dataset.scl_Y.mean_.item(),
-                                            (svi_results.params['prec_obs_auto_scale']**(-1)).item())
+                nll_glm, elpd, elpd_sqrt, elpd_gamma_prior = compute_metrics(predictive_train, predictive_val, predictive_test, dataset, svi_results)
 
                 print('nll glm', nll_glm, 'elpd', elpd, 'elpd spourious sqrt', elpd_sqrt,'elpd gamma', elpd_gamma_prior)
                 results_dict[f"{percentile}"] = {'predictive_train': predictive_train["mean"],
@@ -1028,8 +1037,8 @@ if __name__ == "__main__":
     parser.add_argument("--prior_variance", type=float, default=4.0) #0.1 is good for yacht, 4.0 for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, 1.0   for other datasets
     parser.add_argument('--vi', type=ast.literal_eval, default=False)
-    parser.add_argument('--node_based', type=ast.literal_eval, default=False)
-    parser.add_argument('--hmc', type=ast.literal_eval, default=True)
+    parser.add_argument('--node_based', type=ast.literal_eval, default=True)
+    parser.add_argument('--hmc', type=ast.literal_eval, default=False)
     parser.add_argument('--l_var', type=float, default=1.0)
     args = parser.parse_args()
 
@@ -1137,7 +1146,8 @@ if __name__ == "__main__":
                                     sigma ** 2)
         nll_two = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(),
                                     sigma)
-        print(nll_one, nll_two)
+        print("Nll ", nll_one)
+        print("Nll spurious sqrt", nll_two)
 
         hmc_result_dict = {
                             'dataset': dataset,
@@ -1174,6 +1184,7 @@ if __name__ == "__main__":
             vi_results_dict = pickle.load(open(dict_path, "rb"))
         if len(vi_results_dict.keys()) < dict_length:
             # VI run
+            print("Running VI")
             make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance,scale= args.likelihood_scale, results_dict=vi_results_dict,
                         MAP_params=MAP_params, save_path=args.output_path,  num_epochs=args.num_epochs, is_svi_map=is_svi_map, node_based=False, l_scale=args.l_var)
 
@@ -1183,6 +1194,7 @@ if __name__ == "__main__":
             vi_results_dict = pickle.load(open(dict_path, "rb"))
         if len(vi_results_dict.keys()) < dict_length:
             # Node based
+            print("Running node based VI")
             make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=vi_results_dict,
                         MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs, is_svi_map=is_svi_map, node_based=True, l_scale=args.l_var)
 
