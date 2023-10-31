@@ -390,18 +390,18 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
                            'y_scale': dataset.scl_Y.scale_,
                            'y_loc': dataset.scl_Y.mean_ ,
                            'loss': loss_fn,
-                           'num_mc_samples': 100,
+                           'num_mc_samples': 200,
                            'device': args.device,
                            'epochs': args.num_epochs,
                            'save_path': args.output_path,
                            'learning_rate_sweep': np.logspace(-5, -1, 10, endpoint=True),
                            'swag_epochs': 100,
+                           'calculate_std': calculate_std
                            }
-            train_dataloader_full = DataLoader(UCIDataloader(dataset.X_train, dataset.y_train), batch_size=n_train)
 
             save_name = os.path.join(output_path, f'results_swag_run_{run}.pkl')
             train_swag(mle_model, train_dataloader, val_dataloader, test_dataloader,
-                       percentages, train_dataloader_full, trained_model=mle_model, train_args=train_args, save_name=save_name, dataset=dataset)
+                       percentages, trained_model=mle_model, train_args=train_args)
 
 
 
