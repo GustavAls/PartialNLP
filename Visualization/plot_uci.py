@@ -8,7 +8,7 @@ import pickle
 import os
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from plot_utils_comb import PlotHelper
+
 def get_cmap(n, name='hsv'):
     '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct
     RGB color; the keyword argument name must be a standard mpl colormap name.'''
@@ -63,8 +63,7 @@ def plot_estimator(df, errorbar_func, estimator=None, ax=None, data_name=None):
                                       color_scheme_1=color_scheme_1)
             color_scheme_1 = not color_scheme_1
 
-
-    title = " & ".join(method_names) + " - " + estimator.__name__ + " - " + data_name
+    title = method_names[0] + " & " + method_names[1] + " - " + estimator.__name__ + " - " + data_name
     ax.set_title(label=title, fontsize=12, pad=-20)
 
     # Set labels and legend
@@ -78,77 +77,6 @@ def plot_estimator(df, errorbar_func, estimator=None, ax=None, data_name=None):
     # Set the Seaborn style
     plt.savefig(os.path.join(os.getcwd(), title + '.png'))
     plt.show(block=False)
-
-def plot_scatter(predictions, labels, data_name = None, method_name = None, df = None,
-                 epsilon = 0.1):
-    fig, ax = plt.subplots(1, 1)
-    errorbar_func = lambda x: np.percentile(x, (2.5, 97.5))
-
-    df = pd.DataFrame()
-    df['labels'] = np.tile(labels, predictions.shape[-1])
-    df['preds'] = predictions.T.flatten()
-
-
-    # sns.pointplot(errorbar=errorbar_func,
-    #               data=df, x="labels", y='preds',
-    #               join=False,
-    #               capsize= 0.15,
-    #               markers="d",
-    #               scale=1.0,
-    #               err_kws={'linewidth': 0.7}, estimator=np.mean,
-    #               color='tab:orange',
-    #               label= 'Predictions and labels',
-    #               ax=ax)
-
-    ax.scatter(labels, predictions.mean(-1), marker = 'd', s=20,
-               label = 'Predictions and labels')
-    errs = np.percentile(predictions, (2.5, 97.5), axis = 1)
-    errs = np.abs((errs - predictions.mean(-1)))
-
-    ax.errorbar(labels, predictions.mean(-1), yerr = errs, fmt = 'none')
-
-    minimum = min((labels.min(), np.min(predictions.mean(-1) + errs),
-                   np.min(predictions.mean(-1) - errs)))-epsilon
-    maximum = max((labels.max(), np.max(predictions.mean(-1) + errs),
-                   np.max(predictions.mean(-1) - errs)))+epsilon
-
-    ax.plot(np.linspace(minimum, maximum, 200), np.linspace(minimum, maximum, 200),
-        linestyle='--', linewidth=1, alpha=0.7,
-        color='tab:red', label = 'Ideal curve'
-    )
-
-    ax.set_ylim(ymin=minimum, ymax=maximum)
-    ax.set_xlim(xmin=minimum, xmax=maximum)
-    ax.legend()
-
-    # sns.pointplot(errorbar=errorbar_func,
-    #               data=df, x="labels", y='labels',
-    #               join=False,
-    #               capsize= 0.15,
-    #               markers="d",
-    #               scale=1.0,
-    #               color='tab:blue',
-    #               label= 'Ideal Predictions',
-    #               ax=ax)
-    #
-    # sns.lineplot(data=df, x="labels", y='labels',
-    #               color='tab:blue',
-    #               label= 'Ideal predictions',
-    #               ax=ax)
-
-    # ax.set_xticks(labels[::5])
-
-    # ax.set_aspect('equal', adjustable='box')
-
-    ax.set_xlabel('Labels')
-    ax.set_ylabel('Predictions')
-    title = f'Predictions and labels for {method_name}'
-    ax.set_title(title)
-
-    plt.savefig(os.path.join(os.getcwd(), title + '.png'))
-    plt.show(block=False)
-    breakpoint()
-
 
 
 def plot_partial_percentages(percentages, res, data_name=None, df=None, num_runs=15):
@@ -387,22 +315,7 @@ if __name__ == '__main__':
     # path_hmc = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_HMC'
     # path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_VI'
     # plot_hmc_vi(path_hmc, path_vi)
-    ph = PlotHelper(r'C:\Users\45292\Documents\Master\VI_TORCH_NEW\UCI_HMC_VI_torch\energy_models', 'mse',
-                    calculate=True)
 
-    predictions, labels = ph.get_predictions_and_labels_for_percentage('100', 0, 'vi_run')
-
-    plot_scatter(predictions, labels, data_name='energy', method_name='vi')
-    breakpoint()
-    metrics = ph.run_for_dataset(criteria='vi_run')
-    mets = [met for met in metrics if max(met) < 4]
-    percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100]
-    plot_partial_percentages(percentages=percentages,
-                             res={'VI': np.array(mets)},
-                             data_name='energy',
-                             num_runs=len(mets))
-
-    breakpoint()
     with open(r'C:\Users\45292\Documents\Master\VI_NODE_TORCH\NLLS\ener_vi_node.pkl', 'wb') as h:
         pickle.dump({'vi': nlls_vi, 'node': nlls_node}, h, protocol=pickle.HIGHEST_PROTOCOL)
 

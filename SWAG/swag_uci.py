@@ -18,6 +18,7 @@ from torch.distributions.gamma import Gamma
 import ast
 import misc.likelihood_losses as ll
 from torch.nn import MSELoss
+from HMC.uci_hmc import PredictiveHelper
 
 
 def parameters_to_vector(parameters) -> torch.Tensor:
@@ -330,8 +331,6 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
         'best_nll_val': [],
         'according_mse_val': []
     }
-    # compare_for_all(model_)
-    # breakpoint()
     residuals = get_residuals(model_, dataloader)
     if bayes_var:
         precision = get_tau_by_conjugacy(residuals, 3, 5)
@@ -342,8 +341,6 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
 
     y_scale = train_args['y_scale']
     y_loc = train_args['y_loc']
-    nll, mse =  evaluate_map(model_, dataloader_val, sigma,
-                             y_scale, y_loc)
 
     results_dict['best_nll_val'].append(nll)
     results_dict['according_mse_val'].append(mse)
@@ -356,13 +353,12 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
     for percentage in percentages:
         mask = create_non_parameter_mask(model, percentage)
         mask = mask.bool()
-        nlls = []
-        mses = []
         residuals = get_residuals(model, dataloader)
         precision = get_tau_by_conjugacy(residuals, 1, 1)
         sigma = np.sqrt(1 / precision)
         print("sigma without swag", sigma)
         sigmas = []
+        nlls = []
         for lr in learning_rate_sweep:
 
             swag_results = run_swag_partial(
@@ -382,7 +378,6 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
             sigmas.append(sigma)
             nll, mse = evaluate_swag(model, dataloader_val, mask, swag_results, train_args, sigma = sigma)
             nlls.append(nll)
-            mses.append(mse)
 
         print("Best Validation nll for percentage", percentage, 'was', np.min(nll),'with sigma', sigma)
         lr = learning_rate_sweep[np.argmax(nlls)]
