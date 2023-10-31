@@ -63,7 +63,7 @@ def _gap_train_test_split(X, y, gap_column, test_size):
     train_idxs = np.concatenate(
         (
             sorted_idxs[: int(n_data * 0.5 * (1 - test_size))],
-            sorted_idxs[-int(n_data * 0.5 * (1 - test_size)) :],
+            sorted_idxs[-int(n_data * 0.5 * (1 - test_size)):],
         )
     )
     test_idxs = np.array(list(set(sorted_idxs.tolist()) - set(train_idxs.tolist())))
@@ -76,15 +76,15 @@ def _gap_train_test_split(X, y, gap_column, test_size):
 
 class UCIDataset:
     def __init__(
-        self,
-        data_dir,
-        test_split_type="random",
-        gap_column=0,
-        test_size=0.2,
-        val_fraction_of_train=0.1,
-        seed=42,
-        *args,
-        **kwargs,
+            self,
+            data_dir,
+            test_split_type="random",
+            gap_column=0,
+            test_size=0.2,
+            val_fraction_of_train=0.1,
+            seed=42,
+            *args,
+            **kwargs,
     ):
         self.data_dir = data_dir
         self.download()
@@ -132,7 +132,7 @@ class UCIDataset:
         n_total = n_train + n_val + n_test
 
         print(
-            f"Train set: {n_train} examples, {100*(n_train/n_total):.2f}% of all examples."
+            f"Train set: {n_train} examples, {100 * (n_train / n_total):.2f}% of all examples."
         )
         print(
             f"Val set: {n_val} examples, {100 * (n_val / n_total):.2f}% of all examples."
@@ -196,6 +196,7 @@ class UCIEnergyDataset(UCIDataset):
 
         return X, y
 
+
 class UCIBostonDataset(UCIDataset):
     url = "https://archive.ics.uci.edu/ml/machine-learning-databases/housing/housing.data"
     filename = "housing.data"
@@ -210,6 +211,7 @@ class UCIBostonDataset(UCIDataset):
 
         return X, y
 
+
 class UCIConcreteDataset(UCIDataset):
     url = "https://archive.ics.uci.edu/ml/machine-learning-databases/concrete/compressive/Concrete_Data.xls"
     filename = "concrete.xls"
@@ -223,8 +225,6 @@ class UCIConcreteDataset(UCIDataset):
         y = df.values[:, -1].reshape((nD, 1))
 
         return X, y
-
-
 
 
 def one_d_bnn(X, y=None, prior_variance=0.1, width=50, scale=1.0):
@@ -286,8 +286,8 @@ def evaluate_samples(model, rng_key, X, y, samples, y_scale=1.0, y_loc=0.0):
         .mean()
     )
     rmse = (
-        (y_scale * (predictive["mean"].mean(axis=0).flatten() - y.flatten())) ** 2
-    ).mean() ** 0.5
+                   (y_scale * (predictive["mean"].mean(axis=0).flatten() - y.flatten())) ** 2
+           ).mean() ** 0.5
 
     return float(log_likelihood), float(rmse)
 
@@ -310,7 +310,7 @@ def evaluate_vi_samples(model, params, dataset, rng_key, y_scale=1.0, y_loc=0.0)
         .log_prob(y_loc + (y * y_scale))
         .mean()
     )
-    rmse = ((y_scale * (predictive_test["mean"].mean(axis=0).flatten() - y.flatten())) ** 2 ).mean() ** 0.5
+    rmse = ((y_scale * (predictive_test["mean"].mean(axis=0).flatten() - y.flatten())) ** 2).mean() ** 0.5
 
     return float(log_likelihood), float(rmse)
 
@@ -346,9 +346,8 @@ def evaluate_MAP(model, MAP_params, X, y, rng_key, y_scale=1.0, y_loc=0.0):
     return float(log_likelihood), float(rmse)
 
 
-
 def generate_mixed_bnn_by_param(
-    MAP_params, sample_mask_tuple, prior_variance, scale=1.0, l_scale = 1.0, use_prior = False
+        MAP_params, sample_mask_tuple, prior_variance, scale=1.0, l_scale=1.0, use_prior=False
 ):
     (
         W1_sample_mask,
@@ -450,7 +449,6 @@ def generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale
         b_output_sample_mask
     ) = sample_mask_tuple
 
-
     def mixed_bnn(X, y=None, prior_variance=prior_variance, width=50, scale=scale):
         nB, n_features = X.shape
 
@@ -491,10 +489,10 @@ def generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale
             "W_2_node", (jnp.ones_like(W2_sample_mask) * (1 - W2_sample_mask)) + (W_2_node_noise * W2_sample_mask)
         )
         W_output_node = numpyro.deterministic(
-                "W_output_node",
-                (jnp.ones_like(W_output_sample_mask) * (1 - W_output_sample_mask))
-                + (W_output_node_noise * W_output_sample_mask),
-            )
+            "W_output_node",
+            (jnp.ones_like(W_output_sample_mask) * (1 - W_output_sample_mask))
+            + (W_output_node_noise * W_output_sample_mask),
+        )
 
         b_1_node = numpyro.deterministic(
             "b_1_node", (jnp.ones_like(b1_sample_mask) * (1 - b1_sample_mask)) + (b_1_node_noise * b1_sample_mask)
@@ -544,18 +542,112 @@ def generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale
     return mixed_bnn
 
 
+def generate_additive_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale=1.0, l_scale=1,
+                                     use_prior = True):
+    (
+        W1_sample_mask,
+        W2_sample_mask,
+        W_output_sample_mask,
+        b1_sample_mask,
+        b2_sample_mask,
+        b_output_sample_mask
+    ) = sample_mask_tuple
+
+    def mixed_bnn(X, y=None, prior_variance=prior_variance, width=50, scale=scale):
+        nB, n_features = X.shape
+
+        s1_node_noise = numpyro.sample(
+            's1_node_noise',
+            dist.Normal(0, (prior_variance ** 0.5)* jnp.ones((n_features, 1)))
+        )
+        r1_node_noise = numpyro.sample(
+            'r1_node_noise',
+            dist.Normal(0, (prior_variance ** 0.5)* jnp.ones((width, 1)))
+        )
+
+        s2_node_noise = numpyro.sample(
+            's2_node_noise',
+            dist.Normal(0, (prior_variance ** 0.5)* jnp.ones((width, 1)))
+        )
+        r2_node_noise = numpyro.sample(
+            'r2_node_noise',
+            dist.Normal(0, (prior_variance ** 0.5)* jnp.ones((width, 1)))
+        )
+
+        s_output_node_noise = numpyro.sample(
+            's_output_node_noise',
+            dist.Normal(0, (prior_variance ** 0.5)* jnp.ones((width, 1)))
+        )
+        r_output_node_noise = numpyro.sample(
+            'r_output_node_noise',
+            dist.Normal(0, (prior_variance ** 0.5)* jnp.ones((1, 1)))
+        )
+
+        W_1_map = MAP_params["W1_auto_loc"]
+        b_1_map = MAP_params["b1_auto_loc"]
+        W_2_map = MAP_params["W2_auto_loc"]
+        b_2_map = MAP_params["b2_auto_loc"]
+        W_output_map = MAP_params["W_output_auto_loc"]
+        b_output_map = MAP_params["b_output_auto_loc"]
+
+        W_1_node = numpyro.deterministic(
+            "W_1_node", ((r1_node_noise @ s1_node_noise.T).T * W1_sample_mask)
+        )
+
+        W_2_node = numpyro.deterministic(
+            "W_2_node", ((r2_node_noise @ s2_node_noise.T).T * W2_sample_mask)
+        )
+        W_output_node = numpyro.deterministic(
+            "W_output_node",
+            ((r_output_node_noise @ s_output_node_noise.T).T * W_output_sample_mask),
+        )
+
+        z1 = (X @ (W_1_map + W_1_node)) + b_1_map.reshape((1, width)).repeat(nB, axis=0)
+
+        # z1 = ((X @ W_1_map) * W_1_node + b_1_map.reshape((1, width)).repeat(nB, axis=0))*b_1_node
+        h1 = jax.nn.leaky_relu(z1)
+        z2 = (h1 @ (W_2_node + W_2_map)) + b_2_map.reshape((1, width)).repeat(nB, axis=0)
+
+        # z2 = ((h1 @ W_2_map) * W_2_node + b_2_map.reshape((1, width)).repeat(nB, axis=0)) * b_2_node
+        h2 = jax.nn.leaky_relu(z2)
+        output = (h2 @ (W_output_node + W_output_map)) + b_output_map.repeat(nB, axis=0)
+
+        # output = ((h2 @ W_output_map)*W_output_node + b_output_map.repeat(nB, axis=0)) * b_output_node
+
+        mean = numpyro.deterministic("mean", output)
+
+        # output precision
+        # prec_obs = numpyro.sample(
+        #     "prec_obs", dist.Gamma(3.0, 1.0)
+        # )  # MAP outperforms full BNN, even if we freeze the prior precision. That's interesting here, I think.
+        # sigma_obs = 1.0 / jnp.sqrt(prec_obs)
+
+        if use_prior:
+            prec_obs = numpyro.sample(
+                "prec_obs", dist.Gamma(3.0, 1.0)
+            )  # MAP outperforms full BNN, even if we freeze the prior precision. That's interesting here, I think.
+            sigma_obs = 1.0 / jnp.sqrt(prec_obs)
+            with numpyro.handlers.scale(scale=scale):
+                y_obs = numpyro.sample("y_obs", dist.Normal(mean, sigma_obs), obs=y)
+        else:
+            with numpyro.handlers.scale(scale=scale):
+                y_obs = numpyro.sample("y_obs", dist.Normal(mean, l_scale), obs=y)
+
+    return mixed_bnn
+
+
 def calculate_ll_mc(labels, mc_matrix, sigma, y_scale, y_loc):
     results = []
     for i in range(mc_matrix.shape[1]):
         res_temp = []
         for j in range(mc_matrix.shape[0]):
-            dist = Normal(mc_matrix[j,i].item() * y_scale + y_loc, np.sqrt(sigma) * y_scale)
+            dist = Normal(mc_matrix[j, i].item() * y_scale + y_loc, np.sqrt(sigma) * y_scale)
             res_temp.append(dist.log_prob(torch.tensor([labels[i].item()]) * y_scale + y_loc).item())
         results.append(np.mean(res_temp))
     return np.mean(results)
 
 
-def create_predictives(model, params, dataset, bnn, num_mc_samples = 200, delta = False):
+def create_predictives(model, params, dataset, bnn, num_mc_samples=200, delta=False):
     if delta:
         guide = lambda: autoguide.AutoDelta(bnn)
     else:
@@ -585,20 +677,21 @@ def create_predictives(model, params, dataset, bnn, num_mc_samples = 200, delta 
     return predictive_train, predictive_val, predictive_test
 
 
-def calculate_ll_ours(model, params, dataset, bnn, num_mc_samples = 200, delta = False):
-    predictive_train, predictive_val, predictive_test = create_predictives(model, params, dataset, bnn, num_mc_samples, delta)
+def calculate_ll_ours(model, params, dataset, bnn, num_mc_samples=200, delta=False):
+    predictive_train, predictive_val, predictive_test = create_predictives(model, params, dataset, bnn, num_mc_samples,
+                                                                           delta)
     y_scale = dataset.scl_Y.scale_
     y_loc = dataset.scl_Y.mean_
     ytrain, yval, ytest = dataset.y_train.squeeze(), dataset.y_val.squeeze(), dataset.y_test.squeeze()
 
     if num_mc_samples == 1:
         ptrain = np.asarray(predictive_train['mean'].squeeze(0))
-        ptest =  np.asarray(predictive_test['mean'].squeeze(0))
+        ptest = np.asarray(predictive_test['mean'].squeeze(0))
         pval = np.asarray(predictive_val['mean'].squeeze(0))
         sigma = np.std(ptrain - ytrain)
     else:
         ptrain = np.asarray(predictive_train['mean'].squeeze(-1))
-        ptest =  np.asarray(predictive_test['mean'].squeeze(-1))
+        ptest = np.asarray(predictive_test['mean'].squeeze(-1))
         pval = np.asarray(predictive_val['mean'].squeeze(-1))
         sigma = np.std(ptrain - ytrain)
 
@@ -631,15 +724,16 @@ def create_sample_mask_random(percentile, MAP_params, vals):
     b_output_sample_mask = np.abs(masks_rng[5]) >= val
 
     sample_mask_tuple = (
-            W1_sample_mask[:, None],
-            W2_sample_mask[:, None],
-            W_output_sample_mask[:, None],
-            b1_sample_mask[:, None],
-            b2_sample_mask[:, None],
-            b_output_sample_mask[:, None],
-        )
+        W1_sample_mask[:, None],
+        W2_sample_mask[:, None],
+        W_output_sample_mask[:, None],
+        b1_sample_mask[:, None],
+        b2_sample_mask[:, None],
+        b_output_sample_mask[:, None],
+    )
 
     return sample_mask_tuple
+
 
 def create_sample_mask_largest_abs_values(percentile, MAP_params):
     keys = [
@@ -703,13 +797,13 @@ def compute_metrics(predictive_train, predictive_val, predictive_test, dataset, 
 
 
 def run_for_percentile(
-    dataset,
-    percentile,
-    MAP_params,
-    prior_variance=0.8,
-    prior_variance_scaled=True,
-    scale=1.0,
-    is_svi_map=True
+        dataset,
+        percentile,
+        MAP_params,
+        prior_variance=0.8,
+        prior_variance_scaled=True,
+        scale=1.0,
+        is_svi_map=True
 ):
     sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
     prior_variance_used = (
@@ -733,12 +827,14 @@ def run_for_percentile(
 
     if is_svi_map:
         test_ll_ours = evaluate_samples_properly(mixed_bnn, rng_key, dataset.X_test, dataset.y_test,
-                                                 mcmc.get_samples(), y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
+                                                 mcmc.get_samples(), y_scale=dataset.scl_Y.scale_,
+                                                 y_loc=dataset.scl_Y.mean_)
 
         test_ll_theirs, _ = evaluate_samples(mixed_bnn, rng_key, dataset.X_test, dataset.y_test,
-                                          mcmc.get_samples(), y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
-        results = { 'test_ll_ours': test_ll_ours,
-                    'test_ll_theirs': test_ll_theirs}
+                                             mcmc.get_samples(), y_scale=dataset.scl_Y.scale_,
+                                             y_loc=dataset.scl_Y.mean_)
+        results = {'test_ll_ours': test_ll_ours,
+                   'test_ll_theirs': test_ll_theirs}
     else:
         samples = mcmc.get_samples()
         predictive_train = Predictive(mixed_bnn, samples)(rng_key, X=dataset.X_train)
@@ -763,21 +859,23 @@ def run_for_percentile(
 
 
 def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, num_epochs, MAP_params,
-                is_svi_map=True, node_based=True, l_scale=1.0):
+                is_svi_map=True, node_based=True, add_node_based = False,l_scale=1.0):
     rng_key = random.PRNGKey(1)
     optimizer = numpyro.optim.Adam(0.01)
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
 
+
     if node_based:
         keys = ["W1_auto_loc", "W2_auto_loc", "W_output_auto_loc", "b1_auto_loc", "b2_auto_loc", "b_output_auto_loc"]
         mask_values = [np.random.normal(0, 1, size=(MAP_params[key].shape[0],)) for key in keys]
-        save_name = os.path.join(save_path, f"results_vi_node_run_{run}_{str(l_scale) if l_scale != 1.0 else str()}.pkl")
+        save_name = os.path.join(save_path,
+                                 f"results_vi_node_run_{run}_{str(l_scale) if l_scale != 1.0 else str()}.pkl")
+
     else:
         save_name = os.path.join(save_path, f"results_vi_run_{run}_{str(l_scale) if l_scale != 1.0 else str()}.pkl")
 
-
     for percentile in percentiles:
-        prior_variance = prior_variance * (100 / percentile)
+        prior_variance = 100 - percentile + 1
 
         print("Running for percentile: ", percentile, "%")
         if str(percentile) not in results_dict.keys():
@@ -797,6 +895,18 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
                     use_prior=True)
 
                 model = lambda X, y=None: generate_node_based_bnn(
+                    MAP_params, sample_mask_tuple, prior_variance, scale, use_prior=True
+                )(X, y)
+            elif add_node_based:
+                mixed_bnn = generate_additive_node_based_bnn(
+                    MAP_params,
+                    sample_mask_tuple,
+                    prior_variance,
+                    scale=scale,
+                    l_scale=l_scale,
+                    use_prior=True)
+
+                model = lambda X, y=None: generate_additive_node_based_bnn(
                     MAP_params, sample_mask_tuple, prior_variance, scale, use_prior=True
                 )(X, y)
             else:
@@ -827,14 +937,17 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
                                                  'val_ll_ours': val_ll_ours,
                                                  'test_ll_theirs': test_ll_theirs}
             else:
-                predictive_train, predictive_val, predictive_test = create_predictives(model, svi_results.params, dataset,
-                                                                                       mixed_bnn, num_mc_samples=200, delta=False)
+                predictive_train, predictive_val, predictive_test = create_predictives(model, svi_results.params,
+                                                                                       dataset,
+                                                                                       mixed_bnn, num_mc_samples=200,
+                                                                                       delta=False)
 
                 nll_glm, elpd, elpd_sqrt, elpd_gamma_prior = compute_metrics(predictive_train, predictive_val,
                                                                              predictive_test, dataset,
                                                                              sigma_obs=(svi_results.params['prec_obs_auto_scale'] ** (-1)).item())
 
-                print('nll glm', nll_glm, 'elpd', elpd, 'elpd spourious sqrt', elpd_sqrt,'elpd gamma', elpd_gamma_prior)
+                print('nll glm', nll_glm, 'elpd', elpd, 'elpd spourious sqrt', elpd_sqrt, 'elpd gamma',
+                      elpd_gamma_prior)
                 results_dict[f"{percentile}"] = {'predictive_train': predictive_train["mean"],
                                                  'predictive_val': predictive_val["mean"],
                                                  'predictive_test': predictive_test["mean"],
@@ -843,13 +956,12 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
                                                  'elpd_spurious_sqrt': elpd_sqrt,
                                                  'elpd_gamma_prior': elpd_gamma_prior}
 
-
             with open(save_name, 'wb') as handle:
                 pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 def train_MAP_solution(mle_model, dataset, num_epochs):
-    loss_arguments = {'loss': GLLGP_loss_swag , 'prior_sigma': 1}
+    loss_arguments = {'loss': GLLGP_loss_swag, 'prior_sigma': 1}
     if issubclass(loss := loss_arguments.get('loss', MSELoss), BaseMAPLossSwag):
         loss_arguments['model'] = mle_model
         loss_fn = loss(**loss_arguments)
@@ -858,11 +970,13 @@ def train_MAP_solution(mle_model, dataset, num_epochs):
     val_dataloader = DataLoader(UCIDataloader(dataset.X_val, dataset.y_val), batch_size=n_val)
 
     mle_model = train(network=mle_model, dataloader_train=train_dataloader, dataloader_val=val_dataloader,
-                      model_old=None, vi=False, device='cpu', epochs=num_epochs, return_best_model=True, criterion=loss_fn)
+                      model_old=None, vi=False, device='cpu', epochs=num_epochs, return_best_model=True,
+                      criterion=loss_fn)
     return mle_model
 
 
-def make_hmc_run(run, dataset, scale_prior, prior_variance, save_path, likelihood_scale, percentiles, results_dict, MAP_params, is_svi_map=True):
+def make_hmc_run(run, dataset, scale_prior, prior_variance, save_path, likelihood_scale, percentiles, results_dict,
+                 MAP_params, is_svi_map=True):
     for percentile in percentiles:
         # If update runs are done
         if str(percentile) not in results_dict.keys():
@@ -901,12 +1015,13 @@ if __name__ == "__main__":
     parser.add_argument("--run", type=int, default=0)
     parser.add_argument("--num_epochs", type=int, default=100)
     parser.add_argument("--scale_prior",  type=ast.literal_eval, default=True)
-    parser.add_argument("--prior_variance", type=float, default=4.0) #0.1 is good for yacht #TODO has been run with 4.0 for boston and energy, try a lot smaller
-    parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 yacht, 4.0 energy, 1.0 boston
+    parser.add_argument("--prior_variance", type=float, default=4.0) #0.1 is good for yacht, 4.0 for other datasets
+    parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, 1.0   for other datasets
     parser.add_argument('--vi', type=ast.literal_eval, default=False)
     parser.add_argument('--node_based', type=ast.literal_eval, default=False)
     parser.add_argument('--hmc', type=ast.literal_eval, default=False)
     parser.add_argument('--l_var', type=float, default=1.0)
+    parser.add_argument('--node_based_add', type=ast.literal_eval, default=False)
     args = parser.parse_args()
 
     if args.dataset == "yacht":
@@ -1000,11 +1115,11 @@ if __name__ == "__main__":
         train, val, test = tp.convert_to_proper_format(rr)
         residuals = tp.get_residuals(train, dataset.y_train, full=True)
         print(f"MSE {np.mean(residuals.mean(1) ** 2)}")
-        res_test = tp.get_residuals(test, dataset.y_test, full = True)
-        print("MSE Test", np.mean(res_test.mean(1)**2))
+        res_test = tp.get_residuals(test, dataset.y_test, full=True)
+        print("MSE Test", np.mean(res_test.mean(1) ** 2))
         sigma = tp.get_sigma(residuals.mean(1))
         print("SIGMA", sigma)
-        fvar = np.ones_like(test)*np.sqrt(sigma)
+        fvar = np.ones_like(test) * np.sqrt(sigma)
 
         # tp.plot(test, fvar, dataset.y_test * dataset.scl_Y.scale_.item() + dataset.scl_Y.mean_.item(),
         #         dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item())
@@ -1017,17 +1132,17 @@ if __name__ == "__main__":
         print("Nll spurious sqrt", nll_two)
 
         hmc_result_dict = {
-                            'dataset': dataset,
-                            'map_results':  {'map_params': MAP_params,
-                                             'predictive_train': predictive_train["mean"],
-                                             'predictive_val': predictive_val["mean"],
-                                             'predictive_test': predictive_test["mean"],
-                                             'glm_nll': nll_one,
-                                             'elpd': nll_one,
-                                             'elpd_spurious_sqrt': nll_two,
-                                             'elpd_gamma_prior': nll_one
-                                             }
-                         }
+            'dataset': dataset,
+            'map_results': {'map_params': MAP_params,
+                            'predictive_train': predictive_train["mean"],
+                            'predictive_val': predictive_val["mean"],
+                            'predictive_test': predictive_test["mean"],
+                            'glm_nll': nll_one,
+                            'elpd': nll_one,
+                            'elpd_spurious_sqrt': nll_two,
+                            'elpd_gamma_prior': nll_one
+                            }
+        }
 
         vi_results_dict = {
                             'dataset': dataset,
@@ -1041,7 +1156,6 @@ if __name__ == "__main__":
                                              'elpd_gamma_prior': nll_one
                                              }
                          }
-
 
     dict_length = 11
     if args.vi:
@@ -1065,12 +1179,24 @@ if __name__ == "__main__":
             make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=vi_results_dict,
                         MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs, is_svi_map=is_svi_map, node_based=True, l_scale=args.l_var)
 
+    if args.node_based_add:
+        dict_path = os.path.join(args.output_path, f"results_vi_node_add_run_{args.run}.pkl")
+        if os.path.exists(dict_path):
+            vi_results_dict = pickle.load(open(dict_path, "rb"))
+        if len(vi_results_dict.keys()) < dict_length:
+            print("Running node based VI")
+            make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale,
+                        results_dict=vi_results_dict,
+                        MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs,
+                        is_svi_map=is_svi_map, node_based=False,add_node_based=True, l_scale=args.l_var)
+
     if args.hmc:
         dict_path = os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")
         if os.path.exists(dict_path):
             hmc_result_dict = pickle.load(open(dict_path, "rb"))
         if len(hmc_result_dict.keys()) < dict_length:
             # HMC run
-            make_hmc_run(run=args.run, dataset=dataset, scale_prior=args.scale_prior, prior_variance=args.prior_variance,
+            make_hmc_run(run=args.run, dataset=dataset, scale_prior=args.scale_prior,
+                         prior_variance=args.prior_variance,
                          save_path=args.output_path, likelihood_scale=args.likelihood_scale, percentiles=percentiles,
                          results_dict=hmc_result_dict, MAP_params=MAP_params, is_svi_map=is_svi_map)
