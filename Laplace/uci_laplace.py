@@ -209,10 +209,11 @@ def find_best_prior(ml_model, subnetwork_indices, train_dataloader, val_loader, 
     return prior_precision_sweep[np.argmin(results)]
 
 
-def compute_metrics(train, val, test, dataset, sigma_obs):
+def compute_metrics(train, val, test, dataset, test_mu=None):
     tp = PredictiveHelper("")
+    test += (test_mu - test.mean(1).reshape(-1, 1))
     fmu, fvar = tp.glm_predictive(test, std=True)
-    nll_glm = tp.glm_nll(fmu, fvar, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item())
+    nll_glm = tp.glm_nll(fmu.reshape((-1,)), fvar.reshape((-1,)), dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item())
     residuals = tp.get_residuals(train, dataset.y_train, full=True)
     res_test = tp.get_residuals(test, dataset.y_test, full=True)
     sigma = tp.get_sigma(residuals.mean(1))
@@ -308,16 +309,19 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages, save_name
                                                size=(n_test, 200))
 
             nll_glm, elpd, elpd_sqrt = compute_metrics(predictive_train, predictive_val, predictive_test, dataset,
-                                                                         sigma_obs=pred_std_test)
+                                                       test_preds_mu.detach().numpy().reshape((n_test, 1)))
 
             print('nll glm', nll_glm, 'elpd', elpd, 'elpd spourious sqrt', elpd_sqrt)
-            laplace_result_dict[f"{p}"] = {'predictive_train': train_preds_mu.detach().numpy().reshape((n_train, 1)),
+            laplace_result_dict[f"{p}"] = {  'predictive_train': train_preds_mu.detach().numpy().reshape((n_train, 1)),
                                              'predictive_val': val_preds_mu.detach().numpy().reshape((n_val, 1)),
                                              'predictive_test': test_preds_mu.detach().numpy().reshape((n_test, 1)),
+                                             'predictive_var_train': train_preds_var.detach().numpy().reshape((n_train, 1)),
+                                             'predictive_var_val': val_preds_var.detach().numpy().reshape((n_val, 1)),
+                                             'predictive_var_test': test_preds_var.detach().numpy().reshape((n_test, 1)),
                                              'glm_nll': nll_glm,
                                              'elpd': elpd,
                                              'elpd_spurious_sqrt': elpd_sqrt,
-                                             'prior_precision': best_prior}
+                                             'prior_precision': best_prior }
 
             with open(save_name, 'wb') as handle:
                 pickle.dump(laplace_result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -344,7 +348,8 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
                                     seed=np.random.randint(0, 1000),
                                     val_fraction_of_train=0.1)
         else:
-            dataset = pickle.load(open(args.dataset_path, "rb"))
+            dataset_path = os.path.join(dataset_path, f"data_laplace_run_{run}.pkl")
+            dataset = pickle.load(open(dataset_path, "rb"))
 
         n_train, p = dataset.X_train.shape
         n_val = dataset.X_val.shape[0]
@@ -368,6 +373,7 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
                                  model_old = None, vi = False, device='cpu', epochs = num_epochs,
                                  save_path = os.path.join(map_path, f"run_{run}.pt"), return_best_model=True, criterion=loss_fn)
         else:
+            map_path = os.path.join(map_path, f"run_{run}.pt")
             mle_model.load_state_dict(torch.load(map_path))
 
         if fit_laplace:
@@ -442,7 +448,7 @@ if __name__ == "__main__":
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
     else:
         multiple_runs(args.data_path, dataset_class, args.num_runs, args.device, args.num_epochs,
-                      args.output_path, args.fit_swag, args.fit_laplace, args.map_path,args.data_path,
+                      args.output_path, args.fit_swag, args.fit_laplace, args.map_path, args.dataset_path,
                       args.load_map, **loss_arguments)
 
     print("Laplace experiments finished!")
