@@ -691,7 +691,8 @@ def generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale
     return mixed_bnn
 
 
-def generate_additive_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale=1.0, l_scale=1):
+def generate_additive_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale=1.0, l_scale=1,
+                                     use_prior = True):
     (
         W1_sample_mask,
         W2_sample_mask,
@@ -773,8 +774,16 @@ def generate_additive_node_based_bnn(MAP_params, sample_mask_tuple, prior_varian
         # )  # MAP outperforms full BNN, even if we freeze the prior precision. That's interesting here, I think.
         # sigma_obs = 1.0 / jnp.sqrt(prec_obs)
 
-        with numpyro.handlers.scale(scale=scale):
-            y_obs = numpyro.sample("y_obs", dist.Normal(mean, l_scale), obs=y)
+        if use_prior:
+            prec_obs = numpyro.sample(
+                "prec_obs", dist.Gamma(3.0, 1.0)
+            )  # MAP outperforms full BNN, even if we freeze the prior precision. That's interesting here, I think.
+            sigma_obs = 1.0 / jnp.sqrt(prec_obs)
+            with numpyro.handlers.scale(scale=scale):
+                y_obs = numpyro.sample("y_obs", dist.Normal(mean, sigma_obs), obs=y)
+        else:
+            with numpyro.handlers.scale(scale=scale):
+                y_obs = numpyro.sample("y_obs", dist.Normal(mean, l_scale), obs=y)
 
     return mixed_bnn
 
@@ -1002,16 +1011,18 @@ def run_for_percentile(
 
 
 def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, num_epochs, MAP_params,
-                is_svi_map=True, node_based=True, l_scale=1.0):
+                is_svi_map=True, node_based=True, add_node_based = False,l_scale=1.0):
     rng_key = random.PRNGKey(1)
     optimizer = numpyro.optim.Adam(0.01)
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
+
 
     if node_based:
         keys = ["W1_auto_loc", "W2_auto_loc", "W_output_auto_loc", "b1_auto_loc", "b2_auto_loc", "b_output_auto_loc"]
         mask_values = [np.random.normal(0, 1, size=(MAP_params[key].shape[0],)) for key in keys]
         save_name = os.path.join(save_path,
                                  f"results_vi_node_run_{run}_{str(l_scale) if l_scale != 1.0 else str()}.pkl")
+
     else:
         save_name = os.path.join(save_path, f"results_vi_run_{run}_{str(l_scale) if l_scale != 1.0 else str()}.pkl")
 
@@ -1038,7 +1049,18 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
                 model = lambda X, y=None: generate_node_based_bnn(
                     MAP_params, sample_mask_tuple, prior_variance, scale, use_prior=True
                 )(X, y)
+            elif add_node_based:
+                mixed_bnn = generate_additive_node_based_bnn(
+                    MAP_params,
+                    sample_mask_tuple,
+                    prior_variance,
+                    scale=scale,
+                    l_scale=l_scale,
+                    use_prior=True)
 
+                model = lambda X, y=None: generate_additive_node_based_bnn(
+                    MAP_params, sample_mask_tuple, prior_variance, scale, use_prior=True
+                )(X, y)
             else:
                 mixed_bnn = generate_mixed_bnn_by_param(
                     MAP_params,
@@ -1308,6 +1330,17 @@ if __name__ == "__main__":
             print("Running node based VI")
             make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=vi_results_dict,
                         MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs, is_svi_map=is_svi_map, node_based=True, l_scale=args.l_var)
+
+    if args.node_based_add:
+        dict_path = os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl")
+        if os.path.exists(dict_path):
+            vi_results_dict = pickle.load(open(dict_path, "rb"))
+        if len(vi_results_dict.keys()) < dict_length:
+            print("Running node based VI")
+            make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale,
+                        results_dict=vi_results_dict,
+                        MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs,
+                        is_svi_map=is_svi_map, node_based=False,add_node_based=True, l_scale=args.l_var)
 
     if args.hmc:
         dict_path = os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")
