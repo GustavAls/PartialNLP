@@ -835,13 +835,10 @@ def run_for_percentile(
     nll_glm, elpd, elpd_sqrt, elpd_gamma_prior = compute_metrics(predictive_train, predictive_val, predictive_test,
                                                                  dataset, sigma_obs = (1.0 / jnp.sqrt(samples["prec_obs"])).mean())
 
-    test_ll_ours = evaluate_samples_properly(mixed_bnn, rng_key, dataset.X_test, dataset.y_test,
-                                             mcmc.get_samples(), y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
-    test_ll_theirs, _ = evaluate_samples(mixed_bnn, rng_key, dataset.X_test, dataset.y_test,
+    test_ll_homoscedastic, _ = evaluate_samples(mixed_bnn, rng_key, dataset.X_test, dataset.y_test,
                                          mcmc.get_samples(), y_scale=dataset.scl_Y.scale_,
                                          y_loc=dataset.scl_Y.mean_)
-    results = { 'test_ll_ours': test_ll_ours,
-                'predictive_train': predictive_train["mean"],
+    results = { 'predictive_train': predictive_train["mean"],
                 'predictive_val': predictive_val["mean"],
                 'predictive_test': predictive_test["mean"],
                 'glm_nll': nll_glm,
