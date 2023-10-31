@@ -189,20 +189,35 @@ def read_vi_data(path):
 
 def read_hmc_data(path):
     percentages = ['map_results', '1', '2', '5', '8', '14', '23', '37', '61', '100']
-    test_ll = {key: [] for key in percentages}
-    test_mse = {key: [] for key in percentages}
+    test_ll_theirs = {key: [] for key in percentages}
+    test_ll_ours = {key: [] for key in percentages}
 
+    faulty_runs = []
     for p in os.listdir(path):
-        pcl = pickle.load(open(os.path.join(path, p), 'rb'))
-        for perc in percentages:
-            if perc in pcl:
-                test_ll[perc].append(pcl[perc]['test_ll'])
-                test_mse[perc].append(pcl[perc]['test_rmse'])
+        run = p.split('_')[-1].split('.')[0]
+        if 'hmc' in p:
+            try:
+                pcl = pickle.load(open(os.path.join(path, p), 'rb'))
+            except:
+                faulty_runs.append(run)
+                continue
+            for perc in percentages:
+                if perc in pcl:
+                    test_ll_theirs[perc].append(pcl[perc]['glm_nll'])
+                    test_ll_ours[perc].append(pcl[perc]['elpd'])
 
-    test_ll = dict_to_nparray(test_ll)
-    test_mse = dict_to_nparray(test_mse)
+    test_ll_theirs_shortened = {key: [] for key in percentages}
+    test_ll_ours_shortened = {key: [] for key in percentages}
 
-    return test_ll, test_mse
+    for percentile_theirs, percentile_ours in zip(test_ll_theirs, test_ll_ours):
+        for i in range(4):
+            test_ll_theirs_shortened[percentile_theirs].append(test_ll_theirs[percentile_theirs][i])
+            test_ll_ours_shortened[percentile_ours].append(test_ll_ours[percentile_ours][i])
+
+    test_ll_theirs = dict_to_nparray(test_ll_theirs_shortened)
+    test_ll_ours = dict_to_nparray(test_ll_ours_shortened)
+
+    return test_ll_theirs, test_ll_theirs, percentages
 
 
 def read_hmc_vi_combined(path):
@@ -298,6 +313,16 @@ def plot_la_swag_combined(path):
                                  num_runs=test_nll_la.shape[0])
 
 
+def plot_hmc(path_hmc):
+    names, paths_hmc = get_under_folders_and_names(path_hmc)
+
+    for name, p_hmc in zip(names, paths_hmc):
+        if 'energy' in name:
+            test_ll_theirs, test_ll_ours, percentages = read_hmc_data(p_hmc)
+            plot_partial_percentages(percentages=percentages,
+                                     res={'HMCtheirs': test_ll_theirs, 'HMCours': test_ll_ours},
+                                     data_name=name,
+                                     num_runs=test_ll_theirs.shape[0])
 
 
 if __name__ == '__main__':
@@ -312,12 +337,14 @@ if __name__ == '__main__':
 
 
     # HMC VI
-    # path_hmc = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_HMC'
+    path_hmc = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_torch'
+    plot_hmc(path_hmc)
+
     # path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_VI'
     # plot_hmc_vi(path_hmc, path_vi)
 
-    with open(r'C:\Users\45292\Documents\Master\VI_NODE_TORCH\NLLS\ener_vi_node.pkl', 'wb') as h:
-        pickle.dump({'vi': nlls_vi, 'node': nlls_node}, h, protocol=pickle.HIGHEST_PROTOCOL)
+    # with open(r'C:\Users\45292\Documents\Master\VI_NODE_TORCH\NLLS\ener_vi_node.pkl', 'wb') as h:
+    #     pickle.dump({'vi': nlls_vi, 'node': nlls_node}, h, protocol=pickle.HIGHEST_PROTOCOL)
 
     breakpoint()
 
