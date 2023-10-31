@@ -373,8 +373,8 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
                                  model_old = None, vi = False, device='cpu', epochs = num_epochs,
                                  save_path = os.path.join(map_path, f"run_{run}.pt"), return_best_model=True, criterion=loss_fn)
         else:
-            map_path = os.path.join(map_path, f"run_{run}.pt")
-            mle_model.load_state_dict(torch.load(map_path))
+            map_run_path = os.path.join(map_path, f"run_{run}.pt")
+            mle_model.load_state_dict(torch.load(map_run_path))
 
         if fit_laplace:
             save_name = os.path.join(output_path, f'results_laplace_run_{run}.pkl')

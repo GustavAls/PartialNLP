@@ -1052,15 +1052,12 @@ if __name__ == "__main__":
     model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
     new_map = False
     # Allows for re-runs
-    # if not (os.path.exists(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")) and
-    #     os.path.exists(os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl")) and
-    #     os.path.exists(os.path.join(args.output_path, f"results_vi_run_{args.run}.pkl"))):
 
     new_map = True
 
     # Setup the MAP model
     svi = SVI(model, autoguide.AutoDelta(one_d_bnn), optimizer, Trace_ELBO())
-    svi_results = svi.run(rng_key, 2, X=dataset.X_train, y=dataset.y_train)
+    svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
 
     MAP_params = svi_results.params
 
