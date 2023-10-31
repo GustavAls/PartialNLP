@@ -348,8 +348,8 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
                                     seed=np.random.randint(0, 1000),
                                     val_fraction_of_train=0.1)
         else:
-            dataset_path = os.path.join(dataset_path, f"data_laplace_run_{run}.pkl")
-            dataset = pickle.load(open(dataset_path, "rb"))
+            data_run_path = os.path.join(dataset_path, f"data_laplace_run_{run}.pkl")
+            dataset = pickle.load(open(data_run_path, "rb"))
 
         n_train, p = dataset.X_train.shape
         n_val = dataset.X_val.shape[0]
