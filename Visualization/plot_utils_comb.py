@@ -146,9 +146,9 @@ class PlotHelper:
         if preds_train.ndim == 3:
             preds_train = np.asarray(run['predictive_train']).squeeze(-1).transpose(1, 0)
         if preds_val.ndim == 3:
-            preds_train = np.asarray(run['predictive_train']).squeeze(-1).transpose(1, 0)
+            preds_val = np.asarray(run['predictive_val']).squeeze(-1).transpose(1, 0)
         if preds_test.ndim == 3:
-            preds_train = np.asarray(run['predictive_train']).squeeze(-1).transpose(1, 0)
+            preds_test = np.asarray(run['predictive_test']).squeeze(-1).transpose(1, 0)
         return preds_train, preds_val, preds_test
 
     @staticmethod

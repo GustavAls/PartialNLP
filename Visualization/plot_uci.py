@@ -455,6 +455,23 @@ def set_dataset(path1, path2):
     with open(path2, 'wb') as handle:
         pickle.dump(to_be_changed, handle ,protocol=pickle.HIGHEST_PROTOCOL)
 
+def change_datasets(path):
+    laplace, swag = [], []
+    for p in os.listdir(path):
+        if 'laplace' in p:
+            laplace.append(
+                (p.split("_")[-1].split(".")[0], os.path.join(path, p))
+            )
+        if 'swag' in p:
+            swag.append(
+                (p.split("_")[-1].split(".")[0], os.path.join(path, p))
+            )
+
+    for (idx, p_la), (i, p_swa) in zip(sorted(laplace), sorted(swag)):
+        if i == idx:
+            set_dataset(p_la, p_swa)
+
+
 if __name__ == '__main__':
     # path_la = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_Laplace_MAP'
     # path_swag = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_SWAG_MAP_nobayes'
@@ -462,9 +479,12 @@ if __name__ == '__main__':
 
     # path = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_Laplace_SWAG_1'
     path = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\energy_models'
-    path = r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\energy_models'
+
+
+    # path = r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\energy_models'
 
     # plot_la_swag(path_la, path_swag)
+
 
 
     # HMC VI
@@ -472,15 +492,15 @@ if __name__ == '__main__':
     # path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_VI'
     # plot_hmc_vi(path_hmc, path_vi)
 
-    ph = PlotHelper(path, 'elpd',
+    ph = PlotHelper(path, 'nll_glm',
                     calculate=True)
 
-    metrics = ph.run_for_dataset(criteria='vi', fast=False)
+    metrics = ph.run_for_dataset(criteria='swag')
     # mets = [met for met in metrics if max(met) < 4]
     percentages = [0,1, 2, 5, 8, 14, 23, 37, 61, 100]
     plot_partial_percentages(percentages=percentages,
-                             res={'SWAG': np.array(metrics)},
-                             data_name='energy elpd',
+                             res={'swag': np.array(metrics)},
+                             data_name='energy nll',
                              num_runs=len(metrics))
 
     breakpoint()
