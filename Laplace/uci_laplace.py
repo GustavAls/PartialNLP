@@ -244,56 +244,60 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages, save_name
     best_prior = 1.0
     ph = PredictiveHelper("")
 
+    if os.path.exists(save_name):
+        laplace_result_dict = pickle.load(open(save_name, "rb"))
+
     for p in percentages:
-        ml_model = copy.deepcopy(mle_model)
-        subnetwork_mask = LargestMagnitudeSubnetMask(ml_model, n_params_subnet=int((p / 100) * num_params))
-        subnetwork_indices = subnetwork_mask.select()
-        batch, labels = next(iter(train_dataloader))
+        if str(p) not in laplace_result_dict.keys():
+            ml_model = copy.deepcopy(mle_model)
+            subnetwork_mask = LargestMagnitudeSubnetMask(ml_model, n_params_subnet=int((p / 100) * num_params))
+            subnetwork_indices = subnetwork_mask.select()
+            batch, labels = next(iter(train_dataloader))
 
-        sigma_noise = calculate_std(ml_model, train_dataloader, alpha=3, beta=1, beta_prior = False)
+            sigma_noise = calculate_std(ml_model, train_dataloader, alpha=3, beta=1, beta_prior = False)
 
-        best_prior = find_best_prior(mle_model, subnetwork_indices, train_dataloader,
-                                     DataLoader(UCIDataloader(dataset.X_val, dataset.y_val, ),
-                                                batch_size=dataset.X_val.shape[0]),
-                                     y_scale=y_scale, y_loc=y_loc, sigma_noise = sigma_noise)
+            best_prior = find_best_prior(mle_model, subnetwork_indices, train_dataloader,
+                                         DataLoader(UCIDataloader(dataset.X_val, dataset.y_val, ),
+                                                    batch_size=dataset.X_val.shape[0]),
+                                         y_scale=y_scale, y_loc=y_loc, sigma_noise = sigma_noise)
 
 
-        # Define and fit subnetwork LA using the specified subnetwork indices
-        la = Laplace(ml_model, 'regression',
-                     subset_of_weights='subnetwork',
-                     hessian_structure='full',
-                     subnetwork_indices=subnetwork_indices,
-                     prior_precision=torch.tensor([float(best_prior)]))
+            # Define and fit subnetwork LA using the specified subnetwork indices
+            la = Laplace(ml_model, 'regression',
+                         subset_of_weights='subnetwork',
+                         hessian_structure='full',
+                         subnetwork_indices=subnetwork_indices,
+                         prior_precision=torch.tensor([float(best_prior)]))
 
-        print('Best prior was', best_prior)
-        la.fit(train_dataloader)
+            print('Best prior was', best_prior)
+            la.fit(train_dataloader)
 
-        test_targets = torch.from_numpy(dataset.y_test).to(torch.float32)
+            test_targets = torch.from_numpy(dataset.y_test).to(torch.float32)
 
-        train_preds_mu, train_preds_var = la(torch.from_numpy(dataset.X_train).to(torch.float32))
-        val_preds_mu, val_preds_var = la(torch.from_numpy(dataset.X_val).to(torch.float32))
-        test_preds_mu, test_preds_var = la(torch.from_numpy(dataset.X_test).to(torch.float32))
+            train_preds_mu, train_preds_var = la(torch.from_numpy(dataset.X_train).to(torch.float32))
+            val_preds_mu, val_preds_var = la(torch.from_numpy(dataset.X_val).to(torch.float32))
+            test_preds_mu, test_preds_var = la(torch.from_numpy(dataset.X_test).to(torch.float32))
 
-        if p == percentages[0]:
-            nll_map_sqrt = ph.calculate_nll_(test_preds_mu.numpy(), dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(), torch.sqrt(sigma_noise))
-            nll_map = ph.calculate_nll_(test_preds_mu.numpy(), dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(), sigma_noise)
-            laplace_result_dict = {
-                'dataset': dataset,
-                'map_results': {'map_params': mle_model.state_dict(),
-                                'predictive_train': train_preds_mu,
-                                'predictive_val': val_preds_mu,
-                                'predictive_test': test_preds_mu,
-                                'glm_nll': nll_map,
-                                'elpd': nll_map,
-                                'elpd_spurious_sqrt': nll_map_sqrt,
-                                'elpd_gamma_prior': nll_map,
-                                'prior_precision': best_prior,
-                                }
-            }
-            print('nll glm', nll_map, 'elpd', nll_map, 'elpd spourious sqrt', nll_map_sqrt, 'elpd gamma', nll_map)
-            with open(save_name, 'wb') as handle:
-                pickle.dump(laplace_result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        else:
+            if p == percentages[0]:
+                nll_map_sqrt = ph.calculate_nll_(test_preds_mu.numpy(), dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(), torch.sqrt(sigma_noise))
+                nll_map = ph.calculate_nll_(test_preds_mu.numpy(), dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(), sigma_noise)
+                laplace_result_dict = {
+                    'dataset': dataset,
+                    'map_results': {'map_params': mle_model.state_dict(),
+                                    'predictive_train': train_preds_mu,
+                                    'predictive_val': val_preds_mu,
+                                    'predictive_test': test_preds_mu,
+                                    'glm_nll': nll_map,
+                                    'elpd': nll_map,
+                                    'elpd_spurious_sqrt': nll_map_sqrt,
+                                    'elpd_gamma_prior': nll_map,
+                                    'prior_precision': best_prior,
+                                    }
+                }
+                print('nll glm', nll_map, 'elpd', nll_map, 'elpd spourious sqrt', nll_map_sqrt, 'elpd gamma', nll_map)
+                with open(save_name, 'wb') as handle:
+                    pickle.dump(laplace_result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
             test_preds_sigma = test_preds_var.squeeze().sqrt()
             pred_std_test = torch.sqrt(test_preds_sigma**2 + sigma_noise**2)
 
