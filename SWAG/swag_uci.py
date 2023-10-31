@@ -182,6 +182,43 @@ def evaluate_swag(model,dataloader, mask, swag_results, train_args, sigma = 1):
 
     return np.mean(mc_overall_nll), mse
 
+def get_swag_predictive(model, dataloader, mask, swag_results, train_args, sigma = 1):
+    theta_swa = swag_results["theta_swa"]
+    sigma_diag = swag_results["sigma_diag"]
+    D = swag_results["D"]
+    K = swag_results["K"]
+    y_scale = train_args['y_scale']
+    y_loc = train_args['y_loc']
+    model_ = copy.deepcopy(model)
+    true_model_params = nn.utils.parameters_to_vector(model_.parameters()).clone()
+    num_mc_samples = train_args['num_mc_samples']
+    device = train_args['device']
+
+    batch_preds = []
+    batch_labels = []
+
+    for batch, labels in dataloader:
+        batch, labels = batch.to(device), labels.to(device)
+        mc_matrix_preds = torch.zeros((batch.shape[0], num_mc_samples))
+
+        for mc_run in range(num_mc_samples):
+            z1 = torch.normal(mean=torch.zeros((theta_swa.numel())), std=1.0).to(device)
+            z2 = torch.normal(mean=torch.zeros(K), std=1.0).to(device)
+
+            theta = theta_swa + 2 ** -0.5 * (sigma_diag ** 0.5 * z1) + (2 * (K - 1)) ** -0.5 * (
+                            D @ z2[:, None]).flatten()
+
+            true_model_params[mask] = theta
+            nn.utils.vector_to_parameters(true_model_params, model_.parameters())
+            preds = model_(batch)
+            mc_matrix_preds[:, mc_run] = preds.flatten()
+
+        batch_preds.append(mc_matrix_preds)
+        batch_labels.append(labels)
+
+    full_preds = torch.cat(batch_preds, 0)
+    full_labels = torch.cat(batch_labels, 0)
+    return full_preds, full_labels
 
 def evaluate_map(model, dataloader, sigma, y_scale, y_loc):
 
@@ -257,6 +294,15 @@ def compare_for_all(model):
         nlls.append(compare_map_models(model, model_path, res))
     breakpoint()
 
+def get_predictives(model, dataloaders, mask, swag_results, train_args, sigma = 1 ):
+
+    train_dataloader, test_dataloader = dataloaders
+    pred_train, label_train = get_swag_predictive(model, train_dataloader, mask, swag_results, train_args, sigma)
+    pred_test, label_test = get_swag_predictive(model, test_dataloader, mask, swag_results, train_args, sigma)
+
+
+    return {'predictions_train': pred_train, 'labels_train': label_train, 'predictions_test': pred_test,
+            'labels_test': label_test}
 
 def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, percentages, trained_model=None, train_args=None):
 
@@ -318,13 +364,15 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
         print("sigma without swag", sigma)
         sigmas = []
         for lr in learning_rate_sweep:
-            try:
-                swag_results = run_swag_partial(
-                    model, dataloader, lr, n_epochs =train_args['swag_epochs'], criterion=train_args['loss'], mask=mask
-                )
-            except:
-                breakpoint()
+
+            swag_results = run_swag_partial(
+                model, dataloader, lr, n_epochs =train_args['swag_epochs'], criterion=train_args['loss'], mask=mask
+            )
+
+            predictives = get_predictives(model, (dataloader, dataloader_test), mask, swag_results, train_args, sigma)
+
             residuals = get_swag_residuals(model, dataloader, mask, swag_results, train_args)
+
             if bayes_var:
                 precision = get_tau_by_conjugacy(residuals, 3, 5)
                 sigma = np.sqrt(1 / precision)
