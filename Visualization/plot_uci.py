@@ -8,7 +8,9 @@ import pickle
 import os
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-
+from plot_utils_comb import PlotHelper
+from sklearn.linear_model import LinearRegression
+import uncertainty_toolbox as uct
 def get_cmap(n, name='hsv'):
     '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct
     RGB color; the keyword argument name must be a standard mpl colormap name.'''
@@ -63,7 +65,7 @@ def plot_estimator(df, errorbar_func, estimator=None, ax=None, data_name=None):
                                       color_scheme_1=color_scheme_1)
             color_scheme_1 = not color_scheme_1
 
-    title = method_names[0] + " & " + method_names[1] + " - " + estimator.__name__ + " - " + data_name
+    title = " & ".join(method_names) + " - " + estimator.__name__ + " - " + data_name
     ax.set_title(label=title, fontsize=12, pad=-20)
 
     # Set labels and legend
@@ -173,6 +175,103 @@ def read_data_swag_la_combined(path, include_map=True):
     test_mse_swag = np.array(test_mse_swag)
     return percentages, test_nll_la, test_mse_la, test_nll_swag, test_mse_swag
 
+def plot_scatter(predictions, labels, data_name = None, method_name = None, df = None,
+                 epsilon = 0.1, minmax = None):
+    fig, ax = plt.subplots(1, 1)
+    errorbar_func = lambda x: np.percentile(x, (2.5, 97.5))
+
+    df = pd.DataFrame()
+    df['labels'] = np.tile(labels, predictions.shape[-1])
+    df['preds'] = predictions.T.flatten()
+
+
+    # sns.pointplot(errorbar=errorbar_func,
+    #               data=df, x="labels", y='preds',
+    #               join=False,
+    #               capsize= 0.15,
+    #               markers="d",
+    #               scale=1.0,
+    #               err_kws={'linewidth': 0.7}, estimator=np.mean,
+    #               color='tab:orange',
+    #               label= 'Predictions and labels',
+    #               ax=ax)
+
+    point_color = 'tab:orange'
+    ax.scatter(labels, predictions.mean(-1), marker = 'd', s=20,
+               label = 'Predictions and labels', color =point_color)
+    errs = np.percentile(predictions, (2.5, 97.5), axis = 1)
+    errs = np.abs((errs - predictions.mean(-1)))
+
+    ax.errorbar(labels, predictions.mean(-1), yerr = errs, fmt = 'none', capsize = 4,
+                color = point_color, alpha = 0.7, linewidth = 0.7)
+
+    if minmax is None:
+        minimum = min((labels.min(), np.min(predictions.mean(-1) + errs),
+                       np.min(predictions.mean(-1) - errs)))-epsilon
+        maximum = max((labels.max(), np.max(predictions.mean(-1) + errs),
+                       np.max(predictions.mean(-1) - errs)))+epsilon
+    elif isinstance(minmax, (tuple, list)):
+        minimum, maximum = minmax
+
+    ax.plot(np.linspace(minimum, maximum, 200), np.linspace(minimum, maximum, 200),
+        linestyle='--', linewidth=1.4,
+        color='tab:green', label = 'Ideal curve'
+    )
+
+    lin_mod = LinearRegression().fit(labels[:, None], predictions.mean(-1)[:, None])
+
+    preds = lin_mod.predict(np.linspace(minimum, maximum, 200)[:, None])
+    ax.plot(np.linspace(minimum, maximum, 200), preds,
+        linestyle='--', linewidth=1.4,
+        color='tab:red', label = 'Linear Trend'
+    )
+
+
+
+    ax.set_ylim(ymin=minimum, ymax=maximum)
+    ax.set_xlim(xmin=minimum, xmax=maximum)
+    ax.legend()
+
+    # sns.pointplot(errorbar=errorbar_func,
+    #               data=df, x="labels", y='labels',
+    #               join=False,
+    #               capsize= 0.15,
+    #               markers="d",
+    #               scale=1.0,
+    #               color='tab:blue',
+    #               label= 'Ideal Predictions',
+    #               ax=ax)
+    #
+    # sns.lineplot(data=df, x="labels", y='labels',
+    #               color='tab:blue',
+    #               label= 'Ideal predictions',
+    #               ax=ax)
+
+    # ax.set_xticks(labels[::5])
+
+    # ax.set_aspect('equal', adjustable='box')
+
+    ax.set_xlabel('Labels')
+    ax.set_ylabel('Predictions')
+    title = f'Predictions and labels for {method_name}'
+    ax.set_title(title)
+
+    plt.savefig(os.path.join(os.getcwd(), title + '.png'))
+    plt.show(block=False)
+
+def plot_calibration(predictions, labels, pred_var = None, ax = None, label = None):
+
+    if ax is None:
+        fig, ax = plt.subplots(1,1)
+
+    predictions_mean = predictions.mean(-1)
+    predictions_std = predictions.std(-1) if pred_var is None else np.sqrt(pred_var)
+
+    uct.plot_calibration(predictions_mean, predictions_std, labels, ax = ax, curve_label=label,
+                         show_miscalib=False)
+
+
+
 
 def read_vi_data(path):
     percentages = []
@@ -246,6 +345,38 @@ def get_under_folders_and_names(path):
             paths.append(os.path.join(path, p))
     return names, paths
 
+def set_legends_to_plot(ax, criteria = 'Ideal', max_count = 1):
+
+    lines, labels = [], []
+    counter = 0
+
+    holder = []
+    cntd = 0
+
+
+    for idx, child in enumerate(ax._children):
+        if isinstance(child, mpl.collections.PolyCollection):
+            holder.append(ax._children[cntd: idx+1])
+            cntd = idx+1
+
+
+    for hold in holder:
+        fill_between = hold[-1]
+        colors = fill_between.get_facecolors().copy()
+        colors[0, -1] = 1
+        for child in hold[:-1]:
+            child.set_color(colors)
+
+    ideal_color = '#ff7f0e'
+    for line in ax.lines:
+        if criteria not in line._label or counter < max_count:
+            if criteria in line._label:
+                line.set_color(ideal_color)
+            lines.append(line)
+            labels.append(line._label)
+            counter += 1
+
+    # ax.legend(lines, labels)
 
 def plot_hmc_vi(path_hmc, path_vi):
     names, paths_hmc = get_under_folders_and_names(path_hmc)
@@ -298,7 +429,31 @@ def plot_la_swag_combined(path):
                                  num_runs=test_nll_la.shape[0])
 
 
+def calculate_max_and_min_for_predictions(ph, run_type, epsilon):
 
+    predictions, labels = ph.get_predictions_and_labels_for_percentage('100',0, run_type)
+
+    errs = np.percentile(predictions, (2.5, 97.5), axis = 1)
+    errs = np.abs((errs - predictions.mean(-1)))
+
+    minimum = min((labels.min(), np.min(predictions.mean(-1) + errs),
+                   np.min(predictions.mean(-1) - errs)))-epsilon
+    maximum = max((labels.max(), np.max(predictions.mean(-1) + errs),
+                   np.max(predictions.mean(-1) - errs)))+epsilon
+
+    return minimum, maximum
+
+
+def set_dataset(path1, path2):
+
+    correct_ = pickle.load(open(path1, 'rb'))
+    to_be_changed = pickle.load(open(path2, 'rb'))
+
+    to_be_changed['dataset_'] = to_be_changed['dataset']
+    to_be_changed['dataset'] = correct_['dataset']
+
+    with open(path2, 'wb') as handle:
+        pickle.dump(to_be_changed, handle ,protocol=pickle.HIGHEST_PROTOCOL)
 
 if __name__ == '__main__':
     # path_la = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_Laplace_MAP'
@@ -306,7 +461,8 @@ if __name__ == '__main__':
     # plot_la_swag(path_la, path_swag)
 
     # path = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_Laplace_SWAG_1'
-    # plot_la_swag_combined(path)
+    path = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\energy_models'
+    path = r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\energy_models'
 
     # plot_la_swag(path_la, path_swag)
 
@@ -315,6 +471,40 @@ if __name__ == '__main__':
     # path_hmc = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_HMC'
     # path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_VI'
     # plot_hmc_vi(path_hmc, path_vi)
+
+    ph = PlotHelper(path, 'elpd',
+                    calculate=True)
+
+    metrics = ph.run_for_dataset(criteria='vi', fast=False)
+    # mets = [met for met in metrics if max(met) < 4]
+    percentages = [0,1, 2, 5, 8, 14, 23, 37, 61, 100]
+    plot_partial_percentages(percentages=percentages,
+                             res={'SWAG': np.array(metrics)},
+                             data_name='energy elpd',
+                             num_runs=len(metrics))
+
+    breakpoint()
+
+    fig, ax = plt.subplots(1, 1)
+    for run in ['14']:
+        preds, labs = [], []
+        for i in range(ph.__len__('vi_run')):
+            predictions, labels = ph.get_predictions_and_labels_for_percentage(run, i, 'vi_run')
+            plot_calibration(predictions, labels, ax=ax, label=f'run {i} {run} stoch')
+    set_legends_to_plot(ax)
+    plt.show()
+    breakpoint()
+    # predictions, labels = ph.get_predictions_and_labels_for_percentage('8', 0, 'vi_run')
+
+    for run in ['1','2', '8','14', '23', '61', '100']:
+        predictions, labels = ph.get_predictions_and_labels_for_percentage(run, 0, 'vi_run')
+        plot_calibration(predictions, labels, ax = ax, label = f'{run} pct stochasticity')
+    set_legends_to_plot(ax)
+
+    plt.show()
+    breakpoint()
+    plot_scatter(predictions, labels, data_name='energy', method_name='vi')
+    breakpoint()
 
     with open(r'C:\Users\45292\Documents\Master\VI_NODE_TORCH\NLLS\ener_vi_node.pkl', 'wb') as h:
         pickle.dump({'vi': nlls_vi, 'node': nlls_node}, h, protocol=pickle.HIGHEST_PROTOCOL)

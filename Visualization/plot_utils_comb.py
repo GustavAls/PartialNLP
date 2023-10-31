@@ -47,6 +47,8 @@ class PlotHelper:
         else:
             return self.scaler.inverse_transform(x)
 
+    def __len__(self, path_name_criteria):
+        return len(self.get_paths(self.path_to_models, criteria=path_name_criteria))
     def get_predictions_and_labels_for_percentage(self, percentage, idx = 0, path_name_criteria = ""):
         paths = self.get_paths(self.path_to_models, criteria=path_name_criteria)
         path = paths[idx]
@@ -137,15 +139,24 @@ class PlotHelper:
     @staticmethod
     def convert_to_proper_format(run):
 
-        preds_train = np.asarray(run['predictive_train']).squeeze(-1).transpose(1, 0)
-        preds_val = np.asarray(run['predictive_val']).squeeze(-1).transpose(1, 0)
-        preds_test = np.asarray(run['predictive_test']).squeeze(-1).transpose(1, 0)
+        preds_train = np.asarray(run['predictive_train'])
+        preds_val = np.asarray(run['predictive_val'])
+        preds_test = np.asarray(run['predictive_test'])
 
+        if preds_train.ndim == 3:
+            preds_train = np.asarray(run['predictive_train']).squeeze(-1).transpose(1, 0)
+        if preds_val.ndim == 3:
+            preds_train = np.asarray(run['predictive_train']).squeeze(-1).transpose(1, 0)
+        if preds_test.ndim == 3:
+            preds_train = np.asarray(run['predictive_train']).squeeze(-1).transpose(1, 0)
         return preds_train, preds_val, preds_test
 
     @staticmethod
     def get_labels(dataset):
-        y_train, y_val, y_test = dataset.y_train, dataset.y_val, dataset.y_test
+        if isinstance(dataset, dict):
+            y_train, y_val, y_test = dataset['train'].y, dataset['val'].y, dataset['test'].y
+        else:
+            y_train, y_val, y_test = dataset.y_train, dataset.y_val, dataset.y_test
         return y_train, y_val, y_test
 
     @staticmethod
@@ -155,13 +166,21 @@ class PlotHelper:
     def run_for_key(self, pcl, key):
 
         dataset = pcl['dataset']
+        if not self.calculate and self.eval_method != 'all':
+
+            if self.eval_method not in pcl[key]:
+                if self.eval_method == 'nll_glm':
+                    return pcl[key]['glm_nll']
+                if 'sqrt' in self.eval_method:
+                    return pcl[key]['elpd_spurious_sqrt']
+            return pcl[key][self.eval_method]
+
         y_train, y_val, y_test = self.get_labels(dataset)
         preds_train, preds_val, preds_test = self.convert_to_proper_format(pcl[key])
-        sigma = self.get_sigma(self.get_residuals(preds_train, y_train, full=True))
+        sigma = self.get_sigma(self.get_residuals(preds_train, y_train, full=False))
         mse = np.mean(self.get_residuals(preds_test, y_test) ** 2)
 
-        if not self.calculate and self.eval_method != 'all':
-            return pcl[key][self.eval_method]
+
 
         if self.eval_method == 'all':
             metric = {}
@@ -173,16 +192,17 @@ class PlotHelper:
 
         if self.eval_method in  ['nll', 'nll_glm', 'glm_nll']:
 
-            fmu, fvar = self.glm_predictive(preds_test, std=False)
+            fmu, fvar = self.glm_predictive(preds_test, std=True)
 
             if 'map' in key:
                 fvar = np.zeros_like(fmu)
+
             metric = self.glm_nll(fmu, fvar + sigma, y_test,
                                   dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item())
 
         elif self.eval_method == 'elpd':
             metric = self.calculate_nll_(
-                preds_test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(), sigma ** 2
+                preds_test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(), sigma
             )
         elif self.eval_method == 'elpd_sqrt':
             metric = self.calculate_nll_(
@@ -196,11 +216,12 @@ class PlotHelper:
 
         if 'map' in key and self.eval_method in ['elpd']:
             metric = self.calculate_nll_(preds_test, y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(),
-                                         sigma ** 2)
+                                         sigma)
         return metric
 
     def run_for_all_keys(self, pcl):
         all_keys = ['map_results', '1', '2', '5', '8', '14', '23', '37', '61', '100']
+        # all_keys = ['map_results', '2', '5', '8', '14', '23', '37', '61', '100']
         nlls = []
         for key in all_keys:
             nlls.append(self.run_for_key(pcl, key))
@@ -225,8 +246,10 @@ class PlotHelper:
         paths = [os.path.join(path, p) for p in os.listdir(path) if criteria in p]
         return paths
 
-    def run_for_dataset(self, criteria=None):
+    def run_for_dataset(self, criteria=None,  fast = False):
 
         paths = self.get_paths(self.path_to_models, criteria)
+        if fast:
+            paths = list(np.random.choice(paths, 5))
         nlls = self.run_for_multiple_files(paths)
         return nlls
