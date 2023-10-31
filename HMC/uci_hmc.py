@@ -1046,7 +1046,7 @@ if __name__ == "__main__":
     MAP_params = svi_results.params
 
     if is_svi_map:
-        svi_results = svi.run(rng_key, 1000, X=dataset.X_train, y=dataset.y_train)
+        svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
         MAP_params = svi_results.params
         MAP_params = convert_shape_map_params(MAP_params)
     else:
