@@ -460,11 +460,11 @@ def change_datasets(path):
     for p in os.listdir(path):
         if 'laplace' in p:
             laplace.append(
-                (p.split("_")[-1].split(".")[0], os.path.join(path, p))
+                (int(p.split("_")[-1].split(".")[0]), os.path.join(path, p))
             )
         if 'swag' in p:
             swag.append(
-                (p.split("_")[-1].split(".")[0], os.path.join(path, p))
+                (int(p.split("_")[-1].split(".")[0]), os.path.join(path, p))
             )
 
     for (idx, p_la), (i, p_swa) in zip(sorted(laplace), sorted(swag)):
