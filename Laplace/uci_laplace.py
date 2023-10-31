@@ -400,8 +400,12 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
                            }
 
             save_name = os.path.join(output_path, f'results_swag_run_{run}.pkl')
-            train_swag(mle_model, train_dataloader, val_dataloader, test_dataloader,
+            swag_result_dict = train_swag(mle_model, train_dataloader, val_dataloader, test_dataloader,
                        percentages, trained_model=mle_model, train_args=train_args)
+            with open(save_name, 'wb') as handle:
+                pickle.dump(swag_result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
 
 
 
