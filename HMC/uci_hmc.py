@@ -957,7 +957,7 @@ def train_MAP_solution(mle_model, dataset, num_epochs):
 
 
 def make_hmc_run(run, dataset, scale_prior, prior_variance, save_path, likelihood_scale, percentiles, results_dict,
-                 MAP_params, is_svi_map=True):
+                 MAP_params):
     for percentile in percentiles:
         # If update runs are done
         if str(percentile) not in results_dict.keys():
