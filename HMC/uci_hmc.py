@@ -54,6 +54,15 @@ def convert_torch_to_pyro_params(torch_params, MAP_params):
         elif "b_output" in svi_key:
             MAP_params[svi_key] = tensor_to_jax_array(torch_params['out.bias'].detach()).T[:, None]
 
+    return
+
+def convert_shape_map_params(MAP_params):
+    # Torch model does not have a precision parameter
+    for svi_key in MAP_params.keys():
+        # Hardcoded for now
+        if "b1" in svi_key or "b2" in svi_key:
+            MAP_params[svi_key] = MAP_params[svi_key][:, None]
+
     return MAP_params
 
 
@@ -438,7 +447,7 @@ def generate_mixed_bnn_by_param(
     return mixed_bnn
 
 
-def generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale=1.0, l_scale = 1, use_prior=True):
+def generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale=1.0, l_scale = 1, use_prior=True, is_svi_map = False):
 
     (
         W1_sample_mask,
@@ -615,12 +624,6 @@ def generate_additive_node_based_bnn(MAP_params, sample_mask_tuple, prior_varian
         # output = ((h2 @ W_output_map)*W_output_node + b_output_map.repeat(nB, axis=0)) * b_output_node
 
         mean = numpyro.deterministic("mean", output)
-
-        # output precision
-        # prec_obs = numpyro.sample(
-        #     "prec_obs", dist.Gamma(3.0, 1.0)
-        # )  # MAP outperforms full BNN, even if we freeze the prior precision. That's interesting here, I think.
-        # sigma_obs = 1.0 / jnp.sqrt(prec_obs)
 
         if use_prior:
             prec_obs = numpyro.sample(
@@ -802,8 +805,7 @@ def run_for_percentile(
         MAP_params,
         prior_variance=0.8,
         prior_variance_scaled=True,
-        scale=1.0,
-        is_svi_map=True
+        scale=1.0
 ):
     sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
     prior_variance_used = (
@@ -820,46 +822,36 @@ def run_for_percentile(
         use_prior=True
     )
 
-    nuts_kernel = NUTS(mixed_bnn, max_tree_depth=1)
-    mcmc = MCMC(nuts_kernel, num_warmup=1, num_samples=1, num_chains=1)
+    nuts_kernel = NUTS(mixed_bnn, max_tree_depth=15)
+    mcmc = MCMC(nuts_kernel, num_warmup=325, num_samples=75, num_chains=8)
     rng_key = random.PRNGKey(0)
     mcmc.run(rng_key, dataset.X_train, dataset.y_train)
 
-    if is_svi_map:
-        test_ll_ours = evaluate_samples_properly(mixed_bnn, rng_key, dataset.X_test, dataset.y_test,
-                                                 mcmc.get_samples(), y_scale=dataset.scl_Y.scale_,
-                                                 y_loc=dataset.scl_Y.mean_)
+    samples = mcmc.get_samples()
+    predictive_train = Predictive(mixed_bnn, samples)(rng_key, X=dataset.X_train)
+    predictive_val = Predictive(mixed_bnn, samples)(rng_key, X=dataset.X_val)
+    predictive_test = Predictive(mixed_bnn, samples)(rng_key, X=dataset.X_test)
 
-        test_ll_theirs, _ = evaluate_samples(mixed_bnn, rng_key, dataset.X_test, dataset.y_test,
-                                             mcmc.get_samples(), y_scale=dataset.scl_Y.scale_,
-                                             y_loc=dataset.scl_Y.mean_)
-        results = {'test_ll_ours': test_ll_ours,
-                   'test_ll_theirs': test_ll_theirs}
-    else:
-        samples = mcmc.get_samples()
-        predictive_train = Predictive(mixed_bnn, samples)(rng_key, X=dataset.X_train)
-        predictive_val = Predictive(mixed_bnn, samples)(rng_key, X=dataset.X_val)
-        predictive_test = Predictive(mixed_bnn, samples)(rng_key, X=dataset.X_test)
+    nll_glm, elpd, elpd_sqrt, elpd_gamma_prior = compute_metrics(predictive_train, predictive_val, predictive_test,
+                                                                 dataset, sigma_obs = (1.0 / jnp.sqrt(samples["prec_obs"])).mean())
 
-        nll_glm, elpd, elpd_sqrt, elpd_gamma_prior = compute_metrics(predictive_train, predictive_val, predictive_test,
-                                                                     dataset, sigma_obs = (1.0 / jnp.sqrt(samples["prec_obs"])).mean())
-
-        test_ll_ours = evaluate_samples_properly(mixed_bnn, rng_key, dataset.X_test, dataset.y_test,
-                                                 mcmc.get_samples(), y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
-        results = { 'test_ll_ours': test_ll_ours,
-                    'predictive_train': predictive_train["mean"],
-                    'predictive_val': predictive_val["mean"],
-                    'predictive_test': predictive_test["mean"],
-                    'glm_nll': nll_glm,
-                    'elpd': elpd,
-                    'elpd_spurious_sqrt': elpd_sqrt,
-                    'elpd_gamma_prior': elpd_gamma_prior
-                    }
+    test_ll_homoscedastic, _ = evaluate_samples(mixed_bnn, rng_key, dataset.X_test, dataset.y_test,
+                                         mcmc.get_samples(), y_scale=dataset.scl_Y.scale_,
+                                         y_loc=dataset.scl_Y.mean_)
+    results = { 'predictive_train': predictive_train["mean"],
+                'predictive_val': predictive_val["mean"],
+                'predictive_test': predictive_test["mean"],
+                'glm_nll': nll_glm,
+                'elpd': elpd,
+                'elpd_spurious_sqrt': elpd_sqrt,
+                'elpd_gamma_prior': elpd_gamma_prior,
+                'test_ll_homoscedastic': test_ll_homoscedastic
+                }
     return results
 
 
 def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, num_epochs, MAP_params,
-                is_svi_map=True, node_based=True, add_node_based = False,l_scale=1.0):
+                node_based=True, add_node_based = False,l_scale=1.0, is_svi_map=False):
     rng_key = random.PRNGKey(1)
     optimizer = numpyro.optim.Adam(0.01)
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
@@ -868,11 +860,11 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
     if node_based:
         keys = ["W1_auto_loc", "W2_auto_loc", "W_output_auto_loc", "b1_auto_loc", "b2_auto_loc", "b_output_auto_loc"]
         mask_values = [np.random.normal(0, 1, size=(MAP_params[key].shape[0],)) for key in keys]
-        save_name = os.path.join(save_path,
-                                 f"results_vi_node_run_{run}_{str(l_scale) if l_scale != 1.0 else str()}.pkl")
-
+        save_name = os.path.join(save_path, f"results_vi_node_run_{run}.pkl")
+    elif add_node_based:
+        save_name = os.path.join(save_path, f"results_vi_node_add_run_{run}.pkl")
     else:
-        save_name = os.path.join(save_path, f"results_vi_run_{run}_{str(l_scale) if l_scale != 1.0 else str()}.pkl")
+        save_name = os.path.join(save_path, f"results_vi_run_{run}.pkl")
 
     for percentile in percentiles:
         prior_variance = 100 - percentile + 1
@@ -892,7 +884,8 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
                     prior_variance,
                     scale=scale,
                     l_scale=l_scale,
-                    use_prior=True)
+                    use_prior=True,
+                    is_svi_map=is_svi_map)
 
                 model = lambda X, y=None: generate_node_based_bnn(
                     MAP_params, sample_mask_tuple, prior_variance, scale, use_prior=True
@@ -926,35 +919,24 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
             svi_results = svi.run(rng_key, num_epochs, X=dataset.X_train, y=dataset.y_train)
 
             # Evaluate the model
+            predictive_train, predictive_val, predictive_test = create_predictives(model, svi_results.params,
+                                                                                   dataset,
+                                                                                   mixed_bnn, num_mc_samples=200,
+                                                                                   delta=False)
 
-            if is_svi_map:
-                test_ll_ours, val_ll_ours = calculate_ll_ours(model, svi_results.params, dataset, mixed_bnn,
-                                                              delta=False)
-                test_ll_theirs, _ = evaluate_vi_samples(model=mixed_bnn, params=svi_results.params, dataset=dataset,
-                                                        rng_key=rng_key, y_scale=dataset.scl_Y.scale_,
-                                                        y_loc=dataset.scl_Y.mean_)
-                results_dict[f"{percentile}"] = {'test_ll_ours': test_ll_ours,
-                                                 'val_ll_ours': val_ll_ours,
-                                                 'test_ll_theirs': test_ll_theirs}
-            else:
-                predictive_train, predictive_val, predictive_test = create_predictives(model, svi_results.params,
-                                                                                       dataset,
-                                                                                       mixed_bnn, num_mc_samples=200,
-                                                                                       delta=False)
+            nll_glm, elpd, elpd_sqrt, elpd_gamma_prior = compute_metrics(predictive_train, predictive_val,
+                                                                         predictive_test, dataset,
+                                                                         sigma_obs=(svi_results.params['prec_obs_auto_scale'] ** (-1)).item())
 
-                nll_glm, elpd, elpd_sqrt, elpd_gamma_prior = compute_metrics(predictive_train, predictive_val,
-                                                                             predictive_test, dataset,
-                                                                             sigma_obs=(svi_results.params['prec_obs_auto_scale'] ** (-1)).item())
-
-                print('nll glm', nll_glm, 'elpd', elpd, 'elpd spourious sqrt', elpd_sqrt, 'elpd gamma',
-                      elpd_gamma_prior)
-                results_dict[f"{percentile}"] = {'predictive_train': predictive_train["mean"],
-                                                 'predictive_val': predictive_val["mean"],
-                                                 'predictive_test': predictive_test["mean"],
-                                                 'glm_nll': nll_glm,
-                                                 'elpd': elpd,
-                                                 'elpd_spurious_sqrt': elpd_sqrt,
-                                                 'elpd_gamma_prior': elpd_gamma_prior}
+            print('nll glm', nll_glm, 'elpd', elpd, 'elpd spourious sqrt', elpd_sqrt, 'elpd gamma',
+                  elpd_gamma_prior)
+            results_dict[f"{percentile}"] = {'predictive_train': predictive_train["mean"],
+                                             'predictive_val': predictive_val["mean"],
+                                             'predictive_test': predictive_test["mean"],
+                                             'glm_nll': nll_glm,
+                                             'elpd': elpd,
+                                             'elpd_spurious_sqrt': elpd_sqrt,
+                                             'elpd_gamma_prior': elpd_gamma_prior}
 
             with open(save_name, 'wb') as handle:
                 pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -976,7 +958,7 @@ def train_MAP_solution(mle_model, dataset, num_epochs):
 
 
 def make_hmc_run(run, dataset, scale_prior, prior_variance, save_path, likelihood_scale, percentiles, results_dict,
-                 MAP_params, is_svi_map=True):
+                 MAP_params):
     for percentile in percentiles:
         # If update runs are done
         if str(percentile) not in results_dict.keys():
@@ -987,8 +969,7 @@ def make_hmc_run(run, dataset, scale_prior, prior_variance, save_path, likelihoo
                 MAP_params,
                 prior_variance_scaled=scale_prior,
                 prior_variance=prior_variance,
-                scale=likelihood_scale,
-                is_svi_map=is_svi_map
+                scale=likelihood_scale
             )
             with open(os.path.join(save_path, f"results_hmc_run_{run}.pkl"), "wb") as handle:
                 pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -1052,9 +1033,6 @@ if __name__ == "__main__":
     model = lambda X, y=None: one_d_bnn(X, y, prior_variance=args.prior_variance)
     new_map = False
     # Allows for re-runs
-    # if not (os.path.exists(os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")) and
-    #     os.path.exists(os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl")) and
-    #     os.path.exists(os.path.join(args.output_path, f"results_vi_run_{args.run}.pkl"))):
 
     new_map = True
 
@@ -1065,37 +1043,9 @@ if __name__ == "__main__":
     MAP_params = svi_results.params
 
     if is_svi_map:
-        test_ll_theirs, _ = evaluate_MAP(model, MAP_params, dataset.X_test, dataset.y_test,
-                                         rng_key, y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
-        test_ll_ours, val_ll_ours = calculate_ll_ours(model, MAP_params, dataset, one_d_bnn,
-                                                      num_mc_samples=1, delta=True)
-
-        predictive_train, predictive_val, predictive_test = create_predictives(model, MAP_params, dataset, one_d_bnn,
-                                                                               num_mc_samples=1, delta=True)
-        rr = {'predictive_train': predictive_train['mean'], 'predictive_val': predictive_val['mean'],
-              'predictive_test': predictive_test['mean']}
-        tp = PredictiveHelper("")
-        train, val, test = tp.convert_to_proper_format(rr)
-        residuals = tp.get_residuals(train, dataset.y_train, full=True)
-        print(f"MSE {np.mean(residuals.mean(1) ** 2)}")
-        res_test = tp.get_residuals(test, dataset.y_test, full=True)
-        print("MSE Test", np.mean(res_test.mean(1) ** 2))
-        sigma = tp.get_sigma(residuals.mean(1))
-        print("SIGMA", sigma)
-
-        nll_one = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(),
-                                    sigma ** 2)
-
-        nll_two = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(),
-                                    sigma)
-        print(nll_one, nll_two)
-        is_svi_map = False
-        hmc_result_dict = {'dataset': dataset,
-                           'map_results': {'map_params': MAP_params,
-                                           'test_ll_ours': test_ll_ours,
-                                           'test_ll_theirs': test_ll_theirs,
-                                           'val_ll_ours': val_ll_ours}}
-        vi_results_dict = copy.deepcopy(hmc_result_dict)
+        svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
+        MAP_params = svi_results.params
+        MAP_params = convert_shape_map_params(MAP_params)
     else:
         # Setup pytorch MAP
         n_train, p = dataset.X_train.shape
@@ -1106,56 +1056,60 @@ if __name__ == "__main__":
         mle_state_dict = mle_model.state_dict()
         MAP_params = convert_torch_to_pyro_params(mle_state_dict, MAP_params)
 
-        predictive_train, predictive_val, predictive_test = create_predictives(model, MAP_params, dataset, one_d_bnn,
-                                                                               num_mc_samples=1, delta=True)
-        rr = {'predictive_train': predictive_train['mean'], 'predictive_val': predictive_val['mean'],
-              'predictive_test': predictive_test['mean']}
-        tp = PredictiveHelper("")
+    test_ll_homoscedastic, _ = evaluate_MAP(model, MAP_params, dataset.X_test, dataset.y_test,
+                                     rng_key, y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
 
-        train, val, test = tp.convert_to_proper_format(rr)
-        residuals = tp.get_residuals(train, dataset.y_train, full=True)
-        print(f"MSE {np.mean(residuals.mean(1) ** 2)}")
-        res_test = tp.get_residuals(test, dataset.y_test, full=True)
-        print("MSE Test", np.mean(res_test.mean(1) ** 2))
-        sigma = tp.get_sigma(residuals.mean(1))
-        print("SIGMA", sigma)
-        fvar = np.ones_like(test) * np.sqrt(sigma)
+    predictive_train, predictive_val, predictive_test = create_predictives(model, MAP_params, dataset, one_d_bnn,
+                                                                           num_mc_samples=1, delta=True)
+    rr = {'predictive_train': predictive_train['mean'], 'predictive_val': predictive_val['mean'],
+          'predictive_test': predictive_test['mean']}
+    tp = PredictiveHelper("")
 
-        # tp.plot(test, fvar, dataset.y_test * dataset.scl_Y.scale_.item() + dataset.scl_Y.mean_.item(),
-        #         dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item())
+    train, val, test = tp.convert_to_proper_format(rr)
+    residuals = tp.get_residuals(train, dataset.y_train, full=True)
+    print(f"MSE {np.mean(residuals.mean(1) ** 2)}")
+    res_test = tp.get_residuals(test, dataset.y_test, full=True)
+    print("MSE Test", np.mean(res_test.mean(1) ** 2))
+    sigma = tp.get_sigma(residuals.mean(1))
+    print("SIGMA", sigma)
+    fvar = np.ones_like(test) * np.sqrt(sigma)
 
-        nll_one = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(),
-                                    sigma ** 2)
-        nll_two = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(),
-                                    sigma)
-        print("Nll ", nll_one)
-        print("Nll spurious sqrt", nll_two)
+    # tp.plot(test, fvar, dataset.y_test * dataset.scl_Y.scale_.item() + dataset.scl_Y.mean_.item(),
+    #         dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item())
 
-        hmc_result_dict = {
-            'dataset': dataset,
-            'map_results': {'map_params': MAP_params,
-                            'predictive_train': predictive_train["mean"],
-                            'predictive_val': predictive_val["mean"],
-                            'predictive_test': predictive_test["mean"],
-                            'glm_nll': nll_one,
-                            'elpd': nll_one,
-                            'elpd_spurious_sqrt': nll_two,
-                            'elpd_gamma_prior': nll_one
-                            }
-        }
+    nll_one = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(),
+                                sigma ** 2)
+    nll_two = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(),
+                                sigma)
+    print("Nll ", nll_one)
+    print("Nll spurious sqrt", nll_two)
 
-        vi_results_dict = {
-                            'dataset': dataset,
-                            'map_results':  {'map_params': MAP_params,
-                                             'predictive_train': predictive_train["mean"],
-                                             'predictive_val': predictive_val["mean"],
-                                             'predictive_test': predictive_test["mean"],
-                                             'glm_nll': nll_one,
-                                             'elpd': nll_one,
-                                             'elpd_spurious_sqrt': nll_two,
-                                             'elpd_gamma_prior': nll_one
-                                             }
-                         }
+    hmc_result_dict = {
+        'dataset': dataset,
+        'map_results': {'map_params': MAP_params,
+                        'predictive_train': predictive_train["mean"],
+                        'predictive_val': predictive_val["mean"],
+                        'predictive_test': predictive_test["mean"],
+                        'glm_nll': nll_one,
+                        'elpd': nll_one,
+                        'elpd_spurious_sqrt': nll_two,
+                        'elpd_gamma_prior': nll_one,
+                        'test_ll_homoscedastic': test_ll_homoscedastic
+                        }
+    }
+
+    vi_results_dict = {
+                        'dataset': dataset,
+                        'map_results':  {'map_params': MAP_params,
+                                         'predictive_train': predictive_train["mean"],
+                                         'predictive_val': predictive_val["mean"],
+                                         'predictive_test': predictive_test["mean"],
+                                         'glm_nll': nll_one,
+                                         'elpd': nll_one,
+                                         'elpd_spurious_sqrt': nll_two,
+                                         'elpd_gamma_prior': nll_one
+                                         }
+                     }
 
     dict_length = 11
     if args.vi:
@@ -1167,7 +1121,7 @@ if __name__ == "__main__":
             # VI run
             print("Running VI")
             make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance,scale= args.likelihood_scale, results_dict=vi_results_dict,
-                        MAP_params=MAP_params, save_path=args.output_path,  num_epochs=args.num_epochs, is_svi_map=is_svi_map, node_based=False, l_scale=args.l_var)
+                        MAP_params=MAP_params, save_path=args.output_path,  num_epochs=args.num_epochs, node_based=False, l_scale=args.l_var)
 
     if args.node_based:
         dict_path = os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl")
@@ -1177,18 +1131,18 @@ if __name__ == "__main__":
             # Node based
             print("Running node based VI")
             make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=vi_results_dict,
-                        MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs, is_svi_map=is_svi_map, node_based=True, l_scale=args.l_var)
+                        MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs, node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map)
 
     if args.node_based_add:
         dict_path = os.path.join(args.output_path, f"results_vi_node_add_run_{args.run}.pkl")
         if os.path.exists(dict_path):
             vi_results_dict = pickle.load(open(dict_path, "rb"))
         if len(vi_results_dict.keys()) < dict_length:
-            print("Running node based VI")
+            print("Running node based rank 1 VI")
             make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale,
                         results_dict=vi_results_dict,
                         MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs,
-                        is_svi_map=is_svi_map, node_based=False,add_node_based=True, l_scale=args.l_var)
+                        node_based=False, add_node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map)
 
     if args.hmc:
         dict_path = os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")
@@ -1199,4 +1153,4 @@ if __name__ == "__main__":
             make_hmc_run(run=args.run, dataset=dataset, scale_prior=args.scale_prior,
                          prior_variance=args.prior_variance,
                          save_path=args.output_path, likelihood_scale=args.likelihood_scale, percentiles=percentiles,
-                         results_dict=hmc_result_dict, MAP_params=MAP_params, is_svi_map=is_svi_map)
+                         results_dict=hmc_result_dict, MAP_params=MAP_params)
