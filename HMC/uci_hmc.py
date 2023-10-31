@@ -707,29 +707,29 @@ def generate_additive_node_based_bnn(MAP_params, sample_mask_tuple, prior_varian
 
         s1_node_noise = numpyro.sample(
             's1_node_noise',
-            dist.Normal(0, (prior_variance ** 0.5), jnp.ones((n_features, 1)))
+            dist.Normal(0, (prior_variance ** 0.5)* jnp.ones((n_features, 1)))
         )
         r1_node_noise = numpyro.sample(
             'r1_node_noise',
-            dist.Normal(0, (prior_variance ** 0.5), jnp.ones((width, 1)))
+            dist.Normal(0, (prior_variance ** 0.5)* jnp.ones((width, 1)))
         )
 
         s2_node_noise = numpyro.sample(
             's2_node_noise',
-            dist.Normal(0, (prior_variance ** 0.5), jnp.ones((width, 1)))
+            dist.Normal(0, (prior_variance ** 0.5)* jnp.ones((width, 1)))
         )
         r2_node_noise = numpyro.sample(
             'r2_node_noise',
-            dist.Normal(0, (prior_variance ** 0.5), jnp.ones((width, 1)))
+            dist.Normal(0, (prior_variance ** 0.5)* jnp.ones((width, 1)))
         )
 
         s_output_node_noise = numpyro.sample(
             's_output_node_noise',
-            dist.Normal(0, (prior_variance ** 0.5), jnp.ones((width, 1)))
+            dist.Normal(0, (prior_variance ** 0.5)* jnp.ones((width, 1)))
         )
         r_output_node_noise = numpyro.sample(
-            's_output_node_noise',
-            dist.Normal(0, (prior_variance ** 0.5), jnp.ones((1, 1)))
+            'r_output_node_noise',
+            dist.Normal(0, (prior_variance ** 0.5)* jnp.ones((1, 1)))
         )
 
         W_1_map = MAP_params["W1_auto_loc"]
@@ -740,25 +740,22 @@ def generate_additive_node_based_bnn(MAP_params, sample_mask_tuple, prior_varian
         b_output_map = MAP_params["b_output_auto_loc"]
 
         W_1_node = numpyro.deterministic(
-            "W_1_node", (jnp.zeros_like(W1_sample_mask) * (1 - W1_sample_mask)) + ((r1_node_noise @ s1_node_noise.T)
-                                                                                   * W1_sample_mask)
+            "W_1_node", ((r1_node_noise @ s1_node_noise.T).T * W1_sample_mask)
         )
 
         W_2_node = numpyro.deterministic(
-            "W_2_node", (jnp.zeros_like(W2_sample_mask) * (1 - W2_sample_mask)) + ((r2_node_noise @ s2_node_noise.T)
-                                                                                   * W2_sample_mask)
+            "W_2_node", ((r2_node_noise @ s2_node_noise.T).T * W2_sample_mask)
         )
         W_output_node = numpyro.deterministic(
             "W_output_node",
-            (jnp.zeros_like(W_output_sample_mask) * (1 - W_output_sample_mask))
-            + ((r_output_node_noise @ s_output_node_noise.T) * W_output_sample_mask),
+            ((r_output_node_noise @ s_output_node_noise.T).T * W_output_sample_mask),
         )
 
         z1 = (X @ (W_1_map + W_1_node)) + b_1_map.reshape((1, width)).repeat(nB, axis=0)
 
         # z1 = ((X @ W_1_map) * W_1_node + b_1_map.reshape((1, width)).repeat(nB, axis=0))*b_1_node
         h1 = jax.nn.leaky_relu(z1)
-        z2 = (h1 @ (W_1_node + W_2_map)) + b_2_map.reshape((1, width)).repeat(nB, axis=0)
+        z2 = (h1 @ (W_2_node + W_2_map)) + b_2_map.reshape((1, width)).repeat(nB, axis=0)
 
         # z2 = ((h1 @ W_2_map) * W_2_node + b_2_map.reshape((1, width)).repeat(nB, axis=0)) * b_2_node
         h2 = jax.nn.leaky_relu(z2)
@@ -1174,6 +1171,7 @@ if __name__ == "__main__":
     parser.add_argument('--node_based', type=ast.literal_eval, default=False)
     parser.add_argument('--hmc', type=ast.literal_eval, default=False)
     parser.add_argument('--l_var', type=float, default=1.0)
+    parser.add_argument('--node_based_add', type=ast.literal_eval, default=False)
     args = parser.parse_args()
 
     if args.dataset == "yacht":
@@ -1332,7 +1330,7 @@ if __name__ == "__main__":
                         MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs, is_svi_map=is_svi_map, node_based=True, l_scale=args.l_var)
 
     if args.node_based_add:
-        dict_path = os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl")
+        dict_path = os.path.join(args.output_path, f"results_vi_node_add_run_{args.run}.pkl")
         if os.path.exists(dict_path):
             vi_results_dict = pickle.load(open(dict_path, "rb"))
         if len(vi_results_dict.keys()) < dict_length:
