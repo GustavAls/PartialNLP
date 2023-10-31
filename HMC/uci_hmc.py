@@ -54,6 +54,15 @@ def convert_torch_to_pyro_params(torch_params, MAP_params):
         elif "b_output" in svi_key:
             MAP_params[svi_key] = tensor_to_jax_array(torch_params['out.bias'].detach()).T[:, None]
 
+    return
+
+def convert_shape_map_params(MAP_params):
+    # Torch model does not have a precision parameter
+    for svi_key in MAP_params.keys():
+        # Hardcoded for now
+        if "b1" in svi_key or "b2" in svi_key:
+            MAP_params[svi_key] = MAP_params[svi_key][:, None]
+
     return MAP_params
 
 
@@ -438,7 +447,7 @@ def generate_mixed_bnn_by_param(
     return mixed_bnn
 
 
-def generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale=1.0, l_scale = 1, use_prior=True):
+def generate_node_based_bnn(MAP_params, sample_mask_tuple, prior_variance, scale=1.0, l_scale = 1, use_prior=True, is_svi_map = False):
 
     (
         W1_sample_mask,
@@ -615,12 +624,6 @@ def generate_additive_node_based_bnn(MAP_params, sample_mask_tuple, prior_varian
         # output = ((h2 @ W_output_map)*W_output_node + b_output_map.repeat(nB, axis=0)) * b_output_node
 
         mean = numpyro.deterministic("mean", output)
-
-        # output precision
-        # prec_obs = numpyro.sample(
-        #     "prec_obs", dist.Gamma(3.0, 1.0)
-        # )  # MAP outperforms full BNN, even if we freeze the prior precision. That's interesting here, I think.
-        # sigma_obs = 1.0 / jnp.sqrt(prec_obs)
 
         if use_prior:
             prec_obs = numpyro.sample(
@@ -851,7 +854,7 @@ def run_for_percentile(
 
 
 def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, num_epochs, MAP_params,
-                node_based=True, add_node_based = False,l_scale=1.0):
+                node_based=True, add_node_based = False,l_scale=1.0, is_svi_map=False):
     rng_key = random.PRNGKey(1)
     optimizer = numpyro.optim.Adam(0.01)
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
@@ -884,7 +887,8 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
                     prior_variance,
                     scale=scale,
                     l_scale=l_scale,
-                    use_prior=True)
+                    use_prior=True,
+                    is_svi_map=is_svi_map)
 
                 model = lambda X, y=None: generate_node_based_bnn(
                     MAP_params, sample_mask_tuple, prior_variance, scale, use_prior=True
@@ -1042,8 +1046,9 @@ if __name__ == "__main__":
     MAP_params = svi_results.params
 
     if is_svi_map:
-        svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
+        svi_results = svi.run(rng_key, 1000, X=dataset.X_train, y=dataset.y_train)
         MAP_params = svi_results.params
+        MAP_params = convert_shape_map_params(MAP_params)
     else:
         # Setup pytorch MAP
         n_train, p = dataset.X_train.shape
@@ -1129,7 +1134,7 @@ if __name__ == "__main__":
             # Node based
             print("Running node based VI")
             make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=vi_results_dict,
-                        MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs, node_based=True, l_scale=args.l_var)
+                        MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs, node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map)
 
     if args.node_based_add:
         dict_path = os.path.join(args.output_path, f"results_vi_node_add_run_{args.run}.pkl")
@@ -1140,7 +1145,7 @@ if __name__ == "__main__":
             make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale,
                         results_dict=vi_results_dict,
                         MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs,
-                        node_based=False, add_node_based=True, l_scale=args.l_var)
+                        node_based=False, add_node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map)
 
     if args.hmc:
         dict_path = os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")
