@@ -1118,6 +1118,7 @@ if __name__ == "__main__":
         dict_path = os.path.join(args.output_path, f"results_vi_run_{args.run}.pkl")
         if os.path.exists(dict_path):
             vi_results_dict = pickle.load(open(dict_path, "rb"))
+            MAP_params = vi_results_dict['map_results']['map_params']
         if len(vi_results_dict.keys()) < dict_length:
             # VI run
             print("Running VI")
@@ -1128,6 +1129,7 @@ if __name__ == "__main__":
         dict_path = os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl")
         if os.path.exists(dict_path):
             vi_results_dict = pickle.load(open(dict_path, "rb"))
+            MAP_params = vi_results_dict['map_results']['map_params']
         if len(vi_results_dict.keys()) < dict_length:
             # Node based
             print("Running node based VI")
@@ -1138,6 +1140,7 @@ if __name__ == "__main__":
         dict_path = os.path.join(args.output_path, f"results_vi_node_add_run_{args.run}.pkl")
         if os.path.exists(dict_path):
             vi_results_dict = pickle.load(open(dict_path, "rb"))
+            MAP_params = vi_results_dict['map_results']['map_params']
         if len(vi_results_dict.keys()) < dict_length:
             print("Running node based rank 1 VI")
             make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale,
@@ -1149,6 +1152,7 @@ if __name__ == "__main__":
         dict_path = os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")
         if os.path.exists(dict_path):
             hmc_result_dict = pickle.load(open(dict_path, "rb"))
+            MAP_params = hmc_result_dict['map_results']['map_params']
         if len(hmc_result_dict.keys()) < dict_length:
             # HMC run
             make_hmc_run(run=args.run, dataset=dataset, scale_prior=args.scale_prior,
