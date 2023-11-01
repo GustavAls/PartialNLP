@@ -241,7 +241,7 @@ class PlotHelper:
             if 'map' in key:
                 fvar = np.zeros_like(fmu)
 
-            sigma*= 4
+
             metric = self.glm_nll(fmu, fvar + sigma, y_test,
                                   dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item())
 
