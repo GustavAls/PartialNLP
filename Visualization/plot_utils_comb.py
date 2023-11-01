@@ -31,7 +31,7 @@ from HMC.uci_hmc import UCIDataset, UCIBostonDataset, UCIEnergyDataset, UCIYacht
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import seaborn as sns
-
+from torch.distributions import Gamma
 class PlotHelper:
 
     def __init__(self, path_to_models, eval_method='nll', calculate = True):
@@ -49,14 +49,18 @@ class PlotHelper:
 
     def __len__(self, path_name_criteria):
         return len(self.get_paths(self.path_to_models, criteria=path_name_criteria))
-    def get_predictions_and_labels_for_percentage(self, percentage, idx = 0, path_name_criteria = ""):
+    def get_predictions_and_labels_for_percentage(self, percentage, idx = 0, path_name_criteria = "", laplace = False):
+
         paths = self.get_paths(self.path_to_models, criteria=path_name_criteria)
         path = paths[idx]
 
         pcl = pickle.load(open(path, 'rb'))
         labels = pcl['dataset'].y_test.flatten()
-        train, val, test =self.convert_to_proper_format(pcl[percentage])
-
+        train, val, test = self.convert_to_proper_format(self.ensure_numpy(pcl[percentage]), laplace=laplace)
+        if laplace:
+            samples = np.random.normal(test[0], np.sqrt(test[1]), (test[0].shape[0], int(1e6)))
+            samples = samples - (samples.mean(-1) - test[0].flatten())[:, None]
+            test = samples
         return test, labels
 
     def plot_scatter(self, predictions, labels):
@@ -105,10 +109,12 @@ class PlotHelper:
         nlls = []
         labels = torch.from_numpy(labels * scale + loc)
         for mu, var, lab in zip(fmu, fvar, labels):
+
             dist = Normal(mu * scale + loc, var * scale)
             nlls.append(
                 dist.log_prob(lab.view(1, 1)).item()
             )
+
 
         return np.mean(nlls)
 
@@ -137,7 +143,28 @@ class PlotHelper:
         return np.mean(results)
 
     @staticmethod
-    def convert_to_proper_format(run):
+    def ensure_numpy(run):
+        for key in run.keys():
+            if isinstance(run[key], torch.Tensor):
+                run[key] = run[key].numpy()
+
+        return run
+    @staticmethod
+    def convert_to_proper_format(run, laplace = False):
+
+        if laplace:
+            preds_train = run['predictive_train']
+            preds_val = run['predictive_val']
+            preds_test = run['predictive_test']
+            if 'predictive_var_train' in run:
+                preds_train_var = run['predictive_var_train']
+                preds_val_var = run['predictive_var_val']
+                preds_test_var = run['predictive_var_test']
+            else:
+                preds_train_var = np.zeros_like(preds_train)
+                preds_val_var = np.zeros_like(preds_val)
+                preds_test_var = np.zeros_like(preds_test)
+            return (preds_train, preds_train_var), (preds_val, preds_val_var), (preds_test, preds_test_var)
 
         preds_train = np.asarray(run['predictive_train'])
         preds_val = np.asarray(run['predictive_val'])
@@ -160,11 +187,22 @@ class PlotHelper:
         return y_train, y_val, y_test
 
     @staticmethod
-    def get_sigma(residuals):
+    def get_sigma(residuals, gamma_prior = False, alpha = 3, beta = 1):
+        if gamma_prior:
+            if isinstance(residuals, np.ndarray):
+                x = torch.from_numpy(residuals)
+            else:
+                x = residuals.clone()
+            mean_x = torch.mean(x)
+            n = len(x)
+            dist = Gamma(alpha + n / 2, beta + 1 / 2 * torch.sum((x - mean_x)))
+            posterior_tau = torch.mean(dist.sample((1000,)))
+            return 1 / posterior_tau.sqrt().item()
+
         return residuals.std()
 
     def run_for_key(self, pcl, key):
-
+        laplace = getattr(self, 'laplace', False)
         dataset = pcl['dataset']
         if not self.calculate and self.eval_method != 'all':
 
@@ -176,11 +214,15 @@ class PlotHelper:
             return pcl[key][self.eval_method]
 
         y_train, y_val, y_test = self.get_labels(dataset)
-        preds_train, preds_val, preds_test = self.convert_to_proper_format(pcl[key])
-        sigma = self.get_sigma(self.get_residuals(preds_train, y_train, full=False))
+
+        preds_train, preds_val, preds_test = self.convert_to_proper_format(self.ensure_numpy(pcl[key]), laplace)
+        if laplace:
+            preds_train, var_train = preds_train
+            preds_val, var_val = preds_val
+            preds_test, var_test = preds_test
+
+        sigma = self.get_sigma(self.get_residuals(preds_train, y_train, full=False), gamma_prior=False)
         mse = np.mean(self.get_residuals(preds_test, y_test) ** 2)
-
-
 
         if self.eval_method == 'all':
             metric = {}
@@ -193,10 +235,13 @@ class PlotHelper:
         if self.eval_method in  ['nll', 'nll_glm', 'glm_nll']:
 
             fmu, fvar = self.glm_predictive(preds_test, std=True)
+            if laplace:
+                fvar = var_test.flatten()
 
             if 'map' in key:
                 fvar = np.zeros_like(fmu)
 
+            sigma*= 4
             metric = self.glm_nll(fmu, fvar + sigma, y_test,
                                   dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item())
 
@@ -230,14 +275,17 @@ class PlotHelper:
     def calculate_mse(self, preds, labels, scale, loc):
         pred = preds
         label = labels
-        return np.square(pred - label).mean()
+        return np.square(preds.mean(-1)[:, None] - label).mean()
     def run_for_multiple_files(self, paths):
 
         nlls = []
         pbar = tqdm(paths, desc='Running through files')
         for path in pbar:
-            pcl = pickle.load(open(path, 'rb'))
-            nlls.append(self.run_for_all_keys(pcl))
+            try:
+                pcl = pickle.load(open(path, 'rb'))
+                nlls.append(self.run_for_all_keys(pcl))
+            except:
+                continue
         return nlls
 
     def get_paths(self, path, criteria=None):
@@ -246,10 +294,13 @@ class PlotHelper:
         paths = [os.path.join(path, p) for p in os.listdir(path) if criteria in p]
         return paths
 
-    def run_for_dataset(self, criteria=None,  fast = False):
+    def run_for_dataset(self, criteria=None,  fast = False, laplace = False):
+        if laplace:
+            setattr(self, 'laplace', True)
 
         paths = self.get_paths(self.path_to_models, criteria)
         if fast:
             paths = list(np.random.choice(paths, 5))
         nlls = self.run_for_multiple_files(paths)
+        setattr(self, 'laplace', False)
         return nlls

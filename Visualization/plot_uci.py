@@ -11,6 +11,8 @@ import matplotlib as mpl
 from plot_utils_comb import PlotHelper
 from sklearn.linear_model import LinearRegression
 import uncertainty_toolbox as uct
+
+
 def get_cmap(n, name='hsv'):
     '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct
     RGB color; the keyword argument name must be a standard mpl colormap name.'''
@@ -50,7 +52,7 @@ def plot_errorbar_percentages(df, errorbar_func, estimator=None, ax=None, y='Lap
     plt.tight_layout()
 
 
-def plot_estimator(df, errorbar_func, estimator=None, ax=None, data_name=None):
+def plot_estimator(df, errorbar_func, estimator=None, ax=None, data_name=None, show=True):
     method_names = []
     np.random.seed(42)
     color_scheme_1 = True
@@ -78,30 +80,36 @@ def plot_estimator(df, errorbar_func, estimator=None, ax=None, data_name=None):
     # ax.grid(b=True, which='major', color='w', linewidth=1.0)
     # Set the Seaborn style
     plt.savefig(os.path.join(os.getcwd(), title + '.png'))
-    plt.show(block=False)
+    if show:
+        plt.show(block=False)
 
 
-def plot_partial_percentages(percentages, res, data_name=None, df=None, num_runs=15):
+def plot_partial_percentages(percentages, res, data_name=None, df=None, num_runs=15, ax=None, show=True):
     if df is None:
         df = pd.DataFrame()
         df['percentages'] = num_runs * percentages
         for key, val in res.items():
-            if 'Laplace' in key:
-                df[key + '_nll'] = [nll.item() for nll in val.flatten()]
-            else:
-                df[key + '_nll'] = [(-1) * ll for ll in val.flatten()]
+            df[key + '_nll'] = [(-1) * ll if ll < 0 else ll for ll in val.flatten()]
 
-
-    # Plot median
-    fig, ax = plt.subplots(1, 1)
-    plot_estimator(df=df, errorbar_func=lambda x: np.percentile(x, (25, 75)), estimator=np.median, ax=ax, data_name=data_name)
+    if ax is None:
+        # Plot median
+        fig, ax1 = plt.subplots(1, 1)
+    else:
+        ax1 = ax[0]
+    plot_estimator(df=df, errorbar_func=lambda x: np.percentile(x, (25, 75)),
+                   estimator=np.median, ax=ax1, data_name=data_name,
+                   show=show)
 
     # Plot mean
-    fig, ax = plt.subplots(1, 1)
-    plot_estimator(df=df, errorbar_func=('ci', 100), estimator=np.mean, ax=ax, data_name=data_name)
+    if ax is None:
+        fig, ax2 = plt.subplots(1, 1)
+    else:
+        ax2 = ax[1]
+    plot_estimator(df=df, errorbar_func=('ci', 95), estimator=np.mean, ax=ax2, data_name=data_name, show=show)
 
-def plot_series(percentages, res, title = None):
-    fig, ax = plt.subplots(1,1)
+
+def plot_series(percentages, res, title=None):
+    fig, ax = plt.subplots(1, 1)
     perc = percentages
     rs = res - res.mean(-1)[:, None]
 
@@ -113,12 +121,12 @@ def plot_series(percentages, res, title = None):
     df['nll'] = rs.flatten()
 
     df['percentages'] = runs.shape[0] * perc
-    sns.lineplot(data=df, x='percentages', y='nll', errorbar=None, ax = ax, linewidth = 2, legend=False)
-    sns.lineplot(data=df, x = 'percentages', y = 'nll',
-                 hue ='runs', style = 'runs', alpha = 0.4, ax = ax, legend=False,
-                 palette = sns.color_palette(['black']))
+    sns.lineplot(data=df, x='percentages', y='nll', errorbar=None, ax=ax, linewidth=2, legend=False)
+    sns.lineplot(data=df, x='percentages', y='nll',
+                 hue='runs', style='runs', alpha=0.4, ax=ax, legend=False,
+                 palette=sns.color_palette(['black']))
     for line in ax.lines[1:]:
-        line.set(linestyle = '-.')
+        line.set(linestyle='-.')
     ax.lines[0].set_label('Mean')
     ax.legend()
     if title is not None:
@@ -126,7 +134,7 @@ def plot_series(percentages, res, title = None):
     plt.show()
 
 
-def read_data_swag_la(path, include_map = True):
+def read_data_swag_la(path, include_map=True):
     percentages = []
     test_nll = []
     test_mse = []
@@ -175,15 +183,14 @@ def read_data_swag_la_combined(path, include_map=True):
     test_mse_swag = np.array(test_mse_swag)
     return percentages, test_nll_la, test_mse_la, test_nll_swag, test_mse_swag
 
-def plot_scatter(predictions, labels, data_name = None, method_name = None, df = None,
-                 epsilon = 0.1, minmax = None):
-    fig, ax = plt.subplots(1, 1)
+
+def plot_scatter(predictions, labels, data_name=None, method_name=None, df=None,
+                 epsilon=0.1, minmax=None, ax=None):
+    if ax is None:
+        fig, ax = plt.subplots(1, 1)
     errorbar_func = lambda x: np.percentile(x, (2.5, 97.5))
 
     df = pd.DataFrame()
-    df['labels'] = np.tile(labels, predictions.shape[-1])
-    df['preds'] = predictions.T.flatten()
-
 
     # sns.pointplot(errorbar=errorbar_func,
     #               data=df, x="labels", y='preds',
@@ -197,36 +204,34 @@ def plot_scatter(predictions, labels, data_name = None, method_name = None, df =
     #               ax=ax)
 
     point_color = 'tab:orange'
-    ax.scatter(labels, predictions.mean(-1), marker = 'd', s=20,
-               label = 'Predictions and labels', color =point_color)
-    errs = np.percentile(predictions, (2.5, 97.5), axis = 1)
+    ax.scatter(labels, predictions.mean(-1), marker='d', s=20,
+               label='Predictions and labels', color=point_color)
+    errs = np.percentile(predictions, (2.5, 97.5), axis=1)
     errs = np.abs((errs - predictions.mean(-1)))
 
-    ax.errorbar(labels, predictions.mean(-1), yerr = errs, fmt = 'none', capsize = 4,
-                color = point_color, alpha = 0.7, linewidth = 0.7)
+    ax.errorbar(labels, predictions.mean(-1), yerr=errs, fmt='none', capsize=4,
+                color=point_color, alpha=0.7, linewidth=0.7)
 
     if minmax is None:
         minimum = min((labels.min(), np.min(predictions.mean(-1) + errs),
-                       np.min(predictions.mean(-1) - errs)))-epsilon
+                       np.min(predictions.mean(-1) - errs))) - epsilon
         maximum = max((labels.max(), np.max(predictions.mean(-1) + errs),
-                       np.max(predictions.mean(-1) - errs)))+epsilon
+                       np.max(predictions.mean(-1) - errs))) + epsilon
     elif isinstance(minmax, (tuple, list)):
         minimum, maximum = minmax
 
     ax.plot(np.linspace(minimum, maximum, 200), np.linspace(minimum, maximum, 200),
-        linestyle='--', linewidth=1.4,
-        color='tab:green', label = 'Ideal curve'
-    )
+            linestyle='--', linewidth=1.4,
+            color='tab:green', label='Ideal curve'
+            )
 
     lin_mod = LinearRegression().fit(labels[:, None], predictions.mean(-1)[:, None])
 
     preds = lin_mod.predict(np.linspace(minimum, maximum, 200)[:, None])
     ax.plot(np.linspace(minimum, maximum, 200), preds,
-        linestyle='--', linewidth=1.4,
-        color='tab:red', label = 'Linear Trend'
-    )
-
-
+            linestyle='--', linewidth=1.4,
+            color='tab:red', label='Linear Trend'
+            )
 
     ax.set_ylim(ymin=minimum, ymax=maximum)
     ax.set_xlim(xmin=minimum, xmax=maximum)
@@ -253,24 +258,25 @@ def plot_scatter(predictions, labels, data_name = None, method_name = None, df =
 
     ax.set_xlabel('Labels')
     ax.set_ylabel('Predictions')
-    title = f'Predictions and labels for {method_name}'
+    data_name = '' if data_name is None else ", " + data_name
+    title = f'Predictions and labels for {method_name}' + data_name
     ax.set_title(title)
+    return ax
 
-    plt.savefig(os.path.join(os.getcwd(), title + '.png'))
-    plt.show(block=False)
 
-def plot_calibration(predictions, labels, pred_var = None, ax = None, label = None):
-
+def plot_calibration(predictions, labels, pred_var=None, ax=None, label=None):
     if ax is None:
-        fig, ax = plt.subplots(1,1)
+        fig, ax = plt.subplots(1, 1)
 
-    predictions_mean = predictions.mean(-1)
-    predictions_std = predictions.std(-1) if pred_var is None else np.sqrt(pred_var)
+    if predictions.ndim > 1:
+        predictions_mean = predictions.mean(-1)
+        predictions_std = predictions.std(-1)
+    else:
+        predictions_mean = predictions
+        predictions_std = np.sqrt(pred_var)
 
-    uct.plot_calibration(predictions_mean, predictions_std, labels, ax = ax, curve_label=label,
+    uct.plot_calibration(predictions_mean, predictions_std, labels, ax=ax, curve_label=label,
                          show_miscalib=False)
-
-
 
 
 def read_vi_data(path):
@@ -330,7 +336,7 @@ def read_hmc_vi_combined(path):
 def dict_to_nparray(dic):
     percentages, data = [], []
     for key, val in dic.items():
-        percentages.append([0]*len(val) if 'map' in key else [int(key)] * len(val))
+        percentages.append([0] * len(val) if 'map' in key else [int(key)] * len(val))
         data.append(val)
     data = np.transpose(np.array(data))
     return data
@@ -345,20 +351,18 @@ def get_under_folders_and_names(path):
             paths.append(os.path.join(path, p))
     return names, paths
 
-def set_legends_to_plot(ax, criteria = 'Ideal', max_count = 1):
 
+def set_legends_to_plot(ax, criteria='Ideal', max_count=1):
     lines, labels = [], []
     counter = 0
 
     holder = []
     cntd = 0
 
-
     for idx, child in enumerate(ax._children):
         if isinstance(child, mpl.collections.PolyCollection):
-            holder.append(ax._children[cntd: idx+1])
-            cntd = idx+1
-
+            holder.append(ax._children[cntd: idx + 1])
+            cntd = idx + 1
 
     for hold in holder:
         fill_between = hold[-1]
@@ -376,7 +380,8 @@ def set_legends_to_plot(ax, criteria = 'Ideal', max_count = 1):
             labels.append(line._label)
             counter += 1
 
-    # ax.legend(lines, labels)
+    ax.legend(lines, labels)
+
 
 def plot_hmc_vi(path_hmc, path_vi):
     names, paths_hmc = get_under_folders_and_names(path_hmc)
@@ -429,23 +434,33 @@ def plot_la_swag_combined(path):
                                  num_runs=test_nll_la.shape[0])
 
 
-def calculate_max_and_min_for_predictions(ph, run_type, epsilon):
+def calculate_max_and_min_for_predictions(ph, run_type, epsilon, idx=0, laplace=False):
+    predictions, labels = ph.get_predictions_and_labels_for_percentage('100', idx, run_type, laplace=laplace)
 
-    predictions, labels = ph.get_predictions_and_labels_for_percentage('100',0, run_type)
-
-    errs = np.percentile(predictions, (2.5, 97.5), axis = 1)
+    errs = np.percentile(predictions, (2.5, 97.5), axis=1)
     errs = np.abs((errs - predictions.mean(-1)))
 
     minimum = min((labels.min(), np.min(predictions.mean(-1) + errs),
-                   np.min(predictions.mean(-1) - errs)))-epsilon
+                   np.min(predictions.mean(-1) - errs))) - epsilon
     maximum = max((labels.max(), np.max(predictions.mean(-1) + errs),
-                   np.max(predictions.mean(-1) - errs)))+epsilon
+                   np.max(predictions.mean(-1) - errs))) + epsilon
 
     return minimum, maximum
 
 
-def set_dataset(path1, path2):
+def calculate_minmax_for_laplace(ph, run_type, epsilon, idx):
+    predictions, labels = ph.get_predictions_and_labels_for_percentage('100', idx, run_type, laplace=True)
+    fvar = predictions[1]
+    errs = np.sqrt(fvar) * 1.96
 
+    minimum = min((labels.min(), np.min(predictions + errs),
+                   np.min(predictions - errs))) - epsilon
+    maximum = max((labels.max(), np.max(predictions + errs),
+                   np.max(predictions - errs))) + epsilon
+    return minimum, maximum
+
+
+def set_dataset(path1, path2):
     correct_ = pickle.load(open(path1, 'rb'))
     to_be_changed = pickle.load(open(path2, 'rb'))
 
@@ -453,7 +468,8 @@ def set_dataset(path1, path2):
     to_be_changed['dataset'] = correct_['dataset']
 
     with open(path2, 'wb') as handle:
-        pickle.dump(to_be_changed, handle ,protocol=pickle.HIGHEST_PROTOCOL)
+        pickle.dump(to_be_changed, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
 
 def change_datasets(path):
     laplace, swag = [], []
@@ -472,40 +488,276 @@ def change_datasets(path):
             set_dataset(p_la, p_swa)
 
 
+class PlotFunctionHolder:
+
+    def __init__(self, la_swa_path = "", vi_hmc_path = "", calculate=True, show=True):
+        self.la_swa_path = la_swa_path
+        self.vi_hmc_path = vi_hmc_path
+        self.calculate = calculate
+        self.plot_helper_la_swa = PlotHelper(self.la_swa_path, 'nll_glm', calculate=calculate)
+        self.plot_helper_vi_hmc = PlotHelper(self.vi_hmc_path, 'nll_glm', calculate=calculate)
+
+        self.folder_name_to_data_name = {
+            'energy': 'Energy', 'boston': 'Boston', 'yacht': 'Yacht'
+        }
+
+        self.eval_methods_to_names = {
+            'mse': 'MSE', 'nll_glm': 'NLL', 'glm_nll': 'NLL', 'elpd': 'ELPD', 'calib': 'Calibration',
+            'sqrt': 'ELPD'
+        }
+
+        self.show_ = show
+
+    def set_eval_method(self, new_eval_method):
+        self.plot_helper_vi_hmc.eval_method = new_eval_method
+        self.plot_helper_la_swa.eval_method = new_eval_method
+
+    def find_data_name(self, path):
+        data_name = os.path.basename(path).split("_")[0]
+
+        return self.folder_name_to_data_name[data_name]
+
+    def get_eval_method_name(self, eval_method):
+        return self.eval_methods_to_names[eval_method]
+
+    def show(self):
+        if self.show_:
+            plt.show()
+
+    def plot_pred_labels_la_swa(self, percentages=('1', '100')):
+
+        data_name = self.find_data_name(self.la_swa_path)
+        for method, criteria in [('Laplace', 'laplace'), ('SWAG', 'swag')]:
+            fig, ax = plt.subplots(1, 1)
+            minmax = calculate_max_and_min_for_predictions(ph, run_type=criteria, epsilon=0.1, idx=4,
+                                                           laplace=True if 'laplace' in criteria else False)
+            for run in percentages:
+                predictions, labels = self.plot_helper_la_swa.get_predictions_and_labels_for_percentage(
+                    run, 4, criteria, laplace=True if 'laplace' in criteria else False)
+                plot_scatter(predictions, labels, data_name=data_name, minmax=minmax,
+                             method_name=f"{method}, {run} stoch", ax=ax)
+                self.show()
+
+    def plot_pred_labels_vi_hmc(self, percentages=('1', '100')):
+
+        data_name = self.find_data_name(self.la_swa_path)
+
+        for method, critera in [('VI', 'vi_run'), ('HMC', 'hmc')]:
+
+            minmax = calculate_max_and_min_for_predictions(
+                self.plot_helper_vi_hmc, run_type=critera, epsilon=0.1, idx=4)
+            for percentage in percentages:
+                fig, ax = plt.subplots(1, 1)
+                predictions, labels = self.plot_helper_vi_hmc.get_predictions_and_labels_for_percentage(
+                    percentage, 4, critera)
+                plot_scatter(predictions, labels, data_name=data_name, minmax=minmax,
+                             method_name=f"{method}, {percentage} stoch", ax=ax)
+
+                self.show()
+
+    def plot_partial_percentages_nodes(self):
+
+        metrics_mul = self.plot_helper_vi_hmc.run_for_dataset(criteria='node_run')
+        metrics_add = self.plot_helper_vi_hmc.run_for_dataset(criteria='add')
+        percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100]
+
+        data_name = self.find_data_name(self.vi_hmc_path) + " " + self.get_eval_method_name(
+            self.plot_helper_vi_hmc.eval_method)
+
+        if (l1 := len(metrics_add)) != (l2 := len(metrics_mul)):
+            min_ = min((l1, l2))
+            metrics_mul = metrics_mul[:min_]
+            metrics_add = metrics_add[:min_]
+
+        fig1, ax1 = plt.subplots(1, 1)
+        fig2, ax2 = plt.subplots(1, 1)
+
+        plot_partial_percentages(percentages=percentages,
+                                 res={'Additive': np.array(metrics_add), 'Multiplicative': np.array(metrics_mul)},
+                                 data_name=data_name,
+                                 num_runs=len(metrics_mul),
+                                 ax=[ax1, ax2], show=False)
+        ylabel = self.eval_methods_to_names[self.plot_helper_la_swa.eval_method]
+        ax1.set_ylabel(ylabel)
+        ax2.set_ylabel(ylabel)
+        self.show()
+    def ensure_same_length_and_get_name(self, metrics, data_path, eval_method):
+
+        min_ = min((len(met) for met in metrics))
+        metrics = [met[:min_] for met in metrics]
+
+        data_name = self.find_data_name(data_path) + " " + self.get_eval_method_name(eval_method)
+        return metrics, data_name
+
+    def plot_partial_percentages_vi_hmc(self):
+        metrics_vi = self.plot_helper_vi_hmc.run_for_dataset(criteria='vi_run')
+        metrics_hmc = self.plot_helper_vi_hmc.run_for_dataset(criteria='hmc')
+        percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100]
+
+        (metrics_vi, metrics_hmc), data_name = self.ensure_same_length_and_get_name(
+            [metrics_vi, metrics_hmc], self.vi_hmc_path, self.plot_helper_vi_hmc.eval_method
+        )
+
+        fig1, ax1 = plt.subplots(1, 1)
+        fig2, ax2 = plt.subplots(1, 1)
+        plot_partial_percentages(percentages=percentages,
+                                 res={'VI': np.array(metrics_vi), 'HMC': np.array(metrics_hmc)},
+                                 data_name=data_name,
+                                 num_runs=len(metrics_vi),
+                                 ax=[ax1, ax2], show=False)
+
+        ylabel = self.eval_methods_to_names[self.plot_helper_la_swa.eval_method]
+        ax1.set_ylabel(ylabel)
+        ax2.set_ylabel(ylabel)
+        self.show()
+
+    def plot_partial_percentages_la_swa(self):
+        metrics_la = self.plot_helper_la_swa.run_for_dataset(criteria='laplace')
+        metrics_swa = self.plot_helper_la_swa.run_for_dataset(criteria='swag')
+        percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100]
+
+        (metrics_la, metrics_swa), data_name = self.ensure_same_length_and_get_name(
+            [metrics_la, metrics_swa], self.la_swa_path, self.plot_helper_la_swa.eval_method
+        )
+
+        fig1, ax1 = plt.subplots(1, 1)
+        fig2, ax2 = plt.subplots(1, 1)
+        plot_partial_percentages(percentages=percentages,
+                                 res={'SWA-G': np.array(metrics_swa), 'Laplace': np.array(metrics_la)},
+                                 data_name=data_name,
+                                 num_runs=len(metrics_la),
+                                 ax=[ax1, ax2], show=False)
+
+        ylabel = self.eval_methods_to_names[self.plot_helper_la_swa.eval_method]
+        ax1.set_ylabel(ylabel)
+        ax2.set_ylabel(ylabel)
+        self.show()
+    def plot_calibration_la_swa(self, percentages=None):
+
+        if percentages is None:
+            percentages = ['1', '5', '61', '100']
+
+        for method, criteria in [('Laplace', 'laplace'), ('SWAG', 'swag')]:
+            fig, ax = plt.subplots(1, 1)
+            for run in percentages:
+                predictions, labels = self.plot_helper_la_swa.get_predictions_and_labels_for_percentage(
+                    run, 4, criteria, laplace=True if 'laplace' in criteria else False
+                )
+                if 'laplace' == criteria:
+                    plot_calibration(predictions[0], labels, pred_var=predictions[1], ax=ax, label=f'{run} pct stoch')
+                else:
+                    plot_calibration(predictions, labels, ax=ax, label=f'{run} pct stoch')
+            set_legends_to_plot(ax)
+            ax.set_title(f'Average Calibration {method}')
+            self.show()
+
+    def plot_calibration_vi_hmc(self, percentages = None):
+
+        if percentages is None:
+            percentages = ['1', '5', '61', '100']
+
+        for method, criteria in [('VI', 'vi_run'), ('HMC', 'hmc')]:
+            fig, ax = plt.subplots(1, 1)
+            for run in percentages:
+                predictions, labels = self.plot_helper_vi_hmc.get_predictions_and_labels_for_percentage(
+                    run, 4, criteria, laplace=True if 'laplace' in criteria else False
+                )
+                plot_calibration(predictions, labels, ax=ax, label=f'{run} pct stoch')
+            set_legends_to_plot(ax)
+            ax.set_title(f'Average Calibration {method}')
+            self.show()
+
+    def plot_calibration_nodes(self, percentages=None):
+
+        if percentages is None:
+            percentages = ['1', '5', '61', '100']
+
+        for method, criteria in [('Additive', 'add'), ('Multiplicative', 'node_run')]:
+            fig, ax = plt.subplots(1, 1)
+            for run in percentages:
+                predictions, labels = self.plot_helper_vi_hmc.get_predictions_and_labels_for_percentage(
+                    run, 4, criteria, laplace=True if 'laplace' in criteria else False
+                )
+                plot_calibration(predictions, labels, ax=ax, label=f'{run} pct stoch')
+            set_legends_to_plot(ax)
+            ax.set_title(f'Average Calibration {method}')
+            self.show()
+
+
+
+
 if __name__ == '__main__':
     # path_la = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_Laplace_MAP'
     # path_swag = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_SWAG_MAP_nobayes'
     # plot_la_swag(path_la, path_swag)
 
     # path = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_Laplace_SWAG_1'
-    path = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\energy_models'
-
+    path = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\UCI_Laplace_SWAG_all_metrics\yacht_models'
+    path_vi =r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\yacht_models'
+    # change_datasets(path)
+    plot_holder = PlotFunctionHolder(la_swa_path=path, vi_hmc_path=path_vi, calculate=True)
+    # plot_holder.set_eval_method('mse')
+    plot_holder.plot_partial_percentages_vi_hmc()
+    breakpoint()
+    #
+    # breakpoint()
+    # path = r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\boston_models'
 
     # path = r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\energy_models'
 
     # plot_la_swag(path_la, path_swag)
-
-
 
     # HMC VI
     # path_hmc = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_HMC'
     # path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_VI'
     # plot_hmc_vi(path_hmc, path_vi)
 
-    ph = PlotHelper(path, 'nll_glm',
+    ph = PlotHelper(path, 'mse',
                     calculate=True)
 
-    metrics = ph.run_for_dataset(criteria='swag')
-    # mets = [met for met in metrics if max(met) < 4]
-    percentages = [0,1, 2, 5, 8, 14, 23, 37, 61, 100]
-    plot_partial_percentages(percentages=percentages,
-                             res={'swag': np.array(metrics)},
-                             data_name='energy nll',
-                             num_runs=len(metrics))
+    for method, criteria in [('Laplace', 'laplace'), ('SWAG', 'swag')]:
+        fig, ax = plt.subplots(1, 1)
+        minmax = calculate_max_and_min_for_predictions(ph, run_type=criteria, epsilon=0.1, idx=4,
+                                                       laplace=True if 'laplace' in criteria else False)
+        for run in ['1', '100']:
+            predictions, labels = ph.get_predictions_and_labels_for_percentage(run, 4, criteria,
+                                                                               laplace=True if 'laplace' in criteria else False)
+            plot_scatter(predictions, labels, data_name='energy', minmax=minmax,
+                         method_name=f"{method}, {run} stoch")
 
+    # metrics_mul = ph.run_for_dataset(criteria='hmc')
+    # metrics_add = ph.run_for_dataset(criteria='vi_run')
+    for method, critera in [('VI', 'vi_run'), ('HMC', 'hmc'), ('Multiplicative', 'node_run'),
+                            ('Additive', 'add')]:
+        minmax = calculate_max_and_min_for_predictions(ph, run_type=critera, epsilon=0.1, idx=4)
+        for percentage in ['1', '100']:
+            predictions, labels = ph.get_predictions_and_labels_for_percentage(percentage, 4, critera)
+            plot_scatter(predictions, labels, data_name='energy', minmax=minmax,
+                         method_name=f"{method}, {percentage} stoch")
     breakpoint()
+    # metrics_mul = metrics_mul[:len(metrics_add)]
+    # # mets = [met for met in metrics if max(met) < 4]
+    # percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100]
+    # plot_partial_percentages(percentages=percentages,
+    #                          res={'VI': np.array(metrics_add), 'HMC': np.array(metrics_mul)},
+    #                          data_name='energy MSE',
+    #                          num_runs=len(metrics_mul))
 
-    fig, ax = plt.subplots(1, 1)
+    # for method, critera in [('VI', 'vi_run'), ('HMC', 'hmc'), ('Multiplicative', 'node_run'),
+    #                         ('Additive', 'add')]:
+    for method, criteria in [('Laplace', 'laplace'), ('SWAG', 'swag')]:
+        fig, ax = plt.subplots(1, 1)
+        for run in ['1', '5', '61', '100']:
+            predictions, labels = ph.get_predictions_and_labels_for_percentage(run, 4, criteria,
+                                                                               laplace=True if 'laplace' in criteria else False)
+            if 'laplace' == criteria:
+                plot_calibration(predictions[0], labels, pred_var=predictions[1], ax=ax, label=f'{run} pct stoch')
+            else:
+                plot_calibration(predictions, labels, ax=ax, label=f'{run} pct stoch')
+        set_legends_to_plot(ax)
+        ax.set_title(f'Average Calibration {method}')
+        plt.show()
+    breakpoint()
     for run in ['14']:
         preds, labs = [], []
         for i in range(ph.__len__('vi_run')):
@@ -516,9 +768,9 @@ if __name__ == '__main__':
     breakpoint()
     # predictions, labels = ph.get_predictions_and_labels_for_percentage('8', 0, 'vi_run')
 
-    for run in ['1','2', '8','14', '23', '61', '100']:
+    for run in ['1', '2', '8', '14', '23', '61', '100']:
         predictions, labels = ph.get_predictions_and_labels_for_percentage(run, 0, 'vi_run')
-        plot_calibration(predictions, labels, ax = ax, label = f'{run} pct stochasticity')
+        plot_calibration(predictions, labels, ax=ax, label=f'{run} pct stochasticity')
     set_legends_to_plot(ax)
 
     plt.show()
@@ -530,5 +782,3 @@ if __name__ == '__main__':
         pickle.dump({'vi': nlls_vi, 'node': nlls_node}, h, protocol=pickle.HIGHEST_PROTOCOL)
 
     breakpoint()
-
-
