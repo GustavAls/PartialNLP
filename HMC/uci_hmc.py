@@ -1046,6 +1046,8 @@ if __name__ == "__main__":
         svi_results = svi.run(rng_key, 20000, X=dataset.X_train, y=dataset.y_train)
         MAP_params = svi_results.params
         MAP_params = convert_shape_map_params(MAP_params)
+        test_ll_homoscedastic, _ = evaluate_MAP(model, MAP_params, dataset.X_test, dataset.y_test,
+                                                rng_key, y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
     else:
         # Setup pytorch MAP
         n_train, p = dataset.X_train.shape
@@ -1055,9 +1057,8 @@ if __name__ == "__main__":
         mle_model.load_state_dict(torch.load(args.map_path))
         mle_state_dict = mle_model.state_dict()
         MAP_params = convert_torch_to_pyro_params(mle_state_dict, MAP_params)
+        test_ll_homoscedastic = 0.0
 
-    test_ll_homoscedastic, _ = evaluate_MAP(model, MAP_params, dataset.X_test, dataset.y_test,
-                                     rng_key, y_scale=dataset.scl_Y.scale_, y_loc=dataset.scl_Y.mean_)
 
     predictive_train, predictive_val, predictive_test = create_predictives(model, MAP_params, dataset, one_d_bnn,
                                                                            num_mc_samples=1, delta=True)
