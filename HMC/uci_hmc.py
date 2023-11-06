@@ -1165,7 +1165,7 @@ if __name__ == "__main__":
 
     if args.node_based:
         if args.inf_norm_mask:
-            dict_path = os.path.join(args.output_path, f"results_vi_node_run_{args.run}_inf.pkl")
+            dict_path = os.path.join(args.output_path, f"results_vi_node_max_run_{args.run}.pkl")
         else:
             dict_path = os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl")
 
