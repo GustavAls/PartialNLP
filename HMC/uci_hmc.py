@@ -54,7 +54,7 @@ def convert_torch_to_pyro_params(torch_params, MAP_params):
         elif "b_output" in svi_key:
             MAP_params[svi_key] = tensor_to_jax_array(torch_params['out.bias'].detach()).T[:, None]
 
-    return
+    return MAP_params
 
 def convert_shape_map_params(MAP_params):
     # Torch model does not have a precision parameter
@@ -747,36 +747,30 @@ def create_sample_mask_largest_inf_norm(percentile, MAP_params):
         "b_output_auto_loc",
     ]
 
-    index_holder = []
-    inf_norm_holder = []
-    counter = 0
+    inf_norms = []
     for key in keys:
-        inf_norm = MAP_params[key].max(-1)
-        index_holder.append(np.argsort(inf_norm)+counter)
-        inf_norm_holder.append(inf_norm)
-        counter+=len(inf_norm)
+        inf_norms.append(np.abs(MAP_params[key]).max(-1))
 
+    all_values = np.concatenate(inf_norms)
+    val = np.percentile(all_values, 100 - percentile)
 
-
-    all_values = np.concatenate([MAP_params[key].ravel() for key in keys])
-    param_abs_values = np.abs(all_values)
-    val = np.percentile(param_abs_values, 100 - percentile)
-
-    W1_sample_mask = np.abs(MAP_params["W1_auto_loc"]) >= val
-    W2_sample_mask = np.abs(MAP_params["W2_auto_loc"]) >= val
-    W_output_sample_mask = np.abs(MAP_params["W_output_auto_loc"]) >= val
-    b1_sample_mask = np.abs(MAP_params["b1_auto_loc"]) >= val
-    b2_sample_mask = np.abs(MAP_params["b2_auto_loc"]) >= val
-    b_output_sample_mask = np.abs(MAP_params["b_output_auto_loc"]) >= val
+    W1_sample_mask = inf_norms[0] >= val
+    W2_sample_mask = inf_norms[1] >= val
+    W_output_sample_mask = inf_norms[2] >= val
+    b1_sample_mask = inf_norms[3] >= val
+    b2_sample_mask = inf_norms[4] >= val
+    b_output_sample_mask = inf_norms[5] >= val
 
     sample_mask_tuple = (
-        W1_sample_mask,
-        W2_sample_mask,
-        W_output_sample_mask,
-        b1_sample_mask,
-        b2_sample_mask,
-        b_output_sample_mask,
+        W1_sample_mask.reshape(-1, 1),
+        W2_sample_mask.reshape(-1, 1),
+        W_output_sample_mask.reshape(-1, 1),
+        b1_sample_mask.reshape(-1, 1),
+        b2_sample_mask.reshape(-1, 1),
+        b_output_sample_mask.reshape(-1, 1),
     )
+
+    return sample_mask_tuple
 
 def create_sample_mask_largest_abs_values(percentile, MAP_params):
     keys = [
@@ -891,7 +885,7 @@ def run_for_percentile(
 
 
 def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, num_epochs, MAP_params,
-                node_based=True, add_node_based = False,l_scale=1.0, is_svi_map=False):
+                node_based=True, add_node_based = False,l_scale=1.0, is_svi_map=False, inf_norm_mask = False):
     rng_key = random.PRNGKey(1)
     optimizer = numpyro.optim.Adam(0.01)
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
@@ -913,7 +907,12 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
         if str(percentile) not in results_dict.keys():
             sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
             if node_based:
-                sample_mask_tuple = create_sample_mask_random(percentile, MAP_params, mask_values)
+
+                if inf_norm_mask:
+                    sample_mask_tuple = create_sample_mask_largest_inf_norm(percentile, MAP_params)
+                else:
+                    sample_mask_tuple = create_sample_mask_random(percentile, MAP_params, mask_values)
+
             else:
                 sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
 
@@ -1043,7 +1042,11 @@ if __name__ == "__main__":
     parser.add_argument('--hmc', type=ast.literal_eval, default=False)
     parser.add_argument('--l_var', type=float, default=1.0)
     parser.add_argument('--node_based_add', type=ast.literal_eval, default=False)
+    parser.add_argument('--inf_norm_mask', type=ast.literal_eval, default=False)
     args = parser.parse_args()
+
+    if args.inf_norm_mask and not args.node_based:
+        UserWarning("inf norm mask only implemented for node based multiplicative, it has no effect in current run")
 
     if args.dataset == "yacht":
         dataset_class = UCIYachtDataset
@@ -1174,7 +1177,8 @@ if __name__ == "__main__":
             # Node based
             print("Running node based VI")
             make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=vi_results_dict,
-                        MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs, node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map)
+                        MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs, node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map,
+                        inf_norm_mask=args.inf_norm_mask)
 
     if args.node_based_add:
         dict_path = os.path.join(args.output_path, f"results_vi_node_add_run_{args.run}.pkl")
