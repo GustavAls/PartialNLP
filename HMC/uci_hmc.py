@@ -737,6 +737,46 @@ def create_sample_mask_random(percentile, MAP_params, vals):
 
     return sample_mask_tuple
 
+def create_sample_mask_largest_inf_norm(percentile, MAP_params):
+    keys = [
+        "W1_auto_loc",
+        "W2_auto_loc",
+        "W_output_auto_loc",
+        "b1_auto_loc",
+        "b2_auto_loc",
+        "b_output_auto_loc",
+    ]
+
+    index_holder = []
+    inf_norm_holder = []
+    counter = 0
+    for key in keys:
+        inf_norm = MAP_params[key].max(-1)
+        index_holder.append(np.argsort(inf_norm)+counter)
+        inf_norm_holder.append(inf_norm)
+        counter+=len(inf_norm)
+
+
+
+    all_values = np.concatenate([MAP_params[key].ravel() for key in keys])
+    param_abs_values = np.abs(all_values)
+    val = np.percentile(param_abs_values, 100 - percentile)
+
+    W1_sample_mask = np.abs(MAP_params["W1_auto_loc"]) >= val
+    W2_sample_mask = np.abs(MAP_params["W2_auto_loc"]) >= val
+    W_output_sample_mask = np.abs(MAP_params["W_output_auto_loc"]) >= val
+    b1_sample_mask = np.abs(MAP_params["b1_auto_loc"]) >= val
+    b2_sample_mask = np.abs(MAP_params["b2_auto_loc"]) >= val
+    b_output_sample_mask = np.abs(MAP_params["b_output_auto_loc"]) >= val
+
+    sample_mask_tuple = (
+        W1_sample_mask,
+        W2_sample_mask,
+        W_output_sample_mask,
+        b1_sample_mask,
+        b2_sample_mask,
+        b_output_sample_mask,
+    )
 
 def create_sample_mask_largest_abs_values(percentile, MAP_params):
     keys = [

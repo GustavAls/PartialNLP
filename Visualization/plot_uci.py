@@ -692,12 +692,12 @@ if __name__ == '__main__':
     # plot_la_swag(path_la, path_swag)
 
     # path = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_Laplace_SWAG_1'
-    path = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\UCI_Laplace_SWAG_all_metrics\energy_models'
-    path_vi =r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\energy_models'
+    path = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\UCI_Laplace_SWAG_all_metrics\yacht_models'
+    path_vi =r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\yacht_models'
     # change_datasets(path)
     plot_holder = PlotFunctionHolder(la_swa_path=path, vi_hmc_path=path_vi, calculate=True)
     # plot_holder.set_eval_method('mse')
-    plot_holder.plot_partial_percentages_la_swa()
+    plot_holder.plot_partial_percentages_vi_hmc()
     breakpoint()
     #
     # breakpoint()

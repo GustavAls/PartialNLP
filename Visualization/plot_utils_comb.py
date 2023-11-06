@@ -32,6 +32,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import seaborn as sns
 from torch.distributions import Gamma
+from uncertainty_toolbox.metrics import mean_absolute_calibration_error
 class PlotHelper:
 
     def __init__(self, path_to_models, eval_method='nll', calculate = True):
@@ -231,6 +232,15 @@ class PlotHelper:
                 metric[eval_method] = self.run_for_key(pcl, key)
             self.eval_method = 'all'
 
+        if self.eval_method in  ['calib', 'calibration', 'cal']:
+
+            fmu, fvar = self.glm_predictive(preds_test, std = True)
+            if laplace:
+                fvar = np.sqrt(var_test.flatten())
+            if key in ['MAP', 'map']:
+                fvar = np.zeros_like(fmu)
+
+            metric = mean_absolute_calibration_error(fmu, fvar, y_test)
 
         if self.eval_method in  ['nll', 'nll_glm', 'glm_nll']:
 
