@@ -885,7 +885,7 @@ def run_for_percentile(
 
 
 def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, num_epochs, MAP_params,
-                node_based=True, add_node_based = False,l_scale=1.0, is_svi_map=False, inf_norm_mask = False):
+                node_based=True, add_node_based = False,l_scale=1.0, is_svi_map=False, inf_norm_mask = False, save_name = None):
     rng_key = random.PRNGKey(1)
     optimizer = numpyro.optim.Adam(0.01)
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
@@ -894,11 +894,6 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
     if node_based:
         keys = ["W1_auto_loc", "W2_auto_loc", "W_output_auto_loc", "b1_auto_loc", "b2_auto_loc", "b_output_auto_loc"]
         mask_values = [np.random.normal(0, 1, size=(MAP_params[key].shape[0],)) for key in keys]
-        save_name = os.path.join(save_path, f"results_vi_node_run_{run}.pkl")
-    elif add_node_based:
-        save_name = os.path.join(save_path, f"results_vi_node_add_run_{run}.pkl")
-    else:
-        save_name = os.path.join(save_path, f"results_vi_run_{run}.pkl")
 
     for percentile in percentiles:
         prior_variance = 100 - percentile + 1
@@ -997,7 +992,7 @@ def train_MAP_solution(mle_model, dataset, num_epochs):
 
 
 def make_hmc_run(run, dataset, scale_prior, prior_variance, save_path, likelihood_scale, percentiles, results_dict,
-                 MAP_params):
+                 MAP_params, save_name):
     for percentile in percentiles:
         # If update runs are done
         if str(percentile) not in results_dict.keys():
@@ -1010,7 +1005,7 @@ def make_hmc_run(run, dataset, scale_prior, prior_variance, save_path, likelihoo
                 prior_variance=prior_variance,
                 scale=likelihood_scale
             )
-            with open(os.path.join(save_path, f"results_hmc_run_{run}.pkl"), "wb") as handle:
+            with open(save_name, "wb") as handle:
                 pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
             print("Saved results for ", percentile, "%")
 
@@ -1166,10 +1161,14 @@ if __name__ == "__main__":
             # VI run
             print("Running VI")
             make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance,scale= args.likelihood_scale, results_dict=vi_results_dict,
-                        MAP_params=MAP_params, save_path=args.output_path,  num_epochs=args.num_epochs, node_based=False, l_scale=args.l_var)
+                        MAP_params=MAP_params, save_path=args.output_path,  num_epochs=args.num_epochs, node_based=False, l_scale=args.l_var, save_name=dict_path)
 
     if args.node_based:
-        dict_path = os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl")
+        if args.inf_norm_mask:
+            dict_path = os.path.join(args.output_path, f"results_vi_node_run_{args.run}_inf.pkl")
+        else:
+            dict_path = os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl")
+
         if os.path.exists(dict_path):
             vi_results_dict = pickle.load(open(dict_path, "rb"))
             MAP_params = vi_results_dict['map_results']['map_params']
@@ -1178,7 +1177,7 @@ if __name__ == "__main__":
             print("Running node based VI")
             make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=vi_results_dict,
                         MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs, node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map,
-                        inf_norm_mask=args.inf_norm_mask)
+                        inf_norm_mask=args.inf_norm_mask, save_name=dict_path)
 
     if args.node_based_add:
         dict_path = os.path.join(args.output_path, f"results_vi_node_add_run_{args.run}.pkl")
@@ -1190,7 +1189,7 @@ if __name__ == "__main__":
             make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale,
                         results_dict=vi_results_dict,
                         MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs,
-                        node_based=False, add_node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map)
+                        node_based=False, add_node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map, save_name=dict_path)
 
     if args.hmc:
         dict_path = os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")
@@ -1202,4 +1201,4 @@ if __name__ == "__main__":
             make_hmc_run(run=args.run, dataset=dataset, scale_prior=args.scale_prior,
                          prior_variance=args.prior_variance,
                          save_path=args.output_path, likelihood_scale=args.likelihood_scale, percentiles=percentiles,
-                         results_dict=hmc_result_dict, MAP_params=MAP_params)
+                         results_dict=hmc_result_dict, MAP_params=MAP_params, save_name=dict_path)
