@@ -177,11 +177,28 @@ def evaluate_swag(model, dataloader, mask, swag_results, train_args, sigma=1):
             preds = model_(batch)
             mc_matrix_preds[:, mc_run] = preds.flatten()
 
-        mc_overall_nll = calculate_nll_third(labels, mc_matrix_preds, sigma, y_scale.item(), y_loc.item())
+        # mc_overall_nll = calculate_nll_third(labels, mc_matrix_preds, sigma, y_scale.item(), y_loc.item())
         mse = calculate_mse_batch(mc_matrix_preds.mean(-1), labels.flatten())
+        nll = final_nll_calculatation(mc_matrix = mc_matrix_preds, labels = labels.flatten(),
+                                      sigma = sigma,y_scale = y_scale.item(),y_loc = y_loc.item())
         # test = calculate_nll_fourth(labels, mc_matrix_preds, sigma, y_scale.item(), y_loc.item())
 
-    return np.mean(mc_overall_nll), mse
+    return nll, mse
+
+
+def final_nll_calculatation(mc_matrix, labels, sigma, y_scale, y_loc):
+
+    fmu, fvar = mc_matrix.mean(-1), mc_matrix.std(-1)
+    fvar += sigma
+    labels = labels*y_scale + y_loc
+    nlls = []
+    for mu, var, lab in zip(fmu, fvar, labels):
+        dist = Normal(mu * y_scale + y_loc, var * y_scale)
+        nlls.append(
+            dist.log_prob(lab.view(1, 1)).item()
+        )
+
+    return np.mean(nlls)
 
 
 def get_swag_predictive(model, dataloader, mask, swag_results, train_args, sigma=1):
@@ -329,6 +346,7 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
     learning_rate_sweep = train_args['learning_rate_sweep']
     calculate_std = train_args['calculate_std']
     bayes_var = train_args['bayes_var']
+    random_mask = train_args['random_mask']
     residuals = get_residuals(model_, dataloader)
     if bayes_var:
         precision = get_tau_by_conjugacy(residuals, 3, 5)
@@ -363,7 +381,7 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
     }
     model = copy.deepcopy(model_)
     for percentage in percentages:
-        mask = create_non_parameter_mask(model, percentage)
+        mask = create_non_parameter_mask(model, percentage, random_mask)
         mask = mask.bool()
         residuals = get_residuals(model, dataloader)
         precision = get_tau_by_conjugacy(residuals, 1, 1)

@@ -13,7 +13,7 @@ from torch.utils.data import Dataset, DataLoader
 import pickle
 from torch.distributions import Normal
 from Laplace.laplace import Laplace
-from Laplace.laplace.utils import LargestMagnitudeSubnetMask
+from Laplace.laplace.utils import LargestMagnitudeSubnetMask, RandomSubnetMask
 from uci import UCIDataloader, UCIDataset, UCIBostonDataset, UCIEnergyDataset, UCIYachtDataset, UCIWineDataset
 from torch.nn import MSELoss
 from torch.distributions import Gamma
@@ -222,7 +222,7 @@ def compute_metrics(train, val, test, dataset, test_mu=None):
     return nll_glm, elpd, elpd_sqrt
 
 
-def run_percentiles(mle_model, train_dataloader, dataset, percentages, save_name):
+def run_percentiles(mle_model, train_dataloader, dataset, percentages, save_name, random_mask = False):
     """Run the Laplace approximation for different subnetworks.
         Args:
             mle_model: (nn.Module) trained model
@@ -250,7 +250,10 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages, save_name
     for p in percentages:
         if str(p) not in laplace_result_dict.keys():
             ml_model = copy.deepcopy(mle_model)
-            subnetwork_mask = LargestMagnitudeSubnetMask(ml_model, n_params_subnet=int((p / 100) * num_params))
+            if random_mask:
+                subnetwork_mask = RandomSubnetMask(ml_model, n_params_subnet=int((p / 100) * num_params))
+            else:
+                subnetwork_mask = LargestMagnitudeSubnetMask(ml_model, n_params_subnet=int((p / 100) * num_params))
             subnetwork_indices = subnetwork_mask.select()
             batch, labels = next(iter(train_dataloader))
 
@@ -331,7 +334,19 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages, save_name
                 pickle.dump(laplace_result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output_path, fit_swag, fit_laplace, map_path, dataset_path, load_map=True, **kwargs):
+def multiple_runs(data_path,
+                  dataset_class,
+                  num_runs,
+                  device,
+                  num_epochs,
+                  output_path,
+                  fit_swag,
+                  fit_laplace,
+                  map_path,
+                  dataset_path,
+                  load_map=True,
+                  random_mask = False,
+                  **kwargs):
     """Run the Laplace approximation for different subnetworks.
         Args:
             data_path: (str) path to the data
@@ -382,7 +397,7 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
 
         if fit_laplace:
             save_name = os.path.join(output_path, f'results_laplace_run_{run}.pkl')
-            run_percentiles(mle_model, train_dataloader, dataset, percentages, save_name)
+            run_percentiles(mle_model, train_dataloader, dataset, percentages, save_name, random_mask)
 
         if fit_swag:
 
@@ -400,7 +415,8 @@ def multiple_runs(data_path, dataset_class, num_runs, device, num_epochs, output
                            'save_path': args.output_path,
                            'learning_rate_sweep': np.logspace(-5, -1, 10, endpoint=True),
                            'swag_epochs': 100,
-                           'calculate_std': calculate_std
+                           'calculate_std': calculate_std,
+                           'random_mask': random_mask
                            }
 
             save_name = os.path.join(output_path, f'results_swag_run_{run}.pkl')
@@ -429,6 +445,7 @@ if __name__ == "__main__":
     parser.add_argument('--fit_swag', type=ast.literal_eval, default=True)
     parser.add_argument('--fit_laplace', type=ast.literal_eval, default=True)
     parser.add_argument('--prior_precision', type=float, default=0.5)
+    parser.add_argument('--random_mask', type = ast.literal_eval, default=False)
 
 
     # TODO: Save dataset such that it can be loaded in uci_hmc.py
@@ -457,6 +474,6 @@ if __name__ == "__main__":
     else:
         multiple_runs(args.data_path, dataset_class, args.num_runs, args.device, args.num_epochs,
                       args.output_path, args.fit_swag, args.fit_laplace, args.map_path, args.dataset_path,
-                      args.load_map, **loss_arguments)
+                      args.load_map,args.random_mask, **loss_arguments)
 
     print("Laplace experiments finished!")

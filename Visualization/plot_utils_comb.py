@@ -242,11 +242,11 @@ class PlotHelper:
 
             metric = mean_absolute_calibration_error(fmu, fvar, y_test)
 
-        if self.eval_method in  ['nll', 'nll_glm', 'glm_nll']:
+        if self.eval_method in ['nll', 'nll_glm', 'glm_nll']:
 
             fmu, fvar = self.glm_predictive(preds_test, std=True)
             if laplace:
-                fvar = var_test.flatten()
+                fvar = np.sqrt(var_test.flatten())
 
             if 'map' in key:
                 fvar = np.zeros_like(fmu)
@@ -254,6 +254,7 @@ class PlotHelper:
 
             metric = self.glm_nll(fmu, fvar + sigma, y_test,
                                   dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item())
+
 
         elif self.eval_method == 'elpd':
             metric = self.calculate_nll_(

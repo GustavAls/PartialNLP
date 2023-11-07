@@ -11,7 +11,7 @@ import matplotlib as mpl
 from plot_utils_comb import PlotHelper
 from sklearn.linear_model import LinearRegression
 import uncertainty_toolbox as uct
-
+from plot_number_of_parameters import *
 
 def get_cmap(n, name='hsv'):
     '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct
@@ -493,6 +493,18 @@ class PlotFunctionHolder:
     def show(self):
         if self.show_:
             plt.show()
+
+
+    def plot_number_of_parameters(self, save_path):
+
+        results = simulate_n_times()
+
+        plot_with_error_bars(percentile_mat=results,
+                             path=os.path.join(save_path, 'num_params_w_LSVH.pdf'), show_big=True)
+        self.show()
+        plot_with_error_bars(percentile_mat=results,
+                             path=os.path.join(save_path, 'num_params_m_LSVH.pdf'), show_big=False)
+        self.show()
 
     def plot_pred_labels_la_swa(self, percentages=('1', '100')):
 

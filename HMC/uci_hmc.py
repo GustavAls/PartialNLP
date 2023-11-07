@@ -772,7 +772,7 @@ def create_sample_mask_largest_inf_norm(percentile, MAP_params):
 
     return sample_mask_tuple
 
-def create_sample_mask_largest_abs_values(percentile, MAP_params):
+def create_sample_mask_largest_abs_values(percentile, MAP_params, random_mask = False):
     keys = [
         "W1_auto_loc",
         "W2_auto_loc",
@@ -782,7 +782,10 @@ def create_sample_mask_largest_abs_values(percentile, MAP_params):
         "b_output_auto_loc",
     ]
 
-    all_values = np.concatenate([MAP_params[key].ravel() for key in keys])
+    if random_mask:
+        all_values = np.concatenate([np.random.normal(size = MAP_params[key].ravel().shape) for key in keys])
+    else:
+        all_values = np.concatenate([MAP_params[key].ravel() for key in keys])
     param_abs_values = np.abs(all_values)
     val = np.percentile(param_abs_values, 100 - percentile)
 
@@ -839,9 +842,10 @@ def run_for_percentile(
         MAP_params,
         prior_variance=0.8,
         prior_variance_scaled=True,
-        scale=1.0
+        scale=1.0,
+        random_mask = False
 ):
-    sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
+    sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params, random_mask)
     prior_variance_used = (
         prior_variance
         if not prior_variance_scaled
@@ -850,7 +854,7 @@ def run_for_percentile(
 
     mixed_bnn = generate_mixed_bnn_by_param(
         MAP_params,
-        create_sample_mask_largest_abs_values(percentile, MAP_params),
+        create_sample_mask_largest_abs_values(percentile, MAP_params, random_mask),
         prior_variance_used,
         scale=scale,
         use_prior=True
@@ -885,7 +889,8 @@ def run_for_percentile(
 
 
 def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, num_epochs, MAP_params,
-                node_based=True, add_node_based = False,l_scale=1.0, is_svi_map=False, inf_norm_mask = False, save_name = None):
+                node_based=True, add_node_based = False,l_scale=1.0, is_svi_map=False, inf_norm_mask = False,
+                random_mask = False):
     rng_key = random.PRNGKey(1)
     optimizer = numpyro.optim.Adam(0.01)
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
@@ -894,6 +899,11 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
     if node_based:
         keys = ["W1_auto_loc", "W2_auto_loc", "W_output_auto_loc", "b1_auto_loc", "b2_auto_loc", "b_output_auto_loc"]
         mask_values = [np.random.normal(0, 1, size=(MAP_params[key].shape[0],)) for key in keys]
+        save_name = os.path.join(save_path, f"results_vi_node_run_{run}.pkl")
+    elif add_node_based:
+        save_name = os.path.join(save_path, f"results_vi_node_add_run_{run}.pkl")
+    else:
+        save_name = os.path.join(save_path, f"results_vi_run_{run}.pkl")
 
     for percentile in percentiles:
         prior_variance = 100 - percentile + 1
@@ -902,14 +912,16 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
         if str(percentile) not in results_dict.keys():
             sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
             if node_based:
-
                 if inf_norm_mask:
+                    if random_mask:
+                        raise ValueError("You have selected both random mask, and inf_norm_mask, both "
+                                    "cannot be at the same time")
+
                     sample_mask_tuple = create_sample_mask_largest_inf_norm(percentile, MAP_params)
                 else:
                     sample_mask_tuple = create_sample_mask_random(percentile, MAP_params, mask_values)
-
             else:
-                sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
+                sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params, random_mask)
 
             if node_based:
                 mixed_bnn = generate_node_based_bnn(
@@ -992,7 +1004,7 @@ def train_MAP_solution(mle_model, dataset, num_epochs):
 
 
 def make_hmc_run(run, dataset, scale_prior, prior_variance, save_path, likelihood_scale, percentiles, results_dict,
-                 MAP_params, save_name):
+                 MAP_params, random_mask = False):
     for percentile in percentiles:
         # If update runs are done
         if str(percentile) not in results_dict.keys():
@@ -1003,9 +1015,10 @@ def make_hmc_run(run, dataset, scale_prior, prior_variance, save_path, likelihoo
                 MAP_params,
                 prior_variance_scaled=scale_prior,
                 prior_variance=prior_variance,
-                scale=likelihood_scale
+                scale=likelihood_scale,
+                random_mask = random_mask
             )
-            with open(save_name, "wb") as handle:
+            with open(os.path.join(save_path, f"results_hmc_run_{run}.pkl"), "wb") as handle:
                 pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
             print("Saved results for ", percentile, "%")
 
@@ -1038,10 +1051,14 @@ if __name__ == "__main__":
     parser.add_argument('--l_var', type=float, default=1.0)
     parser.add_argument('--node_based_add', type=ast.literal_eval, default=False)
     parser.add_argument('--inf_norm_mask', type=ast.literal_eval, default=False)
+    parser.add_argument('--random_mask', type=ast.literal_eval, default=False)
     args = parser.parse_args()
 
     if args.inf_norm_mask and not args.node_based:
         UserWarning("inf norm mask only implemented for node based multiplicative, it has no effect in current run")
+
+    if args.inf_norm_mask and args.random_mask:
+        raise ValueError("You selected both random and inf_norm_mask, both cannot be set to True")
 
     if args.dataset == "yacht":
         dataset_class = UCIYachtDataset
@@ -1161,14 +1178,11 @@ if __name__ == "__main__":
             # VI run
             print("Running VI")
             make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance,scale= args.likelihood_scale, results_dict=vi_results_dict,
-                        MAP_params=MAP_params, save_path=args.output_path,  num_epochs=args.num_epochs, node_based=False, l_scale=args.l_var, save_name=dict_path)
+                        MAP_params=MAP_params, save_path=args.output_path,  num_epochs=args.num_epochs, node_based=False, l_scale=args.l_var,
+                        random_mask=args.random_mask)
 
     if args.node_based:
-        if args.inf_norm_mask:
-            dict_path = os.path.join(args.output_path, f"results_vi_node_max_run_{args.run}.pkl")
-        else:
-            dict_path = os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl")
-
+        dict_path = os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl")
         if os.path.exists(dict_path):
             vi_results_dict = pickle.load(open(dict_path, "rb"))
             MAP_params = vi_results_dict['map_results']['map_params']
@@ -1177,7 +1191,7 @@ if __name__ == "__main__":
             print("Running node based VI")
             make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=vi_results_dict,
                         MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs, node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map,
-                        inf_norm_mask=args.inf_norm_mask, save_name=dict_path)
+                        inf_norm_mask=args.inf_norm_mask, random_mask=args.random_mask)
 
     if args.node_based_add:
         dict_path = os.path.join(args.output_path, f"results_vi_node_add_run_{args.run}.pkl")
@@ -1189,7 +1203,8 @@ if __name__ == "__main__":
             make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale,
                         results_dict=vi_results_dict,
                         MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs,
-                        node_based=False, add_node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map, save_name=dict_path)
+                        node_based=False, add_node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map,
+                        random_mask=args.random_mask)
 
     if args.hmc:
         dict_path = os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")
@@ -1201,4 +1216,4 @@ if __name__ == "__main__":
             make_hmc_run(run=args.run, dataset=dataset, scale_prior=args.scale_prior,
                          prior_variance=args.prior_variance,
                          save_path=args.output_path, likelihood_scale=args.likelihood_scale, percentiles=percentiles,
-                         results_dict=hmc_result_dict, MAP_params=MAP_params, save_name=dict_path)
+                         results_dict=hmc_result_dict, MAP_params=MAP_params)

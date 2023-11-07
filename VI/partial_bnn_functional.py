@@ -83,9 +83,14 @@ def create_mask(model, percentile):
     return param_mask
 
 
-def create_non_parameter_mask(model, percentile):
+def create_non_parameter_mask(model, percentile, random_mask = False):
+
     parameter_vector = nn.utils.parameters_to_vector(model.parameters())
-    argsorted = torch.argsort(torch.abs(parameter_vector), descending=True)
+
+    if random_mask:
+        argsorted = torch.argsort(torch.randn_like(parameter_vector), descending=True)
+    else:
+        argsorted = torch.argsort(torch.abs(parameter_vector), descending=True)
 
     bnn_length = int(len(argsorted) * percentile / 100)
     mask = torch.zeros_like(parameter_vector)
