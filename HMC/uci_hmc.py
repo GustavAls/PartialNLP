@@ -772,7 +772,7 @@ def create_sample_mask_largest_inf_norm(percentile, MAP_params):
 
     return sample_mask_tuple
 
-def create_sample_mask_largest_abs_values(percentile, MAP_params):
+def create_sample_mask_largest_abs_values(percentile, MAP_params, random_mask = False):
     keys = [
         "W1_auto_loc",
         "W2_auto_loc",
@@ -782,7 +782,10 @@ def create_sample_mask_largest_abs_values(percentile, MAP_params):
         "b_output_auto_loc",
     ]
 
-    all_values = np.concatenate([MAP_params[key].ravel() for key in keys])
+    if random_mask:
+        all_values = np.concatenate([np.random.normal(size = MAP_params[key].ravel().shape) for key in keys])
+    else:
+        all_values = np.concatenate([MAP_params[key].ravel() for key in keys])
     param_abs_values = np.abs(all_values)
     val = np.percentile(param_abs_values, 100 - percentile)
 
@@ -839,9 +842,10 @@ def run_for_percentile(
         MAP_params,
         prior_variance=0.8,
         prior_variance_scaled=True,
-        scale=1.0
+        scale=1.0,
+        random_mask = False
 ):
-    sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
+    sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params, random_mask)
     prior_variance_used = (
         prior_variance
         if not prior_variance_scaled
@@ -850,7 +854,7 @@ def run_for_percentile(
 
     mixed_bnn = generate_mixed_bnn_by_param(
         MAP_params,
-        create_sample_mask_largest_abs_values(percentile, MAP_params),
+        create_sample_mask_largest_abs_values(percentile, MAP_params, random_mask),
         prior_variance_used,
         scale=scale,
         use_prior=True
@@ -885,7 +889,8 @@ def run_for_percentile(
 
 
 def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, num_epochs, MAP_params,
-                node_based=True, add_node_based = False,l_scale=1.0, is_svi_map=False, inf_norm_mask = False):
+                node_based=True, add_node_based = False,l_scale=1.0, is_svi_map=False, inf_norm_mask = False,
+                random_mask = False):
     rng_key = random.PRNGKey(1)
     optimizer = numpyro.optim.Adam(0.01)
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
@@ -907,14 +912,16 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
         if str(percentile) not in results_dict.keys():
             sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
             if node_based:
-
                 if inf_norm_mask:
+                    if random_mask:
+                        raise ValueError("You have selected both random mask, and inf_norm_mask, both "
+                                    "cannot be at the same time")
+
                     sample_mask_tuple = create_sample_mask_largest_inf_norm(percentile, MAP_params)
                 else:
                     sample_mask_tuple = create_sample_mask_random(percentile, MAP_params, mask_values)
-
             else:
-                sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
+                sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params, random_mask)
 
             if node_based:
                 mixed_bnn = generate_node_based_bnn(

@@ -329,6 +329,7 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
     learning_rate_sweep = train_args['learning_rate_sweep']
     calculate_std = train_args['calculate_std']
     bayes_var = train_args['bayes_var']
+    random_mask = train_args['random_mask']
     residuals = get_residuals(model_, dataloader)
     if bayes_var:
         precision = get_tau_by_conjugacy(residuals, 3, 5)
@@ -363,7 +364,7 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
     }
     model = copy.deepcopy(model_)
     for percentage in percentages:
-        mask = create_non_parameter_mask(model, percentage)
+        mask = create_non_parameter_mask(model, percentage, random_mask)
         mask = mask.bool()
         residuals = get_residuals(model, dataloader)
         precision = get_tau_by_conjugacy(residuals, 1, 1)
