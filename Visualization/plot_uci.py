@@ -13,6 +13,14 @@ from sklearn.linear_model import LinearRegression
 import uncertainty_toolbox as uct
 from plot_number_of_parameters import *
 
+
+font = {'family': 'serif',
+            'size': 16,
+            'serif': 'cmr10'
+            }
+mpl.rc('font', **font)
+mpl.rc('legend', fontsize=14)
+
 def get_cmap(n, name='hsv'):
     '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct
     RGB color; the keyword argument name must be a standard mpl colormap name.'''
@@ -64,24 +72,19 @@ def plot_estimator(df, errorbar_func, estimator=None, ax=None, data_name=None, s
             color_scheme_1 = not color_scheme_1
 
     title = " & ".join(method_names) + " - " + estimator.__name__ + " - " + data_name
-    ax.set_title(label=title, fontsize=10, pad=-20)
-
+    ax.set_title(label=title, pad=0)
     # Set labels and legend
     ax.set_xlabel("Percentages")
     ax.set_ylabel(ylabel)
     ax.legend()
-    plt.savefig(os.path.join(os.path.join(os.getcwd(), "Figures"), title + '.png'))
+    # ax.grid(linewidth = 1, alpha = 0.7)
+    path = os.path.join(os.path.join(os.getcwd(), "Figures"), title + ".pdf")
+    plt.savefig(path)
     if show:
         plt.show(block=False)
 
 
 def plot_partial_percentages(percentages, res, data_name=None, df=None, num_runs=15, ax=None, show=True, ylabel="NLL"):
-    font = {'family': 'serif',
-            'size': 10,
-            'serif': 'cmr10'
-            }
-    mpl.rc('font', **font)
-    mpl.rc('legend', fontsize=8)
     if df is None:
         df = pd.DataFrame()
         df['percentages'] = num_runs * percentages
@@ -558,6 +561,7 @@ class PlotFunctionHolder:
                                  num_runs=len(metrics_mul),
                                  ax=None, show=False, ylabel=ylabel)
         self.show()
+
     def ensure_same_length_and_get_name(self, metrics, data_path, eval_method):
 
         min_ = min((len(met) for met in metrics))
@@ -615,7 +619,7 @@ class PlotFunctionHolder:
                                  data_name=data_name,
                                  num_runs=len(metrics_la),
                                  ax=None, show=False, ylabel=ylabel)
-        self.show()
+
     def plot_calibration_la_swa(self, percentages=None):
 
         if percentages is None:
@@ -684,16 +688,16 @@ if __name__ == '__main__':
     # path_vi =r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\yacht_models'
 
     # APPLY TO LA-SWAG PATH ONCE
-    change_datasets(path_la)
+    # change_datasets(path_la)
 
     datasets = ['boston', 'energy', 'yacht']
     prediction_folders = [ dataset + "_models" for dataset in datasets]
 
     # SHARMAS HMC PLOT RECREATED
-    path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_SVI_sharma_hmc'
+    path_svi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_SVI_sharma_hmc'
     for prediction_folder in prediction_folders:
         la_swa_path = os.path.join(path_la, prediction_folder)
-        vi_hmc_path = os.path.join(path_vi, prediction_folder)
+        vi_hmc_path = os.path.join(path_svi, prediction_folder)
         plot_holder = PlotFunctionHolder(la_swa_path=la_swa_path, vi_hmc_path=vi_hmc_path,
                                          eval_method='test_ll_homoscedastic', calculate=False)
         plot_holder.plot_partial_percentages_hmc_homoscedastic_nll()
@@ -705,8 +709,8 @@ if __name__ == '__main__':
     #     plot_holder = PlotFunctionHolder(la_swa_path=la_swa_path, vi_hmc_path=vi_hmc_path, calculate=True)
     #     # plot_holder.set_eval_method('mse')
     #     # plot_holder.plot_partial_percentages_vi_hmc()
-    #     plot_holder.plot_partial_percentages_nodes()
-    #     # plot_holder.plot_partial_percentages_la_swa()
+    #     # plot_holder.plot_partial_percentages_nodes()
+    #     plot_holder.plot_partial_percentages_la_swa()
     breakpoint()
     #
     # breakpoint()

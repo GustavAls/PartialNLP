@@ -401,7 +401,7 @@ def multiple_runs(data_path,
 
         if fit_swag:
 
-            loss_arguments = {'loss': ll.GLLGP_loss_swag, 'prior_sigma': 1 / args.prior_precision}
+            loss_arguments = {'loss': ll.GLLGP_loss_swag, 'prior_sigma': 1 / np.sqrt(args.prior_precision)}
             loss = loss_arguments.get('loss', MSELoss)
             loss_fn = loss(**loss_arguments)
 
@@ -464,7 +464,7 @@ if __name__ == "__main__":
         dataset_class = UCIYachtDataset
 
     loss_arguments = {'loss': ll_losses.GLLGP_loss_swag if args.get_map else MSELoss,
-                      'prior_sigma': 1/args.prior_precision}
+                      'prior_sigma': 1 / np.sqrt(args.prior_precision)}
 
     if args.size_ramping:
         results = make_size_ramping(args.data_path, dataset_class, args.num_runs, args.device, args.num_epochs,
