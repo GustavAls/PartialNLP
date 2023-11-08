@@ -50,6 +50,7 @@ class PlotHelper:
 
     def __len__(self, path_name_criteria):
         return len(self.get_paths(self.path_to_models, criteria=path_name_criteria))
+
     def get_predictions_and_labels_for_percentage(self, percentage, idx = 0, path_name_criteria = "", laplace = False):
 
         paths = self.get_paths(self.path_to_models, criteria=path_name_criteria)
@@ -202,6 +203,38 @@ class PlotHelper:
 
         return residuals.std()
 
+    def scale_hmc_samples(self, pcl, key, scale = 0.1, random = True):
+        dataset = pcl['dataset']
+        y_train, y_val, y_test = self.get_labels(dataset)
+        preds_train, preds_val, preds_test = self.convert_to_proper_format(self.ensure_numpy(pcl[key]), False)
+        # num_samples = int(preds_train.shape[-1] * scale)
+        num_samples = scale
+        if random:
+            indices = np.random.choice(range(preds_train.shape[-1]), num_samples)
+        else:
+            indices = np.arange(preds_train.shape[-1])[:num_samples]
+
+        preds_train, preds_val, preds_test = (preds_train[:, indices],
+                                              preds_val[:, indices],
+                                              preds_test[:,indices])
+        sigma = self.get_sigma(self.get_residuals(preds_train, y_train, full=False), gamma_prior=False)
+        fmu, fvar = self.glm_predictive(preds_test, std=True)
+        if 'map' in key:
+            fvar = np.zeros_like(fmu)
+
+        if self.eval_method in ['nll', 'nll_glm', 'glm_nll']:
+            metric = self.glm_nll(fmu, fvar + sigma, y_test,
+                              dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item())
+        elif self.eval_method in ['mse', 'MSE']:
+            metric = self.calculate_mse(
+                preds_test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item()
+            )
+        elif self.eval_method in ['calib', 'calibration', 'cal']:
+            metric = mean_absolute_calibration_error(fmu, fvar + sigma, y_test)
+        else:
+            raise NotImplementedError("")
+
+        return metric
     def run_for_key(self, pcl, key):
         laplace = getattr(self, 'laplace', False)
         dataset = pcl['dataset']
@@ -241,7 +274,7 @@ class PlotHelper:
             if key in ['MAP', 'map']:
                 fvar = np.zeros_like(fmu)
 
-            metric = mean_absolute_calibration_error(fmu, fvar, y_test)
+            metric = mean_absolute_calibration_error(fmu, fvar + sigma, y_test)
 
         if self.eval_method in ['nll', 'nll_glm', 'glm_nll']:
 
@@ -305,6 +338,25 @@ class PlotHelper:
             criteria = ""
         paths = [os.path.join(path, p) for p in os.listdir(path) if criteria in p]
         return paths
+
+    def run_hmc_scaling_for_dataset(self, criteria = 'hmc'):
+        paths = self.get_paths(self.path_to_models, criteria)
+        all_scales = np.arange(1, 11)/10
+        all_scales = np.linspace(1, 100, 10, endpoint=True)/100
+        all_scales = [1, 2, 5, 100]
+        res_dict = {}
+        for scale in all_scales:
+            metrics = []
+            all_keys = ['map_results', '1', '2', '5', '8', '14', '23', '37', '61', '100']
+
+            for path in paths:
+                pcl = pickle.load(open(path, 'rb'))
+                mets = []
+                for key in all_keys:
+                    mets.append(self.scale_hmc_samples(pcl, key, scale))
+                metrics.append(mets)
+            res_dict[str(scale)] = np.array(metrics)
+        return res_dict
 
     def run_for_dataset(self, criteria=None,  fast = False, laplace = False):
         if laplace:
