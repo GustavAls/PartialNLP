@@ -782,19 +782,23 @@ def create_sample_mask_largest_abs_values(percentile, MAP_params, random_mask = 
         "b_output_auto_loc",
     ]
 
+
     if random_mask:
-        all_values = np.concatenate([np.random.normal(size = MAP_params[key].ravel().shape) for key in keys])
+        new_map_params = {key: np.random.normal(size = MAP_params[key].shape) for key in keys}
     else:
-        all_values = np.concatenate([MAP_params[key].ravel() for key in keys])
+        new_map_params = copy.deepcopy(MAP_params)
+
+
+    all_values = np.concatenate([new_map_params[key].ravel() for key in keys])
     param_abs_values = np.abs(all_values)
     val = np.percentile(param_abs_values, 100 - percentile)
 
-    W1_sample_mask = np.abs(MAP_params["W1_auto_loc"]) >= val
-    W2_sample_mask = np.abs(MAP_params["W2_auto_loc"]) >= val
-    W_output_sample_mask = np.abs(MAP_params["W_output_auto_loc"]) >= val
-    b1_sample_mask = np.abs(MAP_params["b1_auto_loc"]) >= val
-    b2_sample_mask = np.abs(MAP_params["b2_auto_loc"]) >= val
-    b_output_sample_mask = np.abs(MAP_params["b_output_auto_loc"]) >= val
+    W1_sample_mask = np.abs(new_map_params["W1_auto_loc"]) >= val
+    W2_sample_mask = np.abs(new_map_params["W2_auto_loc"]) >= val
+    W_output_sample_mask = np.abs(new_map_params["W_output_auto_loc"]) >= val
+    b1_sample_mask = np.abs(new_map_params["b1_auto_loc"]) >= val
+    b2_sample_mask = np.abs(new_map_params["b2_auto_loc"]) >= val
+    b_output_sample_mask = np.abs(new_map_params["b_output_auto_loc"]) >= val
 
     sample_mask_tuple = (
         W1_sample_mask,
