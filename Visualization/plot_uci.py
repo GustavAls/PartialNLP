@@ -43,7 +43,11 @@ def plot_errorbar_percentages(df, errorbar_func, estimator=None, ax=None, y='Lap
                   label=y.split('_')[0],
                   ax=ax)
 
-    nll_array = np.array(df[y]).reshape((-1, 10))
+    try:
+        nll_array = np.array(df[y]).reshape((-1, 10))
+    except:
+        nll_array = np.array(df[y]).reshape((-1, 9))
+
     estimated = estimator(nll_array, axis=0)
     map_val = estimated[0]
     ax.axhline(y=map_val, linestyle='--', linewidth=1, alpha=0.7,
@@ -601,13 +605,16 @@ class PlotFunctionHolder:
                                  num_runs=len(metrics_vi),
                                  ax=None, show=False, ylabel=ylabel)
 
+        ylabel = self.eval_methods_to_names[self.plot_helper_la_swa.eval_method]
+        ax1.set_ylabel(ylabel)
+        ax2.set_ylabel(ylabel)
         self.show()
 
     def plot_partial_percentages_la_swa(self):
-        metrics_la = self.plot_helper_la_swa.run_for_dataset(criteria='laplace')
-        metrics_swa = self.plot_helper_la_swa.run_for_dataset(criteria='swag')
+        metrics_la = self.plot_helper_la_swa.run_for_dataset(criteria='laplace', laplace=True)
+        metrics_swa = self.plot_helper_la_swa.run_for_dataset(criteria='swag', laplace=False)
         percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100]
-
+        percentages = percentages
         (metrics_la, metrics_swa), data_name = self.ensure_same_length_and_get_name(
             [metrics_la, metrics_swa], self.la_swa_path, self.plot_helper_la_swa.eval_method
         )
