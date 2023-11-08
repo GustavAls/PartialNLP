@@ -367,7 +367,7 @@ def train_swag(untrained_model, dataloader, dataloader_val, dataloader_test, per
     nll_map = tp.calculate_nll_(test_preds_mu.numpy(), dataloader_test.dataset.y, y_scale.item(), y_loc.item(),
                                 sigma_noise)
     results_dict = {
-        'dataset': {'train': dataloader.dataset, 'val': dataloader_val.dataset, 'test': dataloader_test.dataset},
+        'dataset': dataset,
         'map_results': {'map_params': model_.state_dict(),
                         'predictive_train': train_preds_mu,
                         'predictive_val': val_preds_mu,
