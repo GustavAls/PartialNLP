@@ -589,10 +589,10 @@ class PlotFunctionHolder:
                                  ax=None, show=False)
         self.show()
 
-    def plot_partial_percentages_vi_hmc(self):
-        metrics_vi = self.plot_helper_vi_hmc.run_for_dataset(criteria='vi_run')
-        metrics_hmc = self.plot_helper_vi_hmc.run_for_dataset(criteria='hmc')
-        percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100]
+    def plot_partial_percentages_vi_hmc(self, map=True):
+        metrics_vi = self.plot_helper_vi_hmc.run_for_dataset(criteria='vi_run', map=map)
+        metrics_hmc = self.plot_helper_vi_hmc.run_for_dataset(criteria='hmc', map=map)
+        percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100] if map else [1, 2, 5, 8, 14, 23, 37, 61, 100]
 
         (metrics_vi, metrics_hmc), data_name = self.ensure_same_length_and_get_name(
             [metrics_vi, metrics_hmc], self.vi_hmc_path, self.plot_helper_vi_hmc.eval_method
@@ -606,8 +606,9 @@ class PlotFunctionHolder:
                                  ax=None, show=False, ylabel=ylabel)
 
         ylabel = self.eval_methods_to_names[self.plot_helper_la_swa.eval_method]
-        ax1.set_ylabel(ylabel)
-        ax2.set_ylabel(ylabel)
+
+        dataset = self.find_data_name(self.vi_hmc_path)
+
         self.show()
 
     def plot_partial_percentages_la_swa(self):
@@ -701,7 +702,7 @@ if __name__ == '__main__':
     path_la = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_Laplace_SWAG_all_metrics'
     path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_torch'
 
-    datasets = ['boston', 'energy', 'yacht']
+    datasets = ['yacht', 'boston', 'energy']
     prediction_folders = [ dataset + "_models" for dataset in datasets]
 
     # SHARMAS HMC PLOT RECREATED
@@ -719,9 +720,9 @@ if __name__ == '__main__':
         vi_hmc_path = os.path.join(path_vi, prediction_folder)
         plot_holder = PlotFunctionHolder(la_swa_path=la_swa_path, vi_hmc_path=vi_hmc_path, calculate=True)
         # plot_holder.set_eval_method('mse')
-        # plot_holder.plot_partial_percentages_vi_hmc()
-        # plot_holder.plot_partial_percentages_nodes()
-        plot_holder.plot_partial_percentages_la_swa()
+        plot_holder.plot_partial_percentages_vi_hmc()
+        plot_holder.plot_partial_percentages_nodes()
+        # plot_holder.plot_partial_percentages_la_swa()
     breakpoint()
     #
     # breakpoint()
