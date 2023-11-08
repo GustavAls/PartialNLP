@@ -248,9 +248,9 @@ class PlotHelper:
             if laplace:
                 fvar = np.sqrt(var_test.flatten())
 
+
             if 'map' in key:
                 fvar = np.zeros_like(fmu)
-
 
             metric = self.glm_nll(fmu, fvar + sigma, y_test,
                                   dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item())

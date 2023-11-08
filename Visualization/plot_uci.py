@@ -39,7 +39,11 @@ def plot_errorbar_percentages(df, errorbar_func, estimator=None, ax=None, y='Lap
                   label=y.split('_')[0],
                   ax=ax)
 
-    nll_array = np.array(df[y]).reshape((-1, 10))
+    try:
+        nll_array = np.array(df[y]).reshape((-1, 10))
+    except:
+        nll_array = np.array(df[y]).reshape((-1, 9))
+
     estimated = estimator(nll_array, axis=0)
     map_val = estimated[0]
     ax.axhline(y=map_val, linestyle='--', linewidth=1, alpha=0.7,
@@ -605,13 +609,13 @@ class PlotFunctionHolder:
         metrics_vi = self.plot_helper_vi_hmc.run_for_dataset(criteria='vi_run')
         metrics_hmc = self.plot_helper_vi_hmc.run_for_dataset(criteria='hmc')
         percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100]
-
         (metrics_vi, metrics_hmc), data_name = self.ensure_same_length_and_get_name(
             [metrics_vi, metrics_hmc], self.vi_hmc_path, self.plot_helper_vi_hmc.eval_method
         )
 
         fig1, ax1 = plt.subplots(1, 1)
         fig2, ax2 = plt.subplots(1, 1)
+
         plot_partial_percentages(percentages=percentages,
                                  res={'VI': np.array(metrics_vi), 'HMC': np.array(metrics_hmc)},
                                  data_name=data_name,
@@ -624,16 +628,17 @@ class PlotFunctionHolder:
         self.show()
 
     def plot_partial_percentages_la_swa(self):
-        metrics_la = self.plot_helper_la_swa.run_for_dataset(criteria='laplace')
-        metrics_swa = self.plot_helper_la_swa.run_for_dataset(criteria='swag')
+        metrics_la = self.plot_helper_la_swa.run_for_dataset(criteria='laplace', laplace=True)
+        metrics_swa = self.plot_helper_la_swa.run_for_dataset(criteria='swag', laplace=False)
         percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100]
-
+        percentages = percentages
         (metrics_la, metrics_swa), data_name = self.ensure_same_length_and_get_name(
             [metrics_la, metrics_swa], self.la_swa_path, self.plot_helper_la_swa.eval_method
         )
 
         fig1, ax1 = plt.subplots(1, 1)
         fig2, ax2 = plt.subplots(1, 1)
+
         plot_partial_percentages(percentages=percentages,
                                  res={'SWA-G': np.array(metrics_swa), 'Laplace': np.array(metrics_la)},
                                  data_name=data_name,
@@ -704,12 +709,12 @@ if __name__ == '__main__':
     # plot_la_swag(path_la, path_swag)
 
     # path = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_Laplace_SWAG_1'
-    path = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\UCI_Laplace_SWAG_all_metrics\yacht_models'
+    path = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\UCI_Laplace_SWAG_all_metrics\energy_models'
     path_vi =r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\yacht_models'
     # change_datasets(path)
     plot_holder = PlotFunctionHolder(la_swa_path=path, vi_hmc_path=path_vi, calculate=True)
     # plot_holder.set_eval_method('mse')
-    plot_holder.plot_partial_percentages_vi_hmc()
+    plot_holder.plot_partial_percentages_la_swa()
     breakpoint()
     #
     # breakpoint()
