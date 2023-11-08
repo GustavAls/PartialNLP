@@ -34,7 +34,7 @@ def plot_percentages(df, errorbar_func, estimator=None, ax=None, y='Laplace_nll'
 
     point_err_color_dict = {0: 'tab:blue', 1: 'tab:orange', 2: 'tab:red'}
     point_err_color = point_err_color_dict[num_color_schemes]
-
+    # plt.tight_layout()
     sns.pointplot(errorbar=errorbar_func,
                   data=df, x="percentages", y=y,
                   join=False,
@@ -56,7 +56,7 @@ def plot_percentages(df, errorbar_func, estimator=None, ax=None, y='Laplace_nll'
     fully_stochastic_val = estimated[-1]
 
     # Adjust layout
-    plt.tight_layout()
+
 
 
 def plot_errorbar_percentages(df, errorbar_func, estimator=None, ax=None, y='Laplace_nll', color_scheme_1=True):
@@ -67,9 +67,9 @@ def plot_errorbar_percentages(df, errorbar_func, estimator=None, ax=None, y='Lap
     sns.pointplot(errorbar=errorbar_func,
                   data=df, x="percentages", y=y,
                   join=False,
-                  capsize=.30 if color_scheme_1 else 0.15,
+                  capsize=.30,
                   markers="d",
-                  scale=1.0 if color_scheme_1 else 0.7,
+                  scale=1.0,
                   err_kws={'linewidth': 0.7}, estimator=estimator,
                   color=point_err_color,
                   label=y.split('_')[0],
@@ -89,7 +89,7 @@ def plot_errorbar_percentages(df, errorbar_func, estimator=None, ax=None, y='Lap
                color=stochastic_color, label='100% Stochastic' if not color_scheme_1 else '_nolegend_')
 
     # Adjust layout
-    plt.tight_layout()
+    # plt.tight_layout()
 
 
 def plot_estimator_multi_dataset(df, errorbar_func, estimator=None, ax=None, data_name=None, show=True):
@@ -109,7 +109,7 @@ def plot_estimator_multi_dataset(df, errorbar_func, estimator=None, ax=None, dat
             color_scheme_num += 1
 
     title = " & ".join(method_names) + " - " + estimator.__name__ + " - " + data_name
-    ax.set_title(label=title, fontsize=12, pad=-20)
+    ax.set_title(label=title, fontsize=12, pad=0)
     ax.set_xlabel("Percentages", fontsize=12)
     ax.set_ylabel("nll", fontsize=12)
     ax.legend(fontsize=10)
@@ -118,7 +118,7 @@ def plot_estimator_multi_dataset(df, errorbar_func, estimator=None, ax=None, dat
     # ax.grid(axis='y', linestyle='-', alpha=0.3)
     # ax.grid(b=True, which='major', color='w', linewidth=1.0)
     # Set the Seaborn style
-    plt.savefig(os.path.join(os.getcwd(), title + '.png'))
+    # plt.savefig(os.path.join(os.getcwd(), title + '.png'))
     if show:
         plt.show(block=False)
 
@@ -141,11 +141,10 @@ def plot_estimator(df, errorbar_func, estimator=None, ax=None, data_name=None, s
     ax.set_title(label=title, pad=0)
     # Set labels and legend
     ax.set_xlabel("Percentages")
-    ax.set_ylabel(ylabel)
-    ax.legend()
+    # ax.legend()
     # ax.grid(linewidth = 1, alpha = 0.7)
-    path = os.path.join(os.path.join(os.getcwd(), "Figures"), title + ".pdf")
-    plt.savefig(path)
+    # path = os.path.join(os.path.join(os.getcwd(), "Figures"), title + ".pdf")
+    # plt.savefig(path)
     if show:
         plt.show(block=False)
 
@@ -542,10 +541,12 @@ def change_datasets(path):
 
 class PlotFunctionHolder:
 
-    def __init__(self, la_swa_path = "", vi_hmc_path = "", calculate=True, show=True):
+    def __init__(self, la_swa_path = "", vi_hmc_path = "", eval_method = 'nll', calculate=True, show=True,
+                 save_path = None):
         self.la_swa_path = la_swa_path
         self.vi_hmc_path = vi_hmc_path
         self.calculate = calculate
+        self.save_path = save_path
         self.plot_helper_la_swa = PlotHelper(self.la_swa_path, eval_method=eval_method, calculate=calculate)
         self.plot_helper_vi_hmc = PlotHelper(self.vi_hmc_path, eval_method=eval_method, calculate=calculate)
 
@@ -554,7 +555,7 @@ class PlotFunctionHolder:
         }
 
         self.eval_methods_to_names = {
-            'mse': 'MSE', 'nll_glm': 'NLL', 'glm_nll': 'NLL', 'elpd': 'ELPD', 'calib': 'Calibration',
+            'mse': 'MSE', 'nll_glm': 'NLL','nll': 'NLL', 'glm_nll': 'NLL', 'elpd': 'ELPD', 'calib': 'Calibration',
             'sqrt': 'ELPD', 'test_ll_homoscedastic' : 'NLL homoscedastic',
             'prior_precision': 'Prior Precision'}
 
@@ -587,7 +588,7 @@ class PlotFunctionHolder:
                              path=os.path.join(save_path, 'num_params_m_LSVH.pdf'), show_big=False)
         self.show()
 
-    def plot_prior_laplace(self, model_paths=None):
+    def plot_prior_laplace(self, model_paths=None, save_path = None):
 
         potential_paths = ['energy_models', 'yacht_models', 'boston_models']
 
@@ -606,6 +607,7 @@ class PlotFunctionHolder:
 
         fig1, ax1 = plt.subplots(1, 1)
         fig2, ax2 = plt.subplots(1, 1)
+
         percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
         plot_partial_percentages(percentages=percentages,
                                  res=res,
@@ -615,6 +617,14 @@ class PlotFunctionHolder:
 
         ax1.set_ylabel(self.eval_methods_to_names['prior_precision'])
         ax2.set_ylabel(self.eval_methods_to_names['prior_precision'])
+        fig1.tight_layout()
+        fig2.tight_layout()
+
+        save_path = save_path if save_path is not None else self.save_path
+        if save_path is not None:
+            fig1.savefig(os.path.join(save_path, 'Laplace_prior_precision_median.pdf'), format='pdf')
+            fig2.savefig(os.path.join(save_path, 'Laplace_prior_precision_mean.pdf'), format='pdf')
+
         self.show()
 
 
@@ -667,7 +677,9 @@ class PlotFunctionHolder:
 
                 self.show()
 
-    def plot_partial_percentages_nodes(self):
+    def set_save_path(self, path):
+        self.save_path = path
+    def plot_partial_percentages_nodes(self, save_path = None):
 
         metrics_mul = self.plot_helper_vi_hmc.run_for_dataset(criteria='node_run')
         metrics_add = self.plot_helper_vi_hmc.run_for_dataset(criteria='add')
@@ -680,13 +692,25 @@ class PlotFunctionHolder:
             min_ = min((l1, l2))
             metrics_mul = metrics_mul[:min_]
             metrics_add = metrics_add[:min_]
-
-        ylabel = self.eval_methods_to_names[self.plot_helper_la_swa.eval_method]
+        fig1, ax1 = plt.subplots(1, 1)
+        fig2, ax2 = plt.subplots(1, 1)
         plot_partial_percentages(percentages=percentages,
                                  res={'Additive': np.array(metrics_add), 'Multiplicative': np.array(metrics_mul)},
                                  data_name=data_name,
                                  num_runs=len(metrics_mul),
-                                 ax=None, show=False, ylabel=ylabel)
+                                 ax=[ax1,ax2], show=False)
+
+        ylabel = self.eval_methods_to_names[self.plot_helper_vi_hmc.eval_method]
+        ax1.set_ylabel(ylabel)
+        ax2.set_ylabel(ylabel)
+
+        self.set_bounds_and_layout((np.array(metrics_add), np.array(metrics_mul)), np.median, fig1, ax1)
+        self.set_bounds_and_layout((np.array(metrics_add), np.array(metrics_mul)), np.mean, fig2, ax2)
+        save_path = save_path if save_path is not None else self.save_path
+        if save_path is not None:
+            fig1.savefig(os.path.join(save_path, f'node_based_{ylabel}_{data_name}_median.pdf'), format='pdf')
+            fig2.savefig(os.path.join(save_path, f'node_based_{ylabel}_{data_name}_mean.pdf'), format='pdf')
+
         self.show()
 
     def ensure_same_length_and_get_name(self, metrics, data_path, eval_method):
@@ -705,6 +729,7 @@ class PlotFunctionHolder:
         data_name = self.find_data_name(self.vi_hmc_path) + " " + self.get_eval_method_name(
             self.plot_helper_vi_hmc.eval_method)
 
+
         plot_partial_percentages(percentages=percentages,
                                  res={'HMC': np.array(metrics_hmc)},
                                  data_name=data_name,
@@ -712,7 +737,7 @@ class PlotFunctionHolder:
                                  ax=None, show=False)
         self.show()
 
-    def plot_partial_percentages_vi_hmc(self):
+    def plot_partial_percentages_vi_hmc(self, save_path = None):
         metrics_vi = self.plot_helper_vi_hmc.run_for_dataset(criteria='vi_run')
         metrics_hmc = self.plot_helper_vi_hmc.run_for_dataset(criteria='hmc')
         percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100]
@@ -721,19 +746,58 @@ class PlotFunctionHolder:
             [metrics_vi, metrics_hmc], self.vi_hmc_path, self.plot_helper_vi_hmc.eval_method
         )
 
-        ylabel = self.eval_methods_to_names[self.plot_helper_vi_hmc.eval_method]
+        fig1, ax1 = plt.subplots(1,1)
+        fig2, ax2 = plt.subplots(1,1)
+
         plot_partial_percentages(percentages=percentages,
                                  res={'VI': np.array(metrics_vi), 'HMC': np.array(metrics_hmc)},
                                  data_name=data_name,
                                  num_runs=len(metrics_vi),
-                                 ax=None, show=False, ylabel=ylabel)
+                                 ax=[ax1, ax2], show=False)
 
         ylabel = self.eval_methods_to_names[self.plot_helper_la_swa.eval_method]
         ax1.set_ylabel(ylabel)
         ax2.set_ylabel(ylabel)
+        self.set_bounds_and_layout((np.array(metrics_vi), np.array(metrics_hmc)), np.median, fig1, ax1)
+        self.set_bounds_and_layout((np.array(metrics_vi), np.array(metrics_hmc)), np.mean, fig2, ax2)
+
+        save_path = save_path if save_path is not None else self.save_path
+
+        if save_path is not None:
+            fig1.savefig(os.path.join(save_path, f'vi_hmc_{ylabel}_{data_name}_median.pdf'), format='pdf')
+            fig2.savefig(os.path.join(save_path, f'vi_hmc_{ylabel}_{data_name}_mean.pdf'), format='pdf')
+
         self.show()
 
-    def plot_partial_percentages_la_swa(self):
+
+    def set_bounds_and_layout(self, metrics, estimator, fig, ax):
+
+        self.calculate_new_y_bounds_from_data(metrics, ax, estimator)
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
+                   ncol=2, fancybox=True, shadow=True)
+        fig.tight_layout()
+
+    def calculate_new_y_bounds(self, ax):
+        y_bounds = ax.get_ybound()
+        diff = y_bounds[1] - y_bounds[0]
+        new_bounds = (y_bounds[0], y_bounds[1] + diff/5)
+        ax.set_ylim(new_bounds)
+
+    def calculate_new_y_bounds_from_data(self, metrics, ax, estimator = np.median):
+        if isinstance(metrics, (list, tuple)):
+            met = metrics[0][:, 1:-1]
+            for m in metrics[1:]:
+                met = np.concatenate((met, m[:, 1:-1]), -1)
+        else:
+            met = metrics[:, 1:-1]
+
+        ylims = ax.get_ybound()
+        if np.all(estimator(np.abs(met), axis=0) < ylims[1]-(ylims[1] - ylims[0])/5):
+            return None
+
+        self.calculate_new_y_bounds(ax)
+
+    def plot_partial_percentages_la_swa(self, save_path = None):
         metrics_la = self.plot_helper_la_swa.run_for_dataset(criteria='laplace', laplace=True)
         metrics_swa = self.plot_helper_la_swa.run_for_dataset(criteria='swag', laplace=False)
         percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100]
@@ -743,19 +807,36 @@ class PlotFunctionHolder:
         )
 
         ylabel = self.eval_methods_to_names[self.plot_helper_la_swa.eval_method]
+        fig1, ax1 = plt.subplots(1,1)
+        fig2, ax2 = plt.subplots(1,1)
 
         plot_partial_percentages(percentages=percentages,
-                                 res={'SWA-G': np.array(metrics_swa), 'Laplace': np.array(metrics_la)},
+                                 res={'SWAG': np.array(metrics_swa), 'Laplace': np.array(metrics_la)},
                                  data_name=data_name,
                                  num_runs=len(metrics_la),
-                                 ax=None, show=False, ylabel=ylabel)
+                                 ax=[ax1,ax2], show=False)
+
+
+        ax1.set_ylabel(ylabel)
+        ax2.set_ylabel(ylabel)
+
+        self.set_bounds_and_layout((np.array(metrics_swa), np.array(metrics_la)), np.median, fig1, ax1)
+        self.set_bounds_and_layout((np.array(metrics_swa), np.array(metrics_la)), np.mean, fig2, ax2)
+
+        save_path = save_path if save_path is not None else self.save_path
+
+        if save_path is not None:
+            fig1.savefig(os.path.join(save_path, f'la_swa_{ylabel}_{data_name}_median.pdf'), format='pdf')
+            fig2.savefig(os.path.join(save_path, f'la_swa_{ylabel}_{data_name}_mean.pdf'), format='pdf')
+
         self.show()
 
-    def plot_calibration_la_swa(self, percentages=None):
+    def plot_calibration_la_swa(self, percentages=None,  save_path = None):
 
         if percentages is None:
             percentages = ['1', '5', '61', '100']
-
+        save_path = save_path if save_path is not None else self.save_path
+        data_name = self.find_data_name(self.la_swa_path)
         for method, criteria in [('Laplace', 'laplace'), ('SWAG', 'swag')]:
             fig, ax = plt.subplots(1, 1)
             for run in percentages:
@@ -768,13 +849,18 @@ class PlotFunctionHolder:
                     plot_calibration(predictions, labels, ax=ax, label=f'{run} pct stoch')
             set_legends_to_plot(ax)
             ax.set_title(f'Average Calibration {method}')
+            fig.tight_layout()
+            if save_path is not None:
+                fig.savefig(os.path.join(save_path, f'{criteria}_calibration_{data_name}.pdf'), format ='pdf')
+
             self.show()
 
-    def plot_calibration_vi_hmc(self, percentages=None):
+    def plot_calibration_vi_hmc(self, percentages=None, save_path = None):
 
         if percentages is None:
             percentages = ['1', '5', '61', '100']
-
+        save_path = save_path if save_path is not None else self.save_path
+        data_name = self.find_data_name(self.vi_hmc_path)
         for method, criteria in [('VI', 'vi_run'), ('HMC', 'hmc')]:
             fig, ax = plt.subplots(1, 1)
             for run in percentages:
@@ -784,13 +870,18 @@ class PlotFunctionHolder:
                 plot_calibration(predictions, labels, ax=ax, label=f'{run} pct stoch')
             set_legends_to_plot(ax)
             ax.set_title(f'Average Calibration {method}')
+            fig.tight_layout()
+            if save_path is not None:
+                fig.savefig(os.path.join(save_path, f'{criteria}_calibration_{data_name}.pdf'), format='pdf')
+
             self.show()
 
-    def plot_calibration_nodes(self, percentages=None):
+    def plot_calibration_nodes(self, percentages=None, save_path = None):
 
         if percentages is None:
             percentages = ['1', '5', '61', '100']
-
+        save_path = save_path if save_path is not None else self.save_path
+        data_name = self.find_data_name(self.vi_hmc_path)
         for method, criteria in [('Additive', 'add'), ('Multiplicative', 'node_run')]:
             fig, ax = plt.subplots(1, 1)
             for run in percentages:
@@ -800,6 +891,10 @@ class PlotFunctionHolder:
                 plot_calibration(predictions, labels, ax=ax, label=f'{run} pct stoch')
             set_legends_to_plot(ax)
             ax.set_title(f'Average Calibration {method}')
+            fig.tight_layout()
+            if save_path is not None:
+                fig.savefig(os.path.join(save_path, f'{method}_calibration_{data_name}.pdf'), format='pdf')
+
             self.show()
 
 
@@ -809,9 +904,12 @@ if __name__ == '__main__':
     # plot_la_swag(path_la, path_swag)
 
     # PETER PATHS
-    # path_la = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\UCI_Laplace_SWAG_all_metrics\yacht_models'
-    # path_vi =r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\yacht_models'
+    path_la = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\UCI_Laplace_SWAG_all_metrics\boston_models'
+    path_vi =r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\yacht_models'
 
+    plot_holder = PlotFunctionHolder(path_la, path_vi, calculate=True)
+    plot_holder.plot_partial_percentages_la_swa(save_path=r'C:\Users\45292\Documents\Master\Figures\UCI\Laplace')
+    breakpoint()
     # plot_holder = PlotFunctionHolder(la_swa_path=path_la, vi_hmc_path=path_vi, calculate=True)
     # plot_holder.plot_partial_percentages_la_swa()
 
