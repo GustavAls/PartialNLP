@@ -1174,9 +1174,9 @@ if __name__ == "__main__":
     dict_length = 11
     if args.vi:
         # Overwrite dictionary if it exists
-        dict_path = os.path.join(args.output_path, f"results_vi_run_{args.run}.pkl")
-        if os.path.exists(dict_path):
-            vi_results_dict = pickle.load(open(dict_path, "rb"))
+        vi_dict_path = os.path.join(args.output_path, f"results_vi_run_{args.run}.pkl")
+        if os.path.exists(vi_dict_path):
+            vi_results_dict = pickle.load(open(vi_dict_path, "rb"))
             MAP_params = vi_results_dict['map_results']['map_params']
         if len(vi_results_dict.keys()) < dict_length:
             # VI run
@@ -1186,9 +1186,9 @@ if __name__ == "__main__":
                         random_mask=args.random_mask)
 
     if args.node_based:
-        dict_path = os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl")
-        if os.path.exists(dict_path):
-            vi_results_dict = pickle.load(open(dict_path, "rb"))
+        nb_vi_dict_path = os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl")
+        if os.path.exists(nb_vi_dict_path):
+            vi_results_dict = pickle.load(open(nb_vi_dict_path, "rb"))
             MAP_params = vi_results_dict['map_results']['map_params']
         if len(vi_results_dict.keys()) < dict_length:
             # Node based
@@ -1198,9 +1198,9 @@ if __name__ == "__main__":
                         inf_norm_mask=args.inf_norm_mask, random_mask=args.random_mask)
 
     if args.node_based_add:
-        dict_path = os.path.join(args.output_path, f"results_vi_node_add_run_{args.run}.pkl")
-        if os.path.exists(dict_path):
-            vi_results_dict = pickle.load(open(dict_path, "rb"))
+        nb_vi_add_dict_path = os.path.join(args.output_path, f"results_vi_node_add_run_{args.run}.pkl")
+        if os.path.exists(nb_vi_add_dict_path):
+            vi_results_dict = pickle.load(open(nb_vi_add_dict_path, "rb"))
             MAP_params = vi_results_dict['map_results']['map_params']
         if len(vi_results_dict.keys()) < dict_length:
             print("Running node based rank 1 VI")
@@ -1211,9 +1211,9 @@ if __name__ == "__main__":
                         random_mask=args.random_mask)
 
     if args.hmc:
-        dict_path = os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")
-        if os.path.exists(dict_path):
-            hmc_result_dict = pickle.load(open(dict_path, "rb"))
+        hmc_dict_path = os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")
+        if os.path.exists(hmc_dict_path):
+            hmc_result_dict = pickle.load(open(hmc_dict_path, "rb"))
             MAP_params = hmc_result_dict['map_results']['map_params']
         if len(hmc_result_dict.keys()) < dict_length:
             # HMC run
