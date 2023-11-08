@@ -626,6 +626,7 @@ class PlotFunctionHolder:
                                  data_name=data_name,
                                  num_runs=len(metrics_la),
                                  ax=None, show=False, ylabel=ylabel)
+        self.show()
 
     def plot_calibration_la_swa(self, percentages=None):
 
@@ -686,38 +687,41 @@ if __name__ == '__main__':
     # path_swag = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_SWAG_MAP_nobayes'
     # plot_la_swag(path_la, path_swag)
 
-    # GUSTAV PATHS
-    path_la = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_Laplace_SWAG_all_metrics'
-    path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_torch'
-
     # PETER PATHS
-    # path = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\UCI_Laplace_SWAG_all_metrics\yacht_models'
+    # path_la = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\UCI_Laplace_SWAG_all_metrics\yacht_models'
     # path_vi =r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\yacht_models'
+
+    # plot_holder = PlotFunctionHolder(la_swa_path=path_la, vi_hmc_path=path_vi, calculate=True)
+    # plot_holder.plot_partial_percentages_la_swa()
 
     # APPLY TO LA-SWAG PATH ONCE
     # change_datasets(path_la)
+
+    # GUSTAV PATHS
+    path_la = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_Laplace_SWAG_all_metrics'
+    path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_torch'
 
     datasets = ['boston', 'energy', 'yacht']
     prediction_folders = [ dataset + "_models" for dataset in datasets]
 
     # SHARMAS HMC PLOT RECREATED
-    path_svi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_SVI_sharma_hmc'
-    for prediction_folder in prediction_folders:
-        la_swa_path = os.path.join(path_la, prediction_folder)
-        vi_hmc_path = os.path.join(path_svi, prediction_folder)
-        plot_holder = PlotFunctionHolder(la_swa_path=la_swa_path, vi_hmc_path=vi_hmc_path,
-                                         eval_method='test_ll_homoscedastic', calculate=False)
-        plot_holder.plot_partial_percentages_hmc_homoscedastic_nll()
-
-    # NORMAL PLOTTING, WITH CORRECT NLL CALCULATION
+    # path_svi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_SVI_sharma_hmc'
     # for prediction_folder in prediction_folders:
     #     la_swa_path = os.path.join(path_la, prediction_folder)
-    #     vi_hmc_path = os.path.join(path_vi, prediction_folder)
-    #     plot_holder = PlotFunctionHolder(la_swa_path=la_swa_path, vi_hmc_path=vi_hmc_path, calculate=True)
-    #     # plot_holder.set_eval_method('mse')
-    #     # plot_holder.plot_partial_percentages_vi_hmc()
-    #     # plot_holder.plot_partial_percentages_nodes()
-    #     plot_holder.plot_partial_percentages_la_swa()
+    #     vi_hmc_path = os.path.join(path_svi, prediction_folder)
+    #     plot_holder = PlotFunctionHolder(la_swa_path=la_swa_path, vi_hmc_path=vi_hmc_path,
+    #                                      eval_method='test_ll_homoscedastic', calculate=False)
+    #     plot_holder.plot_partial_percentages_hmc_homoscedastic_nll()
+
+    # NORMAL PLOTTING, WITH CORRECT NLL CALCULATION
+    for prediction_folder in prediction_folders:
+        la_swa_path = os.path.join(path_la, prediction_folder)
+        vi_hmc_path = os.path.join(path_vi, prediction_folder)
+        plot_holder = PlotFunctionHolder(la_swa_path=la_swa_path, vi_hmc_path=vi_hmc_path, calculate=True)
+        # plot_holder.set_eval_method('mse')
+        # plot_holder.plot_partial_percentages_vi_hmc()
+        # plot_holder.plot_partial_percentages_nodes()
+        plot_holder.plot_partial_percentages_la_swa()
     breakpoint()
     #
     # breakpoint()
