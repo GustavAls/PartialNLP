@@ -212,6 +212,7 @@ class PlotHelper:
                     return pcl[key]['glm_nll']
                 if 'sqrt' in self.eval_method:
                     return pcl[key]['elpd_spurious_sqrt']
+
             return pcl[key][self.eval_method]
 
         y_train, y_val, y_test = self.get_labels(dataset)
