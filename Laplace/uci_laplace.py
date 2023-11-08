@@ -244,11 +244,10 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages, save_name
     best_prior = 1.0
     ph = PredictiveHelper("")
 
-    if os.path.exists(save_name):
-        laplace_result_dict = pickle.load(open(save_name, "rb"))
+    laplace_result_dict =  pickle.load(open(save_name, "rb")) if os.path.exists(save_name) else None
 
     for p in percentages:
-        if str(p) not in laplace_result_dict.keys():
+        if laplace_result_dict is None or str(p) not in laplace_result_dict.keys():
             ml_model = copy.deepcopy(mle_model)
             if random_mask:
                 subnetwork_mask = RandomSubnetMask(ml_model, n_params_subnet=int((p / 100) * num_params))
@@ -401,7 +400,7 @@ def multiple_runs(data_path,
 
         if fit_swag:
 
-            loss_arguments = {'loss': ll.GLLGP_loss_swag, 'prior_sigma': 1 / args.prior_precision}
+            loss_arguments = {'loss': ll.GLLGP_loss_swag, 'prior_sigma': 1 / np.sqrt(args.prior_precision)}
             loss = loss_arguments.get('loss', MSELoss)
             loss_fn = loss(**loss_arguments)
 
@@ -444,7 +443,7 @@ if __name__ == "__main__":
     parser.add_argument('--load_map', type=ast.literal_eval, default=True)
     parser.add_argument('--fit_swag', type=ast.literal_eval, default=True)
     parser.add_argument('--fit_laplace', type=ast.literal_eval, default=True)
-    parser.add_argument('--prior_precision', type=float, default=0.5)
+    parser.add_argument('--prior_precision', type=float, default=0.25)
     parser.add_argument('--random_mask', type = ast.literal_eval, default=False)
 
 
@@ -464,7 +463,7 @@ if __name__ == "__main__":
         dataset_class = UCIYachtDataset
 
     loss_arguments = {'loss': ll_losses.GLLGP_loss_swag if args.get_map else MSELoss,
-                      'prior_sigma': 1/args.prior_precision}
+                      'prior_sigma': 1 / np.sqrt(args.prior_precision)}
 
     if args.size_ramping:
         results = make_size_ramping(args.data_path, dataset_class, args.num_runs, args.device, args.num_epochs,

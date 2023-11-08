@@ -1216,4 +1216,4 @@ if __name__ == "__main__":
             make_hmc_run(run=args.run, dataset=dataset, scale_prior=args.scale_prior,
                          prior_variance=args.prior_variance,
                          save_path=args.output_path, likelihood_scale=args.likelihood_scale, percentiles=percentiles,
-                         results_dict=hmc_result_dict, MAP_params=MAP_params)
+                         results_dict=hmc_result_dict, MAP_params=MAP_params, random_mask=args.random_mask)
