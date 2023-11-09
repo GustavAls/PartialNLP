@@ -77,7 +77,7 @@ class SentimentClassifier:
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
 
         if logging != -1:
-            logging_steps = logging
+            logging_steps = logging/100
         else:
             logging_steps = 500
 
