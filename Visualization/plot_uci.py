@@ -20,6 +20,8 @@ font = {'family': 'serif',
             }
 mpl.rc('font', **font)
 mpl.rc('legend', fontsize=14)
+params = {'axes.labelsize': 20}
+mpl.rcParams.update(params)
 
 def get_cmap(n, name='hsv'):
     '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct
@@ -602,6 +604,7 @@ class PlotFunctionHolder:
         plot_with_error_bars(percentile_mat=results,
                              path=os.path.join(save_path, 'num_params_w_LSVH.pdf'), show_big=True, ax = ax1)
         self.adjust_yscale(ax1)
+
         ax1.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
                   ncol=1, fancybox=True, shadow=True)
         fig1.tight_layout()
@@ -887,9 +890,15 @@ class PlotFunctionHolder:
         fits = True
         for line in ax.lines:
             ylim = ax.get_ybound()
-            rel = ylim[1] - (ylim[1] - ylim[0]) / 4
             x, y = line.get_data()
-            if np.any(y > rel):
+            if ax.get_yscale() == 'log':
+                rel = np.log(ylim[1])-np.log(ylim[1]-ylim[0])/5
+                overlapping = np.any(np.log(y) > rel)
+            else:
+                rel = ylim[1] - (ylim[1] - ylim[0]) / 5
+                overlapping = np.any(y > rel)
+
+            if overlapping:
                 if ax.get_yscale() == 'log':
                     ax.set_ylim((ylim[0], ylim[1]*10))
                 else:
@@ -1064,7 +1073,7 @@ if __name__ == '__main__':
                                      save_path=r'C:\Users\45292\Documents\Master\Figures\UCI\HMC')
     # plot_holder.write_latex_table()
     plot_holder.plot_number_of_parameters(save_path=r'C:\Users\45292\Documents\Master\Figures\UCI')
-    breakpoint()
+
     plot_holder.plot_hmc_sample_scaling()
     plot_holder.set_eval_method('mse')
     plot_holder.plot_hmc_sample_scaling()
