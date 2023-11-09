@@ -51,8 +51,9 @@ def simulate_n_times(num_sims = 100):
     return results
 
 
-def plot_with_error_bars(percentile_mat, path, show_big = True):
-    fig, ax = plt.subplots(1,1)
+def plot_with_error_bars(percentile_mat, path, show_big = True, ax = None):
+    if ax is None:
+        fig, ax = plt.subplots(1,1)
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
     with sns.axes_style("whitegrid"):
         ax.plot(percentiles, percentile_mat.mean(-1), color = 'tab:blue',
@@ -64,16 +65,13 @@ def plot_with_error_bars(percentile_mat, path, show_big = True):
         if show_big:
             ax.plot(percentiles, [3000 * perc/100 for perc in percentiles], color = 'tab:orange',
                     linestyle = 'dashed', label = 'LSVH')
-
+            ax.set_yscale('log')
         # ax.set_yscale('log')
-        ax.legend()
         ax.set_xlabel('Percentiles')
         ax.set_ylabel('Num. Stoch Trainable Params')
         ax.set_title('Num. trainable stochastic paramaters by method')
         ax.grid(linewidth = 1, alpha = 0.7)
-    plt.tight_layout()
-    plt.savefig(path, format = 'pdf')
-    plt.show()
+
 
 if __name__ == '__main__':
 

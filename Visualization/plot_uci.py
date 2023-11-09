@@ -597,12 +597,25 @@ class PlotFunctionHolder:
     def plot_number_of_parameters(self, save_path):
 
         results = simulate_n_times()
-
+        fig1, ax1 = plt.subplots(1,1)
+        fig2, ax2 = plt.subplots(1,1)
         plot_with_error_bars(percentile_mat=results,
-                             path=os.path.join(save_path, 'num_params_w_LSVH.pdf'), show_big=True)
+                             path=os.path.join(save_path, 'num_params_w_LSVH.pdf'), show_big=True, ax = ax1)
+        self.adjust_yscale(ax1)
+        ax1.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
+                  ncol=1, fancybox=True, shadow=True)
+        fig1.tight_layout()
+        fig1.savefig(os.path.join(save_path, 'num_params_w_LSVH.pdf'), format = 'pdf')
+
         self.show()
         plot_with_error_bars(percentile_mat=results,
-                             path=os.path.join(save_path, 'num_params_m_LSVH.pdf'), show_big=False)
+                             path=os.path.join(save_path, 'num_params_m_LSVH.pdf'), show_big=False, ax = ax2)
+        self.adjust_yscale(ax2)
+        ax2.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
+                   ncol=1, fancybox=True, shadow=True)
+        fig2.tight_layout()
+        fig2.savefig(os.path.join(save_path, 'num_params_m_LSVH.pdf'))
+
         self.show()
 
     def plot_prior_laplace(self, model_paths=None, save_path = None):
@@ -874,10 +887,13 @@ class PlotFunctionHolder:
         fits = True
         for line in ax.lines:
             ylim = ax.get_ybound()
-            rel = ylim[1] - (ylim[1] - ylim[0]) / 5
+            rel = ylim[1] - (ylim[1] - ylim[0]) / 4
             x, y = line.get_data()
             if np.any(y > rel):
-                ax.set_ylim((ylim[0], ylim[1] + rel/3))
+                if ax.get_yscale() == 'log':
+                    ax.set_ylim((ylim[0], ylim[1]*10))
+                else:
+                    ax.set_ylim((ylim[0], ylim[1] + rel/8))
                 fits = False
         if not fits:
             self.adjust_yscale(ax)
@@ -1011,11 +1027,14 @@ class PlotFunctionHolder:
         metrics_mul = estimator(metrics_mul, 0)
         percentages = self.percentages[1:]
 
-        use_min = True if self.plot_helper_vi_hmc.eval_method == 'mse' else False
+        use_min = True
 
         methods = ['Laplace', 'SWAG', 'VI', 'HMC', 'Additive', 'Multiplicative']
         df = pd.DataFrame()
         for method, metric in zip(methods, [metrics_la, metrics_swa, metrics_vi, metrics_hmc, metrics_add, metrics_mul]):
+            if self.plot_helper_vi_hmc.eval_method in ['nll', 'nll_glm', 'glm_nll']:
+                df[method] = -metric
+                continue
             df[method] = metric
 
         if bold_direction == 'method':
@@ -1041,9 +1060,10 @@ if __name__ == '__main__':
     path_la = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\UCI_Laplace_SWAG_all_metrics\energy_models'
     path_vi =r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\energy_models'
 
-    plot_holder = PlotFunctionHolder(path_la, path_vi, eval_method='mse', calculate=True,
+    plot_holder = PlotFunctionHolder(path_la, path_vi, eval_method='nll', calculate=True,
                                      save_path=r'C:\Users\45292\Documents\Master\Figures\UCI\HMC')
-    plot_holder.write_latex_table()
+    # plot_holder.write_latex_table()
+    plot_holder.plot_number_of_parameters(save_path=r'C:\Users\45292\Documents\Master\Figures\UCI')
     breakpoint()
     plot_holder.plot_hmc_sample_scaling()
     plot_holder.set_eval_method('mse')

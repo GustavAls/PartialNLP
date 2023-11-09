@@ -70,10 +70,16 @@ class SentimentClassifier:
         f1 = load_f1.compute(predictions=predictions, references=labels)["f1"]
         return {"accuracy": accuracy, "f1": f1}
 
-    def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, lr=5e-05, seed=0, train=True):
+    def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, lr=5e-05, seed=0, train=True,
+               logging = -1):
         train_data, test_data = self.load_text_dataset(dataset_name=dataset_name, seed=seed)
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
+
+        if logging != -1:
+            logging_steps = logging
+        else:
+            logging_steps = 500
 
         training_args = TrainingArguments(output_dir=output_path,
                                           learning_rate=lr,
@@ -84,7 +90,9 @@ class SentimentClassifier:
                                           evaluation_strategy="epoch",
                                           save_strategy="epoch",
                                           load_best_model_at_end=True,
-                                          weight_decay=0.01)
+                                          weight_decay=0.01,
+                                          logging_steps=logging_steps)
+
 
         # self.model = PartialConstructorSwag(self.model, n_iterations_between_snapshots=1,
         #                                     module_names=['classifier'],
@@ -100,7 +108,7 @@ class SentimentClassifier:
             data_collator=self.collator,
             compute_metrics=self.compute_metrics
         )
-
+        breakpoint()
         if train:
             trainer.train()
             print("Training is done")
@@ -182,7 +190,8 @@ def prepare_and_run_sentiment_classifier(args, sentiment_classifier=None):
                                 device_batch_size=args.device_batch_size,
                                 lr=args.learning_rate,
                                 seed=args.seed,
-                                train=args.train)
+                                train=args.train,
+                                logging = args.logging_perc)
 
     return None
 
@@ -348,6 +357,7 @@ if __name__ == "__main__":
     parser.add_argument('--swag', type=ast.literal_eval, default=False)
     parser.add_argument('--swag_cfg', default=None)
     parser.add_argument('--la_cfg', default=None)
+    parser.add_argument('--logging_perc',type = int, default = -1) # Default from transformers
     args = parser.parse_args()
 
     if not any((args.swag, args.laplace)):
