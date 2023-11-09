@@ -70,7 +70,7 @@ def plot_with_error_bars(percentile_mat, path, show_big = True, ax = None):
         # ax.set_xscale('log')
         ax.set_xlabel('Percentiles')
         ax.set_ylabel('Num. Stoch Trainable Params')
-        ax.set_title('Num. trainable stochastic paramaters by method')
+        ax.set_title('Num. trainable stochastic parameters')
         ax.grid(linewidth = 1, alpha = 0.7)
 
 

@@ -20,7 +20,7 @@ font = {'family': 'serif',
             }
 mpl.rc('font', **font)
 mpl.rc('legend', fontsize=14)
-params = {'axes.labelsize': 20}
+params = {'axes.labelsize': 22}
 mpl.rcParams.update(params)
 
 def get_cmap(n, name='hsv'):
@@ -939,7 +939,7 @@ class PlotFunctionHolder:
         palette = sns.color_palette(None, len(sample_results))
         fig, ax = plt.subplots(1,1)
         for idx, (key, val) in enumerate(sample_results.items()):
-            plot_regression_with_uncertainty(ax, val, label = key, color = palette[idx])
+            plot_regression_with_uncertainty(ax, val, label = f"{int(key)*2}", color = palette[idx])
             print(np.min(val))
         #
         ax.axhline(y=np.median(map_results.mean(0)), linestyle='--', linewidth=2, alpha=0.9,
@@ -1072,11 +1072,11 @@ if __name__ == '__main__':
     plot_holder = PlotFunctionHolder(path_la, path_vi, eval_method='nll', calculate=True,
                                      save_path=r'C:\Users\45292\Documents\Master\Figures\UCI\HMC')
     # plot_holder.write_latex_table()
-    plot_holder.plot_number_of_parameters(save_path=r'C:\Users\45292\Documents\Master\Figures\UCI')
-
-    plot_holder.plot_hmc_sample_scaling()
+    # plot_holder.plot_number_of_parameters(save_path=r'C:\Users\45292\Documents\Master\Figures\UCI')
+    save_path = r'C:\Users\45292\Documents\Master\Figures\UCI\HMC'
+    plot_holder.plot_hmc_sample_scaling(save_path=save_path)
     plot_holder.set_eval_method('mse')
-    plot_holder.plot_hmc_sample_scaling()
+    plot_holder.plot_hmc_sample_scaling(save_path=save_path)
 
     # plot_holder.plot_partial_percentages_vi_hmc()
     breakpoint()
