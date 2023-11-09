@@ -108,7 +108,7 @@ class SentimentClassifier:
             data_collator=self.collator,
             compute_metrics=self.compute_metrics
         )
-        breakpoint()
+
         if train:
             trainer.train()
             print("Training is done")
