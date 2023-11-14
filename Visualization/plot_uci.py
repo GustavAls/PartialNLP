@@ -15,13 +15,12 @@ from plot_number_of_parameters import *
 
 
 font = {'family': 'serif',
-            'size': 16,
+            'size': 15,
             'serif': 'cmr10'
             }
 mpl.rc('font', **font)
-mpl.rc('legend', fontsize=14)
-params = {'axes.labelsize': 22}
-mpl.rcParams.update(params)
+mpl.rc('legend', fontsize=15)
+mpl.rc('axes', labelsize=19)
 
 def get_cmap(n, name='hsv'):
     '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct
@@ -126,10 +125,10 @@ def plot_estimator_multi_dataset(df, errorbar_func, estimator=None, ax=None, dat
             color_scheme_num += 1
 
     title = " & ".join(method_names) + " - " + estimator.__name__ + " - " + data_name
-    ax.set_title(label=title, fontsize=12, pad=0)
-    ax.set_xlabel("Percentages", fontsize=12)
-    ax.set_ylabel("nll", fontsize=12)
-    ax.legend(fontsize=10)
+    ax.set_title(label=title, pad=0)
+    ax.set_xlabel("Percentages")
+    ax.set_ylabel("nll")
+    ax.legend()
 
     # Customize the grid appearance
     # ax.grid(axis='y', linestyle='-', alpha=0.3)
@@ -660,6 +659,9 @@ class PlotFunctionHolder:
 
         self.show()
 
+
+
+
     def get_criteria_between_datasets_la_swa(self, potential_paths, criteria, laplace = False):
 
         results = {}
@@ -710,11 +712,11 @@ class PlotFunctionHolder:
 
     def set_save_path(self, path):
         self.save_path = path
-    def plot_partial_percentages_nodes(self, save_path = None):
+    def plot_partial_percentages_nodes(self, save_path = None, map=True):
 
-        metrics_mul = self.plot_helper_vi_hmc.run_for_dataset(criteria='node_run')
-        metrics_add = self.plot_helper_vi_hmc.run_for_dataset(criteria='add')
-        percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100]
+        metrics_mul = self.plot_helper_vi_hmc.run_for_dataset(criteria='node_run', map=map)
+        metrics_add = self.plot_helper_vi_hmc.run_for_dataset(criteria='add', map=map)
+        percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100] if map else [1, 2, 5, 8, 14, 23, 37, 61, 100]
 
         data_name = self.find_data_name(self.vi_hmc_path) + " " + self.get_eval_method_name(
             self.plot_helper_vi_hmc.eval_method)
@@ -739,8 +741,8 @@ class PlotFunctionHolder:
         self.set_bounds_and_layout((np.array(metrics_add), np.array(metrics_mul)), np.mean, fig2, ax2)
         save_path = save_path if save_path is not None else self.save_path
         if save_path is not None:
-            fig1.savefig(os.path.join(save_path, f'node_based_{ylabel}_{data_name}_median.pdf'), format='pdf')
-            fig2.savefig(os.path.join(save_path, f'node_based_{ylabel}_{data_name}_mean.pdf'), format='pdf')
+            fig1.savefig(os.path.join(save_path, f'node_based_{ylabel}_{data_name}_{"no map" if not map else str()}_median.pdf'), format='pdf')
+            fig2.savefig(os.path.join(save_path, f'node_based_{ylabel}_{data_name}_{"no map" if not map else str()}_mean.pdf'), format='pdf')
 
         self.show()
 
@@ -768,10 +770,10 @@ class PlotFunctionHolder:
                                  ax=None, show=False)
         self.show()
 
-    def plot_partial_percentages_vi_hmc(self, save_path = None):
-        metrics_vi = self.plot_helper_vi_hmc.run_for_dataset(criteria='vi_run')
-        metrics_hmc = self.plot_helper_vi_hmc.run_for_dataset(criteria='hmc')
-        percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100]
+    def plot_partial_percentages_vi_hmc(self, save_path = None, map=True):
+        metrics_vi = self.plot_helper_vi_hmc.run_for_dataset(criteria='vi_run', map=map)
+        metrics_hmc = self.plot_helper_vi_hmc.run_for_dataset(criteria='hmc', map=map)
+        percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100] if map else [1, 2, 5, 8, 14, 23, 37, 61, 100]
 
         (metrics_vi, metrics_hmc), data_name = self.ensure_same_length_and_get_name(
             [metrics_vi, metrics_hmc], self.vi_hmc_path, self.plot_helper_vi_hmc.eval_method
@@ -795,8 +797,8 @@ class PlotFunctionHolder:
         save_path = save_path if save_path is not None else self.save_path
 
         if save_path is not None:
-            fig1.savefig(os.path.join(save_path, f'vi_hmc_{ylabel}_{data_name}_median.pdf'), format='pdf')
-            fig2.savefig(os.path.join(save_path, f'vi_hmc_{ylabel}_{data_name}_mean.pdf'), format='pdf')
+            fig1.savefig(os.path.join(save_path, f'vi_hmc_{ylabel}_{data_name}_{"no map" if not map else str()}_median.pdf'), format='pdf')
+            fig2.savefig(os.path.join(save_path, f'vi_hmc_{ylabel}_{data_name}_{"no map" if not map else str()}_mean.pdf'), format='pdf')
 
         self.show()
 
@@ -828,11 +830,10 @@ class PlotFunctionHolder:
 
         self.calculate_new_y_bounds(ax)
 
-    def plot_partial_percentages_la_swa(self, save_path = None):
-        metrics_la = self.plot_helper_la_swa.run_for_dataset(criteria='laplace', laplace=True)
-        metrics_swa = self.plot_helper_la_swa.run_for_dataset(criteria='swag', laplace=False)
-        percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100]
-        percentages = percentages
+    def plot_partial_percentages_la_swa(self, save_path = None, map=True):
+        metrics_la = self.plot_helper_la_swa.run_for_dataset(criteria='laplace', laplace=True, map=map)
+        metrics_swa = self.plot_helper_la_swa.run_for_dataset(criteria='swag', laplace=False, map=map)
+        percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100] if map else [1, 2, 5, 8, 14, 23, 37, 61, 100]
         (metrics_la, metrics_swa), data_name = self.ensure_same_length_and_get_name(
             [metrics_la, metrics_swa], self.la_swa_path, self.plot_helper_la_swa.eval_method
         )
@@ -857,8 +858,8 @@ class PlotFunctionHolder:
         save_path = save_path if save_path is not None else self.save_path
 
         if save_path is not None:
-            fig1.savefig(os.path.join(save_path, f'la_swa_{ylabel}_{data_name}_median.pdf'), format='pdf')
-            fig2.savefig(os.path.join(save_path, f'la_swa_{ylabel}_{data_name}_mean.pdf'), format='pdf')
+            fig1.savefig(os.path.join(save_path, f'la_swa_{ylabel}_{data_name}_{"no map" if not map else str()}_median.pdf'), format='pdf')
+            fig2.savefig(os.path.join(save_path, f'la_swa_{ylabel}_{data_name}_{"no map" if not map else str()}_mean.pdf'), format='pdf')
 
         self.show()
 
@@ -1068,9 +1069,6 @@ if __name__ == '__main__':
     # plot_la_swag(path_la, path_swag)
 
     # PETER PATHS
-    test = ExtendedString('hej')
-    print(test)
-    breakpoint()
     path_la = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\UCI_Laplace_SWAG_all_metrics\energy_models'
     path_vi =r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\energy_models'
 
@@ -1095,9 +1093,9 @@ if __name__ == '__main__':
 
     # GUSTAV PATHS
     path_la = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_Laplace_SWAG_all_metrics'
-    path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_torch'
+    path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_torch_rand'
 
-    datasets = ['boston', 'energy', 'yacht']
+    datasets = ['yacht', 'boston', 'energy']
     prediction_folders = [ dataset + "_models" for dataset in datasets]
 
     # SHARMAS HMC PLOT RECREATED
@@ -1110,15 +1108,20 @@ if __name__ == '__main__':
     #     plot_holder.plot_partial_percentages_hmc_homoscedastic_nll()
 
     # NORMAL PLOTTING, WITH CORRECT NLL CALCULATION
-    path = 'energy_results'
     for prediction_folder in prediction_folders:
         la_swa_path = os.path.join(path_la, prediction_folder)
         vi_hmc_path = os.path.join(path_vi, prediction_folder)
-        plot_holder = PlotFunctionHolder(la_swa_path=la_swa_path, vi_hmc_path=vi_hmc_path, calculate=True, save_path=path)
+        save_path = os.path.join(os.getcwd(), r"Figures\Torch_rand")
+        plot_holder = PlotFunctionHolder(la_swa_path=la_swa_path, vi_hmc_path=vi_hmc_path, calculate=True, save_path=save_path)
         # plot_holder.set_eval_method('mse')
-        # plot_holder.plot_partial_percentages_vi_hmc()
-        # plot_holder.plot_partial_percentages_nodes()
+        plot_holder.plot_partial_percentages_nodes()
+        plot_holder.plot_partial_percentages_vi_hmc()
         plot_holder.plot_partial_percentages_la_swa()
+        if 'yacht' in prediction_folder:
+            plot_holder.plot_partial_percentages_vi_hmc(map=False)
+            plot_holder.plot_partial_percentages_nodes(map=False)
+            plot_holder.plot_partial_percentages_la_swa(map=False)
+
     breakpoint()
     #
     # breakpoint()

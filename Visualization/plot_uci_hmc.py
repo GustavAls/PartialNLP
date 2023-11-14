@@ -12,23 +12,25 @@ import requests
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 
-path = r"C:\Users\Gustav\Desktop\MasterThesisResults\UCI_HMC_boston_scale"
+path = r"C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_SVI"
 datasets = ["yacht", "energy", "boston"]
 
-all_results_df_list_scaled = {}
+yacht_results = {}
+boston_results = {}
+energy_results = {}
 
 for root, dirs, files in os.walk(path):
     for f in files:
-        for dataset in datasets:
-            if dataset in f:
-                if ".pkl" in f:
-                    d = pickle.load(open(os.path.join(root, f), "rb"))
-                file_name = f.split(".")[0]
-                all_results_df_list_scaled[file_name] = d
-#
-# for run in all_results_df_list_scaled:
-#     for percentile in all_results_df_list_scaled[run]:
-#         all_results_df_list_scaled[run][percentile]["test_nll"] = -all_results_df_list_scaled[run][percentile]["test_ll"]
+        if "hmc" in f:
+            if ".pkl" in f:
+                d = pickle.load(open(os.path.join(root, f), "rb"))
+            file_name = f.split(".")[0]
+            if "yacht" in root:
+                yacht_results[file_name] = d
+            elif "boston" in root:
+                boston_results[file_name] = d
+            elif "energy" in root:
+                energy_results[file_name] = d
 
 main_df = pd.DataFrame(all_results_df_list_scaled)
 main_df["test_nll"] = - main_df["test_ll"]
