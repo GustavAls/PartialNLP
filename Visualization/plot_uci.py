@@ -1058,6 +1058,8 @@ class PlotFunctionHolder:
         print(df.to_latex(index=True, float_format="{:.3f}".format))
 
 
+class ExtendedString(str):
+    pass
 
 
 if __name__ == '__main__':
@@ -1066,6 +1068,9 @@ if __name__ == '__main__':
     # plot_la_swag(path_la, path_swag)
 
     # PETER PATHS
+    test = ExtendedString('hej')
+    print(test)
+    breakpoint()
     path_la = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\UCI_Laplace_SWAG_all_metrics\energy_models'
     path_vi =r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\energy_models'
 

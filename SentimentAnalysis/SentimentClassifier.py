@@ -48,6 +48,8 @@ class SentimentClassifier:
 
     def load_text_dataset(self, dataset_name="imdb", seed=0):
         data = load_dataset(dataset_name)
+        if 0 < self.train_size < 1:
+            self.train_size = int(len(data['train']) * self.train_size)
         train_data = data["train"].shuffle(seed=seed) if self.train_size is None else data["train"].shuffle(seed=42).select([i for i in list(range(self.train_size))])
         test_data = data["test"] if self.test_size is None else data["test"].shuffle(seed=42).select([i for i in list(range(self.test_size))])
         del data
