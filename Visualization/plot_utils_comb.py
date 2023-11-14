@@ -276,9 +276,11 @@ class PlotHelper:
                                          sigma)
         return metric
 
-    def run_for_all_keys(self, pcl):
-        all_keys = ['map_results', '1', '2', '5', '8', '14', '23', '37', '61', '100']
-        # all_keys = ['map_results', '2', '5', '8', '14', '23', '37', '61', '100']
+    def run_for_all_keys(self, pcl, map=True):
+        if map:
+            all_keys = ['map_results', '1', '2', '5', '8', '14', '23', '37', '61', '100']
+        else:
+            all_keys = ['1', '2', '5', '8', '14', '23', '37', '61', '100']
         nlls = []
         for key in all_keys:
             nlls.append(self.run_for_key(pcl, key))
@@ -288,14 +290,14 @@ class PlotHelper:
         pred = preds
         label = labels
         return np.square(preds.mean(-1)[:, None] - label).mean()
-    def run_for_multiple_files(self, paths):
+    def run_for_multiple_files(self, paths, map=True):
 
         nlls = []
         pbar = tqdm(paths, desc='Running through files')
         for path in pbar:
             try:
                 pcl = pickle.load(open(path, 'rb'))
-                nlls.append(self.run_for_all_keys(pcl))
+                nlls.append(self.run_for_all_keys(pcl, map=map))
             except:
                 continue
         return nlls
@@ -306,13 +308,13 @@ class PlotHelper:
         paths = [os.path.join(path, p) for p in os.listdir(path) if criteria in p]
         return paths
 
-    def run_for_dataset(self, criteria=None,  fast = False, laplace = False):
+    def run_for_dataset(self, criteria=None,  fast = False, laplace = False, map=True):
         if laplace:
             setattr(self, 'laplace', True)
 
         paths = self.get_paths(self.path_to_models, criteria)
         if fast:
             paths = list(np.random.choice(paths, 5))
-        nlls = self.run_for_multiple_files(paths)
+        nlls = self.run_for_multiple_files(paths, map=map)
         setattr(self, 'laplace', False)
         return nlls
