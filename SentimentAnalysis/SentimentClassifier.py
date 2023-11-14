@@ -347,7 +347,7 @@ if __name__ == "__main__":
     parser.add_argument("--train_batch_size", type=int, default=None)
     parser.add_argument("--eval_batch_size", type=int, default=None)
     parser.add_argument("--device", type=str, default="cpu")
-    parser.add_argument("--num_epochs", type=int, default=1)
+    parser.add_argument("--num_epochs", type=float, default=1)
     parser.add_argument("--dataset_name", type=str, default="sst2")
     parser.add_argument("--train", type=ast.literal_eval, default=True)
     parser.add_argument("--train_size", type=float, default=None) # Set to number for subset of data
@@ -364,6 +364,7 @@ if __name__ == "__main__":
 
     if int(args.train_size)-args.train_size == 0:
         args.train_size = int(args.train_size)
+
 
     if not any((args.swag, args.laplace)):
         prepare_and_run_sentiment_classifier(args)
