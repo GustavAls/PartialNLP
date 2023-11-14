@@ -19,8 +19,8 @@ font = {'family': 'serif',
             'serif': 'cmr10'
             }
 mpl.rc('font', **font)
-mpl.rc('legend', fontsize=14)
-mpl.rc('axes', labelsize=18)
+mpl.rc('legend', fontsize=15)
+mpl.rc('axes', labelsize=19)
 
 def get_cmap(n, name='hsv'):
     '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct
@@ -1067,22 +1067,22 @@ if __name__ == '__main__':
     # plot_la_swag(path_la, path_swag)
 
     # PETER PATHS
-    path_la = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\UCI_Laplace_SWAG_all_metrics\energy_models'
-    path_vi =r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\energy_models'
-
-    plot_holder = PlotFunctionHolder(path_la, path_vi, eval_method='nll', calculate=True,
-                                     save_path=r'C:\Users\45292\Documents\Master\Figures\UCI\HMC')
-    # plot_holder.write_latex_table()
-    # plot_holder.plot_number_of_parameters(save_path=r'C:\Users\45292\Documents\Master\Figures\UCI')
-    save_path = r'C:\Users\45292\Documents\Master\Figures\UCI\HMC'
-    plot_holder.plot_hmc_sample_scaling(save_path=save_path)
-    plot_holder.set_eval_method('mse')
-    plot_holder.plot_hmc_sample_scaling(save_path=save_path)
-
-    # plot_holder.plot_partial_percentages_vi_hmc()
-    breakpoint()
-    plot_holder.plot_partial_percentages_la_swa(save_path=r'C:\Users\45292\Documents\Master\Figures\UCI\Laplace')
-    breakpoint()
+    # path_la = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\UCI_Laplace_SWAG_all_metrics\energy_models'
+    # path_vi =r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\energy_models'
+    #
+    # plot_holder = PlotFunctionHolder(path_la, path_vi, eval_method='nll', calculate=True,
+    #                                  save_path=r'C:\Users\45292\Documents\Master\Figures\UCI\HMC')
+    # # plot_holder.write_latex_table()
+    # # plot_holder.plot_number_of_parameters(save_path=r'C:\Users\45292\Documents\Master\Figures\UCI')
+    # save_path = r'C:\Users\45292\Documents\Master\Figures\UCI\HMC'
+    # plot_holder.plot_hmc_sample_scaling(save_path=save_path)
+    # plot_holder.set_eval_method('mse')
+    # plot_holder.plot_hmc_sample_scaling(save_path=save_path)
+    #
+    # # plot_holder.plot_partial_percentages_vi_hmc()
+    # breakpoint()
+    # plot_holder.plot_partial_percentages_la_swa(save_path=r'C:\Users\45292\Documents\Master\Figures\UCI\Laplace')
+    # breakpoint()
     # plot_holder = PlotFunctionHolder(la_swa_path=path_la, vi_hmc_path=path_vi, calculate=True)
     # plot_holder.plot_partial_percentages_la_swa()
 
