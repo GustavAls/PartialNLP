@@ -360,7 +360,7 @@ class PlotHelper:
             res_dict[str(scale)] = np.array(metrics)
         return res_dict
 
-    def run_for_dataset(self, criteria=None,  fast = False, laplace = False):
+    def run_for_dataset(self, criteria=None,  fast = False, laplace = False, map = True):
         if laplace:
             setattr(self, 'laplace', True)
 
