@@ -57,6 +57,21 @@ def plot_percentages(df, errorbar_func, estimator=None, ax=None, y='Laplace_nll'
     fully_stochastic_val = estimated[-1]
 
     # Adjust layout
+def plot_regression_with_uncertainty(ax, metrics, estimator = np.median, label = "", color = None):
+    percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
+    # percentages = percentages[4:]
+    # metrics = metrics[:, 4:]
+    if metrics.shape[-1] != len(percentages):
+        metrics = metrics[:, 1:]
+    estimated = estimator(metrics, 0)
+    if estimator.__name__ == 'median':
+        lower, upper = np.percentile(metrics, q=(25, 75), axis = 0)
+    elif estimator.__name__ == 'mean':
+        std_ = np.std(metrics, 0)
+        lower, upper = (estimated - 1.96 * std_, estimated + 1.96 * std_)
+
+    ax.plot(percentages, estimated, label = label, color = color, linestyle = 'dashed')
+    # ax.fill_between(percentages, lower, upper, color = color, alpha = 0.3)
 
 
 
@@ -362,7 +377,7 @@ def read_hmc_data(path):
     return test_ll, test_mse
 
 
-def read_hmc_vi_combined(path):
+def read_hmc_vi_combined(wpath):
     percentages = []
     test_ll_vi = []
     hmc_percentiles = ['map_results', '1', '2', '5', '8', '14', '23', '37', '61', '100']
@@ -560,6 +575,8 @@ class PlotFunctionHolder:
             'sqrt': 'ELPD', 'test_ll_homoscedastic' : 'NLL homoscedastic',
             'prior_precision': 'Prior Precision'}
 
+        self.percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100]
+
         self.show_ = show
 
     def set_eval_method(self, new_eval_method):
@@ -581,18 +598,32 @@ class PlotFunctionHolder:
     def plot_number_of_parameters(self, save_path):
 
         results = simulate_n_times()
-
+        fig1, ax1 = plt.subplots(1,1)
+        fig2, ax2 = plt.subplots(1,1)
         plot_with_error_bars(percentile_mat=results,
-                             path=os.path.join(save_path, 'num_params_w_LSVH.pdf'), show_big=True)
+                             path=os.path.join(save_path, 'num_params_w_LSVH.pdf'), show_big=True, ax = ax1)
+        self.adjust_yscale(ax1)
+
+        ax1.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
+                  ncol=1, fancybox=True, shadow=True)
+        fig1.tight_layout()
+        fig1.savefig(os.path.join(save_path, 'num_params_w_LSVH.pdf'), format = 'pdf')
+
         self.show()
         plot_with_error_bars(percentile_mat=results,
-                             path=os.path.join(save_path, 'num_params_m_LSVH.pdf'), show_big=False)
+                             path=os.path.join(save_path, 'num_params_m_LSVH.pdf'), show_big=False, ax = ax2)
+        self.adjust_yscale(ax2)
+        ax2.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
+                   ncol=1, fancybox=True, shadow=True)
+        fig2.tight_layout()
+        fig2.savefig(os.path.join(save_path, 'num_params_m_LSVH.pdf'))
+
         self.show()
 
     def plot_prior_laplace(self, model_paths=None, save_path = None):
 
         potential_paths = ['energy_models', 'yacht_models', 'boston_models']
-
+        org_calculate = self.plot_helper_la_swa.calculate
         setattr(self.plot_helper_la_swa, 'calculate', False)
         setattr(self.plot_helper_la_swa, 'eval_method', 'prior_precision')
 
@@ -647,6 +678,7 @@ class PlotFunctionHolder:
             results[name] = np.array(res)
 
         return results
+
     def plot_pred_labels_la_swa(self, percentages=('1', '100')):
 
         data_name = self.find_data_name(self.la_swa_path)
@@ -749,6 +781,7 @@ class PlotFunctionHolder:
 
         fig1, ax1 = plt.subplots(1,1)
         fig2, ax2 = plt.subplots(1,1)
+
         plot_partial_percentages(percentages=percentages,
                                  res={'VI': np.array(metrics_vi), 'HMC': np.array(metrics_hmc)},
                                  data_name=data_name,
@@ -808,6 +841,7 @@ class PlotFunctionHolder:
         ylabel = self.eval_methods_to_names[self.plot_helper_la_swa.eval_method]
         fig1, ax1 = plt.subplots(1,1)
         fig2, ax2 = plt.subplots(1,1)
+
         plot_partial_percentages(percentages=percentages,
                                  res={'SWAG': np.array(metrics_swa), 'Laplace': np.array(metrics_la)},
                                  data_name=data_name,
@@ -853,6 +887,80 @@ class PlotFunctionHolder:
 
             self.show()
 
+    def adjust_yscale(self, ax):
+        fits = True
+        for line in ax.lines:
+            ylim = ax.get_ybound()
+            x, y = line.get_data()
+            if ax.get_yscale() == 'log':
+                rel = np.log(ylim[1])-np.log(ylim[1]-ylim[0])/5
+                overlapping = np.any(np.log(y) > rel)
+            else:
+                rel = ylim[1] - (ylim[1] - ylim[0]) / 5
+                overlapping = np.any(y > rel)
+
+            if overlapping:
+                if ax.get_yscale() == 'log':
+                    ax.set_ylim((ylim[0], ylim[1]*10))
+                else:
+                    ax.set_ylim((ylim[0], ylim[1] + rel/8))
+                fits = False
+        if not fits:
+            self.adjust_yscale(ax)
+
+    def find_best_comparable(self):
+
+        metrics_vi = np.array(self.plot_helper_vi_hmc.run_for_dataset('vi_run', laplace=False))
+        metrics_add = np.array(self.plot_helper_vi_hmc.run_for_dataset('add', laplace=False))
+        metrics_mul = np.array(self.plot_helper_vi_hmc.run_for_dataset('node_run', laplace=False))
+        if self.plot_helper_vi_hmc.eval_method in ['nll', 'nll_glm']:
+            metrics_add, metrics_mul, metrics_vi = -metrics_add, -metrics_mul, -metrics_vi
+
+        colors = ['tab:red', 'tab:blue', 'tab:green']
+        results = {}
+        for i, (method, res) in enumerate(
+                zip(['VI', 'Add.', 'Mult.'], [metrics_vi,metrics_add, metrics_mul])):
+            res = res[:, 1:]
+            minimum = np.min(np.median(res, 0))
+            best_percentage = self.percentages[np.argmin(np.median(res, 0))]
+            results[method] = (minimum, best_percentage, colors[i])
+
+        return results
+    def plot_hmc_sample_scaling(self, save_path = None):
+        save_path = save_path if save_path is not None else self.save_path
+        data_name = self.find_data_name(self.vi_hmc_path)
+        sample_results = self.plot_helper_vi_hmc.run_hmc_scaling_for_dataset()
+
+        other_method_results = self.find_best_comparable()
+
+        if self.plot_helper_vi_hmc.eval_method in ['nll', 'nll_glm', 'glm_nll']:
+            sample_results = {key: - val for key, val in sample_results.items()}
+
+        map_results = np.array([m[:, 0] for k, m in sample_results.items()])
+        palette = sns.color_palette(None, len(sample_results))
+        fig, ax = plt.subplots(1,1)
+        for idx, (key, val) in enumerate(sample_results.items()):
+            plot_regression_with_uncertainty(ax, val, label = f"{int(key)*2}", color = palette[idx])
+            print(np.min(val))
+        #
+        ax.axhline(y=np.median(map_results.mean(0)), linestyle='--', linewidth=2, alpha=0.9,
+                   color='tab:orange', label='MAP')
+        for key, val in other_method_results.items():
+            ax.axhline(y=val[0], linestyle='--', linewidth=2, alpha=0.9,
+                       color=val[2], label=key)
+
+        ax.set_xlabel('Percentages')
+        y_label = self.eval_methods_to_names[self.plot_helper_vi_hmc.eval_method]
+        ax.set_ylabel(y_label)
+        ax.set_title(f'Sample Scaling HMC, {data_name} - {y_label}')
+        self.adjust_yscale(ax)
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
+                  ncol=4, fancybox=True, shadow=True)
+        fig.tight_layout()
+        # ax.set_yscale('log')
+        if save_path is not None:
+            fig.savefig(os.path.join(save_path, f'HMC_scaled_{y_label}_{data_name}.pdf'), format='pdf')
+        self.show()
     def plot_calibration_vi_hmc(self, percentages=None, save_path = None):
 
         if percentages is None:
@@ -894,6 +1002,63 @@ class PlotFunctionHolder:
                 fig.savefig(os.path.join(save_path, f'{method}_calibration_{data_name}.pdf'), format='pdf')
 
             self.show()
+    @staticmethod
+    def find_best_and_make_bold(df, column, use_min = False, num_indices = 3):
+
+        values = list(df[column])
+        if use_min:
+            best = np.argmin(values)
+        else:
+            best = np.argmax(values)
+
+        new_values = []
+        for idx, val in enumerate(values):
+            if idx == best:
+                format_ = f"\\textbf{'{' + '{:.3f}'.format(val) + '}'}"
+            else:
+                format_ = '{:.3f}'.format(val)
+            new_values.append(format_)
+        df[column] = new_values
+        return df
+
+    def write_latex_table(self,estimator = np.median,  save_path = None, bold_direction = 'percentage'):
+        metrics_la = np.array(self.plot_helper_la_swa.run_for_dataset(criteria='laplace', laplace=True))[:, 1:]
+        metrics_swa = np.array(self.plot_helper_la_swa.run_for_dataset(criteria='swag', laplace=False))[:, 1:]
+        metrics_vi = np.array(self.plot_helper_vi_hmc.run_for_dataset(criteria='vi_run'))[:, 1:]
+        metrics_hmc = np.array(self.plot_helper_vi_hmc.run_for_dataset(criteria='hmc'))[:, 1:]
+        metrics_add = np.array(self.plot_helper_vi_hmc.run_for_dataset(criteria='add'))[:,1:]
+        metrics_mul = np.array(self.plot_helper_vi_hmc.run_for_dataset(criteria='node_run'))[:, 1:]
+
+        metrics_la = estimator(metrics_la, 0)
+        metrics_swa = estimator(metrics_swa, 0)
+        metrics_hmc = estimator(metrics_hmc, 0)
+        metrics_vi = estimator(metrics_vi, 0)
+        metrics_add = estimator(metrics_add, 0)
+        metrics_mul = estimator(metrics_mul, 0)
+        percentages = self.percentages[1:]
+
+        use_min = True
+
+        methods = ['Laplace', 'SWAG', 'VI', 'HMC', 'Additive', 'Multiplicative']
+        df = pd.DataFrame()
+        for method, metric in zip(methods, [metrics_la, metrics_swa, metrics_vi, metrics_hmc, metrics_add, metrics_mul]):
+            if self.plot_helper_vi_hmc.eval_method in ['nll', 'nll_glm', 'glm_nll']:
+                df[method] = -metric
+                continue
+            df[method] = metric
+
+        if bold_direction == 'method':
+            for column in df.columns:
+                df = self.find_best_and_make_bold(df, column, use_min)
+        df = df.transpose()
+        df = df.rename(columns = {i: f"{perc}." for i, perc in zip(df.columns, percentages)})
+        if bold_direction == 'percentage':
+            for column in df.columns:
+                df = self.find_best_and_make_bold(df, column, use_min)
+
+        print(df.to_latex(index=True, float_format="{:.3f}".format))
+
+
 
 
 if __name__ == '__main__':
@@ -902,12 +1067,22 @@ if __name__ == '__main__':
     # plot_la_swag(path_la, path_swag)
 
     # PETER PATHS
-    # path_la = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\UCI_Laplace_SWAG_all_metrics\boston_models'
-    # path_vi =r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\yacht_models'
-    #
-    # plot_holder = PlotFunctionHolder(path_la, path_vi, calculate=True)
-    # plot_holder.plot_partial_percentages_la_swa(save_path=r'C:\Users\45292\Documents\Master\Figures\UCI\Laplace')
-    # breakpoint()
+    path_la = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\UCI_Laplace_SWAG_all_metrics\energy_models'
+    path_vi =r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\energy_models'
+
+    plot_holder = PlotFunctionHolder(path_la, path_vi, eval_method='nll', calculate=True,
+                                     save_path=r'C:\Users\45292\Documents\Master\Figures\UCI\HMC')
+    # plot_holder.write_latex_table()
+    # plot_holder.plot_number_of_parameters(save_path=r'C:\Users\45292\Documents\Master\Figures\UCI')
+    save_path = r'C:\Users\45292\Documents\Master\Figures\UCI\HMC'
+    plot_holder.plot_hmc_sample_scaling(save_path=save_path)
+    plot_holder.set_eval_method('mse')
+    plot_holder.plot_hmc_sample_scaling(save_path=save_path)
+
+    # plot_holder.plot_partial_percentages_vi_hmc()
+    breakpoint()
+    plot_holder.plot_partial_percentages_la_swa(save_path=r'C:\Users\45292\Documents\Master\Figures\UCI\Laplace')
+    breakpoint()
     # plot_holder = PlotFunctionHolder(la_swa_path=path_la, vi_hmc_path=path_vi, calculate=True)
     # plot_holder.plot_partial_percentages_la_swa()
 
