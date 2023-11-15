@@ -48,7 +48,7 @@ class SentimentClassifier:
 
     def load_text_dataset(self, dataset_name="imdb", seed=0):
         data = load_dataset(dataset_name)
-        if 0 < self.train_size < 1:
+        if 0 < self.train_size <= 1:
             self.train_size = int(len(data['train']) * self.train_size)
         train_data = data["train"].shuffle(seed=seed) if self.train_size is None else data["train"].shuffle(seed=42).select([i for i in list(range(self.train_size))])
         test_data = data["test"] if self.test_size is None else data["test"].shuffle(seed=42).select([i for i in list(range(self.test_size))])
@@ -72,14 +72,16 @@ class SentimentClassifier:
         f1 = load_f1.compute(predictions=predictions, references=labels)["f1"]
         return {"accuracy": accuracy, "f1": f1}
 
-    def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, lr=5e-05, seed=0, train=True,
-               logging = -1):
+    def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, lr=5e-05, seed=0,
+               train=True, logging_perc = -1, save_strategy = 'epoch', load_best_model_at_end = False, no_cuda = False):
+
         train_data, test_data = self.load_text_dataset(dataset_name=dataset_name, seed=seed)
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
 
-        if logging != -1:
-            logging_steps = logging/100
+        if logging_perc > 0:
+            update_steps = len(tokenized_train)  / train_bs
+            logging_steps = logging_perc * update_steps
         else:
             logging_steps = 500
 
@@ -89,11 +91,12 @@ class SentimentClassifier:
                                           per_device_train_batch_size=device_batch_size,
                                           per_device_eval_batch_size=device_batch_size,
                                           num_train_epochs=num_epochs,
-                                          evaluation_strategy="epoch",
-                                          save_strategy="epoch",
-                                          load_best_model_at_end=True,
+                                          evaluation_strategy=save_strategy,
+                                          save_strategy=save_strategy,
+                                          load_best_model_at_end=load_best_model_at_end,
                                           weight_decay=0.01,
-                                          logging_steps=logging_steps)
+                                          logging_steps=logging_steps,
+                                          no_cuda=no_cuda)
 
 
         # self.model = PartialConstructorSwag(self.model, n_iterations_between_snapshots=1,
@@ -180,6 +183,29 @@ def prepare_sentiment_classifier(args, model_name="distilbert-base-uncased"):
     return sentiment_classifier
 
 
+def run_dataramping(args, sentiment_classifier=None, num_steps=10):
+    train_sizes = np.linspace(0.1, 1.0, num_steps)
+    num_epochs = [1 / x for x in train_sizes]
+
+    for train_size, num_epoch in zip(train_sizes, num_epochs):
+        args.train_size = train_size
+        if sentiment_classifier is None:
+            sentiment_classifier = prepare_sentiment_classifier(args)
+        sentiment_classifier.runner(output_path=args.output_path,
+                                    train_bs=args.train_batch_size,
+                                    eval_bs=args.eval_batch_size,
+                                    num_epochs=num_epoch,
+                                    dataset_name=args.dataset_name,
+                                    device_batch_size=args.device_batch_size,
+                                    lr=args.learning_rate,
+                                    seed=args.seed,
+                                    train=args.train,
+                                    logging_perc=args.logging_perc,
+                                    save_strategy=args.save_strategy,
+                                    load_best_model_at_end=args.load_best_model_at_end,
+                                    no_cuda=args.no_cuda)
+
+
 def prepare_and_run_sentiment_classifier(args, sentiment_classifier=None):
     if sentiment_classifier is None:
         sentiment_classifier = prepare_sentiment_classifier(args)
@@ -193,7 +219,11 @@ def prepare_and_run_sentiment_classifier(args, sentiment_classifier=None):
                                 lr=args.learning_rate,
                                 seed=args.seed,
                                 train=args.train,
-                                logging = args.logging_perc)
+                                logging_perc = args.logging_perc,
+                                evaluation_strategy = args.save_strategy,
+                                save_strategy = args.save_strategy,
+                                load_best_model_at_end = args.load_best_model_at_end,
+                                no_cuda = args.no_cuda)
 
     return None
 
@@ -359,14 +389,21 @@ if __name__ == "__main__":
     parser.add_argument('--swag', type=ast.literal_eval, default=False)
     parser.add_argument('--swag_cfg', default=None)
     parser.add_argument('--la_cfg', default=None)
-    parser.add_argument('--logging_perc',type = int, default = -1) # Default from transformers
+    parser.add_argument('--logging_perc',type = float, default = 0.1) # -1 for default from transformers
+    parser.add_argument('--save_strategy', default = 'no') # 'epoch' for default from transformers
+    parser.add_argument('--load_best_model_at_end', type=ast.literal_eval, default=False)
+    parser.add_argument('--no_cuda', type=ast.literal_eval, default=False)
+    parser.add_argument('--dataramping', type=ast.literal_eval, default=False)
+
     args = parser.parse_args()
 
     if int(args.train_size)-args.train_size == 0:
         args.train_size = int(args.train_size)
 
+    if args.dataramping:
+        run_dataramping(args)
 
-    if not any((args.swag, args.laplace)):
+    if not any((args.swag, args.laplace)) and not args.dataramping:
         prepare_and_run_sentiment_classifier(args)
 
     elif args.swag:
