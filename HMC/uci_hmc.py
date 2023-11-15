@@ -1194,7 +1194,6 @@ if __name__ == "__main__":
         if os.path.exists(nb_vi_dict_path):
             nb_vi_results_dict = pickle.load(open(nb_vi_dict_path, "rb"))
             MAP_params = nb_vi_results_dict['map_results']['map_params']
-        if len(nb_vi_results_dict.keys()) < dict_length:
             # Node based
             print("Running node based VI")
             make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=nb_vi_results_dict,
@@ -1206,7 +1205,6 @@ if __name__ == "__main__":
         if os.path.exists(nb_vi_add_dict_path):
             nb_vi_add_results_dict = pickle.load(open(nb_vi_add_dict_path, "rb"))
             MAP_params = nb_vi_add_results_dict['map_results']['map_params']
-        if len(nb_vi_add_results_dict.keys()) < dict_length:
             print("Running node based rank 1 VI")
             make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale,
                         results_dict=nb_vi_add_results_dict,
