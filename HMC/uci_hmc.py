@@ -1052,11 +1052,11 @@ if __name__ == "__main__":
     parser.add_argument("--scale_prior",  type=ast.literal_eval, default=True)
     parser.add_argument("--prior_variance", type=float, default=4.0) #0.1 is good for yacht, 4.0 for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, 1.0   for other datasets
-    parser.add_argument('--vi', type=ast.literal_eval, default=False)
-    parser.add_argument('--node_based', type=ast.literal_eval, default=False)
-    parser.add_argument('--hmc', type=ast.literal_eval, default=False)
+    parser.add_argument('--vi', type=ast.literal_eval, default=True)
+    parser.add_argument('--node_based', type=ast.literal_eval, default=True)
+    parser.add_argument('--hmc', type=ast.literal_eval, default=True)
     parser.add_argument('--l_var', type=float, default=1.0)
-    parser.add_argument('--node_based_add', type=ast.literal_eval, default=False)
+    parser.add_argument('--node_based_add', type=ast.literal_eval, default=True)
     parser.add_argument('--inf_norm_mask', type=ast.literal_eval, default=False)
     parser.add_argument('--random_mask', type=ast.literal_eval, default=False)
     parser.add_argument('--only_full', type=ast.literal_eval, default = False)
@@ -1176,7 +1176,7 @@ if __name__ == "__main__":
                      }
 
     dict_length = 11
-    if args.vi:
+    if args.vi and args.node_based and args.node_based_add:
         # Overwrite dictionary if it exists
         vi_dict_path = os.path.join(args.output_path, f"results_vi_run_{args.run}.pkl")
         if os.path.exists(vi_dict_path):
@@ -1189,7 +1189,7 @@ if __name__ == "__main__":
                         MAP_params=MAP_params, save_path=args.output_path,  num_epochs=args.num_epochs, node_based=False, l_scale=args.l_var,
                         random_mask=args.random_mask, only_full=args.only_full)
 
-    if args.node_based:
+    # if args.node_based:
         nb_vi_dict_path = os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl")
         if os.path.exists(nb_vi_dict_path):
             vi_results_dict = pickle.load(open(nb_vi_dict_path, "rb"))
@@ -1201,7 +1201,7 @@ if __name__ == "__main__":
                         MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs, node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map,
                         inf_norm_mask=args.inf_norm_mask, random_mask=args.random_mask, only_full=args.only_full)
 
-    if args.node_based_add:
+    # if args.node_based_add:
         nb_vi_add_dict_path = os.path.join(args.output_path, f"results_vi_node_add_run_{args.run}.pkl")
         if os.path.exists(nb_vi_add_dict_path):
             vi_results_dict = pickle.load(open(nb_vi_add_dict_path, "rb"))
