@@ -28,7 +28,7 @@ def get_cmap(n, name='hsv'):
     return plt.cm.get_cmap(name, n)
 
 
-def plot_percentages(df, errorbar_func, estimator=None, ax=None, y='Laplace_nll', num_color_schemes=0):
+def plot_percentages(df, errorbar_func, estimator=None, ax=None, y='Laplace_nll', num_color_schemes=0, map=True):
     # cmap = get_cmap(20)
     # color_num = np.random.randint(2, 18)
     # color_map = mpl.colormaps['Set1']
@@ -53,7 +53,8 @@ def plot_percentages(df, errorbar_func, estimator=None, ax=None, y='Laplace_nll'
         nll_array = np.array(df[y]).reshape((-1, 9))
 
     estimated = estimator(nll_array, axis=0)
-    map_val = estimated[0]
+    if map:
+        map_val = estimated[0]
     fully_stochastic_val = estimated[-1]
 
     # Adjust layout
@@ -75,7 +76,7 @@ def plot_regression_with_uncertainty(ax, metrics, estimator = np.median, label =
 
 
 
-def plot_errorbar_percentages(df, errorbar_func, estimator=None, ax=None, y='Laplace_nll', color_scheme_1=True):
+def plot_errorbar_percentages(df, errorbar_func, estimator=None, ax=None, y='Laplace_nll', color_scheme_1=True, map=True):
     map_color = 'tab:red'
     stochastic_color = 'tab:green'
     point_err_color = 'tab:blue' if color_scheme_1 else 'tab:orange'
@@ -98,8 +99,9 @@ def plot_errorbar_percentages(df, errorbar_func, estimator=None, ax=None, y='Lap
 
     estimated = estimator(nll_array, axis=0)
     map_val = estimated[0]
-    ax.axhline(y=map_val, linestyle='--', linewidth=1, alpha=0.7,
-               color=map_color, label='MAP' if not color_scheme_1 else '_nolegend_')
+    if map:
+        ax.axhline(y=map_val, linestyle='--', linewidth=1, alpha=0.7,
+                   color=map_color, label='MAP' if not color_scheme_1 else '_nolegend_')
     fully_stochastic_val = estimated[-1]
     ax.axhline(y=fully_stochastic_val, linestyle='--', linewidth=1, alpha=0.7,
                color=stochastic_color, label='100% Stochastic' if not color_scheme_1 else '_nolegend_')
@@ -108,7 +110,7 @@ def plot_errorbar_percentages(df, errorbar_func, estimator=None, ax=None, y='Lap
     # plt.tight_layout()
 
 
-def plot_estimator_multi_dataset(df, errorbar_func, estimator=None, ax=None, data_name=None, show=True):
+def plot_estimator_multi_dataset(df, errorbar_func, estimator=None, ax=None, data_name=None, show=True, map=True):
     method_names = []
     np.random.seed(42)
     color_scheme_num = 0
@@ -121,7 +123,7 @@ def plot_estimator_multi_dataset(df, errorbar_func, estimator=None, ax=None, dat
                              estimator=estimator,
                              y=key,
                              ax=ax,
-                             num_color_schemes=color_scheme_num)
+                             num_color_schemes=color_scheme_num, map=map)
             color_scheme_num += 1
 
     title = " & ".join(method_names) + " - " + estimator.__name__ + " - " + data_name
@@ -138,7 +140,7 @@ def plot_estimator_multi_dataset(df, errorbar_func, estimator=None, ax=None, dat
     if show:
         plt.show(block=False)
 
-def plot_estimator(df, errorbar_func, estimator=None, ax=None, data_name=None, show=True):
+def plot_estimator(df, errorbar_func, estimator=None, ax=None, data_name=None, show=True, map=True):
     method_names = []
     np.random.seed(42)
     color_scheme_1 = True
@@ -150,23 +152,19 @@ def plot_estimator(df, errorbar_func, estimator=None, ax=None, data_name=None, s
                                       estimator=estimator,
                                       y=key,
                                       ax=ax,
-                                      color_scheme_1=color_scheme_1)
+                                      color_scheme_1=color_scheme_1, map=map)
             color_scheme_1 = not color_scheme_1
 
     title = " & ".join(method_names) + " - " + estimator.__name__ + " - " + data_name
     ax.set_title(label=title, pad=0)
     # Set labels and legend
     ax.set_xlabel("Percentages")
-    # ax.legend()
-    # ax.grid(linewidth = 1, alpha = 0.7)
-    # path = os.path.join(os.path.join(os.getcwd(), "Figures"), title + ".pdf")
-    # plt.savefig(path)
     if show:
         plt.show(block=False)
 
 
 def plot_partial_percentages(percentages, res, data_name=None, df=None, num_runs=15, ax=None, show=True,
-                             multidataset = False):
+                             multidataset = False, map=True):
     if df is None:
         df = pd.DataFrame()
         df['percentages'] = num_runs * percentages
@@ -182,11 +180,11 @@ def plot_partial_percentages(percentages, res, data_name=None, df=None, num_runs
     if multidataset:
         plot_estimator_multi_dataset(df=df, errorbar_func=lambda x: np.percentile(x, (25, 75)),
                    estimator=np.median, ax=ax1, data_name=data_name,
-                   show=show)
+                   show=show, map=map)
     else:
         plot_estimator(df=df, errorbar_func=lambda x: np.percentile(x, (25, 75)),
                        estimator=np.median, ax=ax1, data_name=data_name,
-                       show=show)
+                       show=show, map=map)
 
     # Plot mean
     if ax is None:
@@ -195,9 +193,11 @@ def plot_partial_percentages(percentages, res, data_name=None, df=None, num_runs
         ax2 = ax[1]
 
     if multidataset:
-        plot_estimator_multi_dataset(df=df, errorbar_func=('ci', 95), estimator=np.mean, ax=ax2, data_name=data_name, show=show)
+        plot_estimator_multi_dataset(df=df, errorbar_func=('ci', 95), estimator=np.mean,
+                                     ax=ax2, data_name=data_name, show=show, map=map)
     else:
-        plot_estimator(df=df, errorbar_func=('ci', 95), estimator=np.mean, ax=ax2, data_name=data_name, show=show)
+        plot_estimator(df=df, errorbar_func=('ci', 95), estimator=np.mean, ax=ax2,
+                       data_name=data_name, show=show, map=map)
 
 
 
@@ -731,7 +731,7 @@ class PlotFunctionHolder:
                                  res={'Additive': np.array(metrics_add), 'Multiplicative': np.array(metrics_mul)},
                                  data_name=data_name,
                                  num_runs=len(metrics_mul),
-                                 ax=[ax1,ax2], show=False)
+                                 ax=[ax1,ax2], show=False, map=map)
 
         ylabel = self.eval_methods_to_names[self.plot_helper_vi_hmc.eval_method]
         ax1.set_ylabel(ylabel)
@@ -743,6 +743,40 @@ class PlotFunctionHolder:
         if save_path is not None:
             fig1.savefig(os.path.join(save_path, f'node_based_{ylabel}_{data_name}_{"no map" if not map else str()}_median.pdf'), format='pdf')
             fig2.savefig(os.path.join(save_path, f'node_based_{ylabel}_{data_name}_{"no map" if not map else str()}_mean.pdf'), format='pdf')
+
+        self.show()
+
+    def plot_partial_percentages_node_mult(self, save_path = None, map=True):
+
+        metrics_mul = self.plot_helper_vi_hmc.run_for_dataset(criteria='node_run', map=map)
+        metrics_mul_max = self.plot_helper_vi_hmc.run_for_dataset(criteria='max', map=map)
+        percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100] if map else [1, 2, 5, 8, 14, 23, 37, 61, 100]
+
+        data_name = self.find_data_name(self.vi_hmc_path) + " " + self.get_eval_method_name(
+            self.plot_helper_vi_hmc.eval_method)
+
+        if (l1 := len(metrics_mul_max)) != (l2 := len(metrics_mul)):
+            min_ = min((l1, l2))
+            metrics_mul = metrics_mul[:min_]
+            metrics_mul_max = metrics_mul_max[:min_]
+        fig1, ax1 = plt.subplots(1, 1)
+        fig2, ax2 = plt.subplots(1, 1)
+        plot_partial_percentages(percentages=percentages,
+                                 res={'Multi max': np.array(metrics_mul_max), 'Multi rand': np.array(metrics_mul)},
+                                 data_name=data_name,
+                                 num_runs=len(metrics_mul),
+                                 ax=[ax1,ax2], show=False, map=map)
+
+        ylabel = self.eval_methods_to_names[self.plot_helper_vi_hmc.eval_method]
+        ax1.set_ylabel(ylabel)
+        ax2.set_ylabel(ylabel)
+
+        self.set_bounds_and_layout((np.array(metrics_mul_max), np.array(metrics_mul)), np.median, fig1, ax1)
+        self.set_bounds_and_layout((np.array(metrics_mul_max), np.array(metrics_mul)), np.mean, fig2, ax2)
+        save_path = save_path if save_path is not None else self.save_path
+        if save_path is not None:
+            fig1.savefig(os.path.join(save_path, f'nb_multi_{ylabel}_{data_name}_{"no map" if not map else str()}_median.pdf'), format='pdf')
+            fig2.savefig(os.path.join(save_path, f'nb_multi_{ylabel}_{data_name}_{"no map" if not map else str()}_mean.pdf'), format='pdf')
 
         self.show()
 
@@ -786,7 +820,7 @@ class PlotFunctionHolder:
                                  res={'VI': np.array(metrics_vi), 'HMC': np.array(metrics_hmc)},
                                  data_name=data_name,
                                  num_runs=len(metrics_vi),
-                                 ax=[ax1, ax2], show=False)
+                                 ax=[ax1, ax2], show=False, map=map)
 
         ylabel = self.eval_methods_to_names[self.plot_helper_la_swa.eval_method]
         ax1.set_ylabel(ylabel)
@@ -846,7 +880,7 @@ class PlotFunctionHolder:
                                  res={'SWAG': np.array(metrics_swa), 'Laplace': np.array(metrics_la)},
                                  data_name=data_name,
                                  num_runs=len(metrics_la),
-                                 ax=[ax1,ax2], show=False)
+                                 ax=[ax1,ax2], show=False, map=map)
 
 
         ax1.set_ylabel(ylabel)
@@ -1069,34 +1103,31 @@ if __name__ == '__main__':
     # plot_la_swag(path_la, path_swag)
 
     # PETER PATHS
-    path_la = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\UCI_Laplace_SWAG_all_metrics\energy_models'
-    path_vi =r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\energy_models'
-
-    plot_holder = PlotFunctionHolder(path_la, path_vi, eval_method='nll', calculate=True,
-                                     save_path=r'C:\Users\45292\Documents\Master\Figures\UCI\HMC')
-
-    plot_holder.plot_partial_percentages_la_swa()
-    breakpoint()
-    # plot_holder.write_latex_table()
-    # plot_holder.plot_number_of_parameters(save_path=r'C:\Users\45292\Documents\Master\Figures\UCI')
-    save_path = r'C:\Users\45292\Documents\Master\Figures\UCI\HMC'
-    plot_holder.plot_hmc_sample_scaling(save_path=save_path)
-    plot_holder.set_eval_method('mse')
-    plot_holder.plot_hmc_sample_scaling(save_path=save_path)
-
-    # plot_holder.plot_partial_percentages_vi_hmc()
-    breakpoint()
-    plot_holder.plot_partial_percentages_la_swa(save_path=r'C:\Users\45292\Documents\Master\Figures\UCI\Laplace')
-    breakpoint()
-    # plot_holder = PlotFunctionHolder(la_swa_path=path_la, vi_hmc_path=path_vi, calculate=True)
-    # plot_holder.plot_partial_percentages_la_swa()
+    # path_la = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\UCI_Laplace_SWAG_all_metrics\energy_models'
+    # path_vi =r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\energy_models'
+    #
+    # plot_holder = PlotFunctionHolder(path_la, path_vi, eval_method='nll', calculate=True,
+    #                                  save_path=r'C:\Users\45292\Documents\Master\Figures\UCI\HMC')
+    # # plot_holder.write_latex_table()
+    # # plot_holder.plot_number_of_parameters(save_path=r'C:\Users\45292\Documents\Master\Figures\UCI')
+    # save_path = r'C:\Users\45292\Documents\Master\Figures\UCI\HMC'
+    # plot_holder.plot_hmc_sample_scaling(save_path=save_path)
+    # plot_holder.set_eval_method('mse')
+    # plot_holder.plot_hmc_sample_scaling(save_path=save_path)
+    #
+    # # plot_holder.plot_partial_percentages_vi_hmc()
+    # breakpoint()
+    # plot_holder.plot_partial_percentages_la_swa(save_path=r'C:\Users\45292\Documents\Master\Figures\UCI\Laplace')
+    # breakpoint()
+    # # plot_holder = PlotFunctionHolder(la_swa_path=path_la, vi_hmc_path=path_vi, calculate=True)
+    # # plot_holder.plot_partial_percentages_la_swa()
 
     # APPLY TO LA-SWAG PATH ONCE
     # change_datasets(path_la)
 
     # GUSTAV PATHS
     path_la = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_Laplace_SWAG_all_metrics'
-    path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_torch_rand'
+    path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_torch'
 
     datasets = ['yacht', 'boston', 'energy']
     prediction_folders = [ dataset + "_models" for dataset in datasets]
@@ -1114,16 +1145,18 @@ if __name__ == '__main__':
     for prediction_folder in prediction_folders:
         la_swa_path = os.path.join(path_la, prediction_folder)
         vi_hmc_path = os.path.join(path_vi, prediction_folder)
-        save_path = os.path.join(os.getcwd(), r"Figures\Torch_rand")
+        save_path = os.path.join(os.getcwd(), r"Figures\Torch")
         plot_holder = PlotFunctionHolder(la_swa_path=la_swa_path, vi_hmc_path=vi_hmc_path, calculate=True, save_path=save_path)
         # plot_holder.set_eval_method('mse')
-        plot_holder.plot_partial_percentages_nodes()
-        plot_holder.plot_partial_percentages_vi_hmc()
-        plot_holder.plot_partial_percentages_la_swa()
+        # plot_holder.plot_partial_percentages_nodes()
+        # plot_holder.plot_partial_percentages_vi_hmc()
+        # plot_holder.plot_partial_percentages_la_swa()
+        plot_holder.plot_partial_percentages_node_mult()
         if 'yacht' in prediction_folder:
-            plot_holder.plot_partial_percentages_vi_hmc(map=False)
-            plot_holder.plot_partial_percentages_nodes(map=False)
-            plot_holder.plot_partial_percentages_la_swa(map=False)
+            # plot_holder.plot_partial_percentages_vi_hmc(map=False)
+            # plot_holder.plot_partial_percentages_nodes(map=False)
+            # plot_holder.plot_partial_percentages_la_swa(map=False)
+            plot_holder.plot_partial_percentages_node_mult(map=False)
 
     breakpoint()
     #
