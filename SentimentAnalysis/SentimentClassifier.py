@@ -239,16 +239,17 @@ def construct_laplace(sent_class, laplace_cfg, args):
         if module_name.split(".")[0] != 'model':
             laplace_cfg.module_names[idx] = ".".join(('model', module_name))
 
-    partial_constructor = PartialConstructor(model, module_names=laplace_cfg.module_names)
+    partial_constructor = PartialConstructor(model, module_names='all')
     partial_constructor.select()
 
     la = lp.Laplace(model, laplace_cfg.ml_task,
                     subset_of_weights=laplace_cfg.deprecated_subset_of_weights,
                     hessian_structure=laplace_cfg.hessian_structure,
-                    prior_precision=laplace_cfg.prior_precision,
-                    subnetwork_indices=partial_constructor.get_subnetwork_indices())
+                    prior_precision=laplace_cfg.prior_precision)
 
     la.fit(train_loader)
+    out = la(next(iter(train_loader)))
+    breakpoint()
 
     return la
 

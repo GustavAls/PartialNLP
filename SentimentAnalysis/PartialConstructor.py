@@ -24,6 +24,8 @@ class PartialConstructor:
     def __init__(self, model, module_names):
         self.model = model
         self.module_names = module_names
+        if self.module_names == 'all':
+            self.module_names = [name for name, _ in self.model.named_modules()]
         self.subnet_indices = None
 
     def select(self):
@@ -31,7 +33,7 @@ class PartialConstructor:
         for name, module in self.model.named_modules():
             if name in self.module_names and isinstance(module, TRANSFORMER_COMPATIBLE_MODULES):
                 setattr(module, 'partial', True)
-                counter += 1
+                counter += len(list(module.parameters()))
             else:
                 setattr(module, 'partial', False)
 
