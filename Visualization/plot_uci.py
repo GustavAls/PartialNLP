@@ -1074,6 +1074,9 @@ if __name__ == '__main__':
 
     plot_holder = PlotFunctionHolder(path_la, path_vi, eval_method='nll', calculate=True,
                                      save_path=r'C:\Users\45292\Documents\Master\Figures\UCI\HMC')
+
+    plot_holder.plot_partial_percentages_la_swa()
+    breakpoint()
     # plot_holder.write_latex_table()
     # plot_holder.plot_number_of_parameters(save_path=r'C:\Users\45292\Documents\Master\Figures\UCI')
     save_path = r'C:\Users\45292\Documents\Master\Figures\UCI\HMC'

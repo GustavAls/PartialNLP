@@ -894,11 +894,12 @@ def run_for_percentile(
 
 def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, num_epochs, MAP_params,
                 node_based=True, add_node_based = False,l_scale=1.0, is_svi_map=False, inf_norm_mask = False,
-                random_mask = False):
+                random_mask = False, only_full = False):
     rng_key = random.PRNGKey(1)
     optimizer = numpyro.optim.Adam(0.01)
     percentiles = [1, 2, 5, 8, 14, 23, 37, 61, 100]
-
+    if only_full:
+        percentiles = [100 for _ in range(len(percentiles))]
 
     if node_based:
         keys = ["W1_auto_loc", "W2_auto_loc", "W_output_auto_loc", "b1_auto_loc", "b2_auto_loc", "b_output_auto_loc"]
@@ -908,7 +909,7 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
         save_name = os.path.join(save_path, f"results_vi_node_add_run_{run}.pkl")
     else:
         save_name = os.path.join(save_path, f"results_vi_run_{run}.pkl")
-
+    counter = 0
     for percentile in percentiles:
         prior_variance = 100 - percentile + 1
 
@@ -980,7 +981,8 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
 
             print('nll glm', nll_glm, 'elpd', elpd, 'elpd spourious sqrt', elpd_sqrt, 'elpd gamma',
                   elpd_gamma_prior)
-            results_dict[f"{percentile}"] = {'predictive_train': predictive_train["mean"],
+            results_dict[f"{percentile}" if not only_full else f"{percentile}_{counter}"] = \
+                {'predictive_train': predictive_train["mean"],
                                              'predictive_val': predictive_val["mean"],
                                              'predictive_test': predictive_test["mean"],
                                              'glm_nll': nll_glm,
@@ -1056,6 +1058,7 @@ if __name__ == "__main__":
     parser.add_argument('--node_based_add', type=ast.literal_eval, default=False)
     parser.add_argument('--inf_norm_mask', type=ast.literal_eval, default=False)
     parser.add_argument('--random_mask', type=ast.literal_eval, default=False)
+    parser.add_argument('--only_full', type=ast.literal_eval, default = False)
     args = parser.parse_args()
 
     if args.inf_norm_mask and not args.node_based:
@@ -1183,7 +1186,7 @@ if __name__ == "__main__":
             print("Running VI")
             make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance,scale= args.likelihood_scale, results_dict=vi_results_dict,
                         MAP_params=MAP_params, save_path=args.output_path,  num_epochs=args.num_epochs, node_based=False, l_scale=args.l_var,
-                        random_mask=args.random_mask)
+                        random_mask=args.random_mask, only_full=args.only_full)
 
     if args.node_based:
         nb_vi_dict_path = os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl")
@@ -1195,7 +1198,7 @@ if __name__ == "__main__":
             print("Running node based VI")
             make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=vi_results_dict,
                         MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs, node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map,
-                        inf_norm_mask=args.inf_norm_mask, random_mask=args.random_mask)
+                        inf_norm_mask=args.inf_norm_mask, random_mask=args.random_mask, only_full=args.only_full)
 
     if args.node_based_add:
         nb_vi_add_dict_path = os.path.join(args.output_path, f"results_vi_node_add_run_{args.run}.pkl")
@@ -1208,7 +1211,7 @@ if __name__ == "__main__":
                         results_dict=vi_results_dict,
                         MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs,
                         node_based=False, add_node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map,
-                        random_mask=args.random_mask)
+                        random_mask=args.random_mask, only_full=args.only_full)
 
     if args.hmc:
         hmc_dict_path = os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")
