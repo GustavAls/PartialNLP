@@ -1192,24 +1192,24 @@ if __name__ == "__main__":
     # if args.node_based:
         nb_vi_dict_path = os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl")
         if os.path.exists(nb_vi_dict_path):
-            vi_results_dict = pickle.load(open(nb_vi_dict_path, "rb"))
-            MAP_params = vi_results_dict['map_results']['map_params']
-        if len(vi_results_dict.keys()) < dict_length:
+            nb_vi_results_dict = pickle.load(open(nb_vi_dict_path, "rb"))
+            MAP_params = nb_vi_results_dict['map_results']['map_params']
+        if len(nb_vi_results_dict.keys()) < dict_length:
             # Node based
             print("Running node based VI")
-            make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=vi_results_dict,
+            make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=nb_vi_results_dict,
                         MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs, node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map,
                         inf_norm_mask=args.inf_norm_mask, random_mask=args.random_mask, only_full=args.only_full)
 
     # if args.node_based_add:
         nb_vi_add_dict_path = os.path.join(args.output_path, f"results_vi_node_add_run_{args.run}.pkl")
         if os.path.exists(nb_vi_add_dict_path):
-            vi_results_dict = pickle.load(open(nb_vi_add_dict_path, "rb"))
-            MAP_params = vi_results_dict['map_results']['map_params']
-        if len(vi_results_dict.keys()) < dict_length:
+            nb_vi_add_results_dict = pickle.load(open(nb_vi_add_dict_path, "rb"))
+            MAP_params = nb_vi_add_results_dict['map_results']['map_params']
+        if len(nb_vi_add_results_dict.keys()) < dict_length:
             print("Running node based rank 1 VI")
             make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale,
-                        results_dict=vi_results_dict,
+                        results_dict=nb_vi_add_results_dict,
                         MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs,
                         node_based=False, add_node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map,
                         random_mask=args.random_mask, only_full=args.only_full)
