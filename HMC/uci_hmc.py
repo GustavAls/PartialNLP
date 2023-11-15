@@ -1162,7 +1162,7 @@ if __name__ == "__main__":
                         }
     }
 
-    results_dict = {
+    results_dict_init = {
                         'dataset': dataset,
                         'map_results':  {'map_params': MAP_params,
                                          'predictive_train': predictive_train["mean"],
@@ -1183,7 +1183,7 @@ if __name__ == "__main__":
             vi_results_dict = pickle.load(open(vi_dict_path, "rb"))
             MAP_params = vi_results_dict['map_results']['map_params']
         else:
-            vi_results_dict = results_dict
+            vi_results_dict = results_dict_init
             MAP_params = vi_results_dict['map_results']['map_params']
 
         print("Running VI")
@@ -1197,7 +1197,7 @@ if __name__ == "__main__":
             nb_vi_results_dict = pickle.load(open(nb_vi_dict_path, "rb"))
             MAP_params = nb_vi_results_dict['map_results']['map_params']
         else:
-            nb_vi_results_dict = results_dict
+            nb_vi_results_dict = results_dict_init
             MAP_params = nb_vi_results_dict['map_results']['map_params']
 
         print("Running node based VI")
@@ -1211,7 +1211,7 @@ if __name__ == "__main__":
             nb_vi_add_results_dict = pickle.load(open(nb_vi_add_dict_path, "rb"))
             MAP_params = nb_vi_add_results_dict['map_results']['map_params']
         else:
-            nb_vi_add_results_dict = results_dict
+            nb_vi_add_results_dict = results_dict_init
             MAP_params = nb_vi_add_results_dict['map_results']['map_params']
 
         print("Running node based rank 1 VI")
