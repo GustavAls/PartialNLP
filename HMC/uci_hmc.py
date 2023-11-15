@@ -989,6 +989,7 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
                                              'elpd': elpd,
                                              'elpd_spurious_sqrt': elpd_sqrt,
                                              'elpd_gamma_prior': elpd_gamma_prior}
+            counter += 1
 
             with open(save_name, 'wb') as handle:
                 pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
