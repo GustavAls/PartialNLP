@@ -1162,7 +1162,7 @@ if __name__ == "__main__":
                         }
     }
 
-    vi_results_dict = {
+    results_dict = {
                         'dataset': dataset,
                         'map_results':  {'map_params': MAP_params,
                                          'predictive_train': predictive_train["mean"],
@@ -1182,6 +1182,10 @@ if __name__ == "__main__":
         if os.path.exists(vi_dict_path):
             vi_results_dict = pickle.load(open(vi_dict_path, "rb"))
             MAP_params = vi_results_dict['map_results']['map_params']
+        else:
+            vi_results_dict = results_dict
+            MAP_params = vi_results_dict['map_results']['map_params']
+
         print("Running VI")
         make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance,scale= args.likelihood_scale, results_dict=vi_results_dict,
                     MAP_params=MAP_params, save_path=args.output_path,  num_epochs=args.num_epochs, node_based=False, l_scale=args.l_var,
@@ -1192,6 +1196,10 @@ if __name__ == "__main__":
         if os.path.exists(nb_vi_dict_path):
             nb_vi_results_dict = pickle.load(open(nb_vi_dict_path, "rb"))
             MAP_params = nb_vi_results_dict['map_results']['map_params']
+        else:
+            nb_vi_results_dict = results_dict
+            MAP_params = nb_vi_results_dict['map_results']['map_params']
+
         print("Running node based VI")
         make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=nb_vi_results_dict,
                     MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs, node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map,
@@ -1202,6 +1210,10 @@ if __name__ == "__main__":
         if os.path.exists(nb_vi_add_dict_path):
             nb_vi_add_results_dict = pickle.load(open(nb_vi_add_dict_path, "rb"))
             MAP_params = nb_vi_add_results_dict['map_results']['map_params']
+        else:
+            nb_vi_add_results_dict = results_dict
+            MAP_params = nb_vi_add_results_dict['map_results']['map_params']
+
         print("Running node based rank 1 VI")
         make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale,
                     results_dict=nb_vi_add_results_dict,
