@@ -79,12 +79,6 @@ class SentimentClassifier:
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
 
-        if logging_perc > 0:
-            update_steps = len(tokenized_train)  / train_bs
-            logging_steps = logging_perc * update_steps
-        else:
-            logging_steps = 500
-
         training_args = TrainingArguments(output_dir=output_path,
                                           learning_rate=lr,
                                           do_train=train,
@@ -95,7 +89,7 @@ class SentimentClassifier:
                                           save_strategy=save_strategy,
                                           load_best_model_at_end=load_best_model_at_end,
                                           weight_decay=0.01,
-                                          logging_steps=logging_steps,
+                                          logging_steps=logging_perc,
                                           no_cuda=no_cuda)
 
 
