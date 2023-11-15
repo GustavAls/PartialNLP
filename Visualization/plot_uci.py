@@ -21,6 +21,9 @@ font = {'family': 'serif',
 mpl.rc('font', **font)
 mpl.rc('legend', fontsize=15)
 mpl.rc('axes', labelsize=19)
+map_color = 'tab:red'
+stochastic_color = 'tab:green'
+point_err_color = 'tab:blue'
 
 def get_cmap(n, name='hsv'):
     '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct
@@ -159,6 +162,19 @@ def plot_estimator(df, errorbar_func, estimator=None, ax=None, data_name=None, s
     ax.set_title(label=title, pad=0)
     # Set labels and legend
     ax.set_xlabel("Percentages")
+    try:
+        nll_array = np.array(df[key]).reshape((-1, 10))
+    except:
+        nll_array = np.array(df[key]).reshape((-1, 9))
+
+    estimated = estimator(nll_array, axis=0)
+    map_val = estimated[0]
+    if map:
+        ax.axhline(y=map_val, linestyle='--', linewidth=1, alpha=0.7,
+                   color=map_color, label='MAP' if not color_scheme_1 else '_nolegend_')
+    fully_stochastic_val = estimated[-1]
+    ax.axhline(y=fully_stochastic_val, linestyle='--', linewidth=1, alpha=0.7,
+               color=stochastic_color, label='100% Stochastic' if not color_scheme_1 else '_nolegend_')
     if show:
         plt.show(block=False)
 
@@ -572,7 +588,7 @@ class PlotFunctionHolder:
 
         self.eval_methods_to_names = {
             'mse': 'MSE', 'nll_glm': 'NLL','nll': 'NLL', 'glm_nll': 'NLL', 'elpd': 'ELPD', 'calib': 'Calibration',
-            'sqrt': 'ELPD', 'test_ll_homoscedastic' : 'NLL homoscedastic',
+            'sqrt': 'ELPD', 'test_ll_homoscedastic' : 'NLL Homoscedastic',
             'prior_precision': 'Prior Precision'}
 
         self.percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100]
@@ -789,19 +805,36 @@ class PlotFunctionHolder:
         return metrics, data_name
 
     # Sharma HMC plot
-    def plot_partial_percentages_hmc_homoscedastic_nll(self):
+    def plot_partial_percentages_hmc_homoscedastic_nll(self, save_path = None):
         metrics_hmc = self.plot_helper_vi_hmc.run_for_dataset(criteria='hmc')
         percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100]
 
         data_name = self.find_data_name(self.vi_hmc_path) + " " + self.get_eval_method_name(
             self.plot_helper_vi_hmc.eval_method)
 
-
+        fig1, ax1 = plt.subplots(1, 1)
+        fig2, ax2 = plt.subplots(1, 1)
         plot_partial_percentages(percentages=percentages,
                                  res={'HMC': np.array(metrics_hmc)},
                                  data_name=data_name,
                                  num_runs=len(metrics_hmc),
-                                 ax=None, show=False)
+                                 ax=[ax1,ax2], show=False, map=True)
+
+        save_path = save_path if save_path is not None else self.save_path
+
+        ylabel = self.eval_methods_to_names[self.plot_helper_la_swa.eval_method]
+        ax1.set_ylabel(ylabel)
+        ax2.set_ylabel(ylabel)
+        self.set_bounds_and_layout((np.array(metrics_hmc), np.array(metrics_hmc)), np.median, fig1, ax1)
+        self.set_bounds_and_layout((np.array(metrics_hmc), np.array(metrics_hmc)), np.mean, fig2, ax2)
+
+        if save_path is not None:
+            fig1.savefig(
+                os.path.join(save_path, f'hmc_homoscedastic_{data_name}_median.pdf'),
+                format='pdf')
+            fig2.savefig(
+                os.path.join(save_path, f'hmc_homoscedastic_{data_name}_mean.pdf'),
+                format='pdf')
         self.show()
 
     def plot_partial_percentages_vi_hmc(self, save_path = None, map=True):
@@ -1127,7 +1160,7 @@ if __name__ == '__main__':
 
     # GUSTAV PATHS
     path_la = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_Laplace_SWAG_all_metrics'
-    path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_torch'
+    path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_torch_rand'
 
     datasets = ['yacht', 'boston', 'energy']
     prediction_folders = [ dataset + "_models" for dataset in datasets]
@@ -1136,27 +1169,29 @@ if __name__ == '__main__':
     # path_svi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_SVI_sharma_hmc'
     # for prediction_folder in prediction_folders:
     #     la_swa_path = os.path.join(path_la, prediction_folder)
+    #     save_path = os.path.join(os.getcwd(), r"Figures\SVI")
+    #
     #     vi_hmc_path = os.path.join(path_svi, prediction_folder)
     #     plot_holder = PlotFunctionHolder(la_swa_path=la_swa_path, vi_hmc_path=vi_hmc_path,
-    #                                      eval_method='test_ll_homoscedastic', calculate=False)
+    #                                      eval_method='test_ll_homoscedastic', calculate=False, save_path=save_path)
     #     plot_holder.plot_partial_percentages_hmc_homoscedastic_nll()
 
     # NORMAL PLOTTING, WITH CORRECT NLL CALCULATION
     for prediction_folder in prediction_folders:
         la_swa_path = os.path.join(path_la, prediction_folder)
         vi_hmc_path = os.path.join(path_vi, prediction_folder)
-        save_path = os.path.join(os.getcwd(), r"Figures\Torch")
+        save_path = os.path.join(os.getcwd(), r"Figures\Torch_rand")
         plot_holder = PlotFunctionHolder(la_swa_path=la_swa_path, vi_hmc_path=vi_hmc_path, calculate=True, save_path=save_path)
         # plot_holder.set_eval_method('mse')
         # plot_holder.plot_partial_percentages_nodes()
-        # plot_holder.plot_partial_percentages_vi_hmc()
+        plot_holder.plot_partial_percentages_vi_hmc()
         # plot_holder.plot_partial_percentages_la_swa()
-        plot_holder.plot_partial_percentages_node_mult()
+        # plot_holder.plot_partial_percentages_node_mult()
         if 'yacht' in prediction_folder:
-            # plot_holder.plot_partial_percentages_vi_hmc(map=False)
+            plot_holder.plot_partial_percentages_vi_hmc(map=False)
             # plot_holder.plot_partial_percentages_nodes(map=False)
             # plot_holder.plot_partial_percentages_la_swa(map=False)
-            plot_holder.plot_partial_percentages_node_mult(map=False)
+            # plot_holder.plot_partial_percentages_node_mult(map=False)
 
     breakpoint()
     #
