@@ -1190,19 +1190,6 @@ if __name__ == "__main__":
                     node_based=False, add_node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map,
                     random_mask=args.random_mask, only_full=args.only_full)
 
-        # vi_dict_path = os.path.join(args.output_path, f"results_vi_run_{args.run}.pkl")
-        # if os.path.exists(vi_dict_path):
-        #     vi_results_dict = pickle.load(open(vi_dict_path, "rb"))
-        #     MAP_params = vi_results_dict['map_results']['map_params']
-        # else:
-        #     vi_results_dict = results_dict_init
-        #     MAP_params = vi_results_dict['map_results']['map_params']
-
-        print("Running VI")
-        make_vi_run(run=args.run, dataset_=dataset, prior_variance=args.prior_variance,scale= args.likelihood_scale, results_dict=results_dict_init,
-                    MAP_params_=MAP_params, save_path=args.output_path,  num_epochs=args.num_epochs, node_based=False, l_scale=args.l_var,
-                    random_mask=args.random_mask, only_full=args.only_full)
-
 
         # if args.node_based:
         # nb_vi_dict_path = os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl")
@@ -1219,7 +1206,24 @@ if __name__ == "__main__":
                     inf_norm_mask=args.inf_norm_mask, random_mask=args.random_mask, only_full=args.only_full)
 
 
-    else:
+        # vi_dict_path = os.path.join(args.output_path, f"results_vi_run_{args.run}.pkl")
+        # if os.path.exists(vi_dict_path):
+        #     vi_results_dict = pickle.load(open(vi_dict_path, "rb"))
+        #     MAP_params = vi_results_dict['map_results']['map_params']
+        # else:
+        #     vi_results_dict = results_dict_init
+        #     MAP_params = vi_results_dict['map_results']['map_params']
+
+        print("Running VI")
+        make_vi_run(run=args.run, dataset_=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale,
+                    results_dict=results_dict_init,
+                    MAP_params_=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs, node_based=False,
+                    l_scale=args.l_var,
+                    random_mask=args.random_mask, only_full=args.only_full)
+
+
+
+else:
         hmc_dict_path = os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")
         if os.path.exists(hmc_dict_path):
             hmc_result_dict = pickle.load(open(hmc_dict_path, "rb"))
