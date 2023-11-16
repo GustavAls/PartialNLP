@@ -1222,13 +1222,12 @@ if __name__ == "__main__":
                     random_mask=args.random_mask, only_full=args.only_full)
 
     else:
-        hmc_dict_path = os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")
-        if os.path.exists(hmc_dict_path):
-            hmc_result_dict = pickle.load(open(hmc_dict_path, "rb"))
-            MAP_params = hmc_result_dict['map_results']['map_params']
-        if len(hmc_result_dict.keys()) < dict_length:
-            # HMC run
-            make_hmc_run(run=args.run, dataset=dataset, scale_prior=args.scale_prior,
-                         prior_variance=args.prior_variance,
-                         save_path=args.output_path, likelihood_scale=args.likelihood_scale, percentiles=percentiles,
-                         results_dict=hmc_result_dict, MAP_params=MAP_params, random_mask=args.random_mask)
+        # hmc_dict_path = os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")
+        # if os.path.exists(hmc_dict_path):
+        #     hmc_result_dict = pickle.load(open(hmc_dict_path, "rb"))
+        MAP_params = hmc_result_dict['map_results']['map_params']
+        # HMC run
+        make_hmc_run(run=args.run, dataset=dataset, scale_prior=args.scale_prior,
+                     prior_variance=args.prior_variance,
+                     save_path=args.output_path, likelihood_scale=args.likelihood_scale, percentiles=percentiles,
+                     results_dict=hmc_result_dict, MAP_params=MAP_params, random_mask=args.random_mask)
