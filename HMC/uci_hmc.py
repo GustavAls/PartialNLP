@@ -1221,9 +1221,7 @@ if __name__ == "__main__":
                     l_scale=args.l_var,
                     random_mask=args.random_mask, only_full=args.only_full)
 
-
-
-else:
+    else:
         hmc_dict_path = os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")
         if os.path.exists(hmc_dict_path):
             hmc_result_dict = pickle.load(open(hmc_dict_path, "rb"))
