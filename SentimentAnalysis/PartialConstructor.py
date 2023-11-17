@@ -32,7 +32,7 @@ class PartialConstructor:
     def select_random_percentile(self, num_params):
         counter = 0
         names = []
-        for name, module in self.model.named_modules:
+        for name, module in self.model.named_modules():
             if isinstance(module, TRANSFORMER_COMPATIBLE_MODULES):
                 counter += 1
                 names.append(name)
@@ -43,9 +43,11 @@ class PartialConstructor:
         for name, module in self.model.named_modules():
             if name in self.module_names and isinstance(module, TRANSFORMER_COMPATIBLE_MODULES):
                 setattr(module, 'partial', True)
+                module.requires_grad_(True)
                 counter += len(list(module.parameters()))
             else:
                 setattr(module, 'partial', False)
+                module.requires_grad_(False)
 
         self.model.get_ignore_modules = get_ignore_modules
         setattr(self.model, 'num_partial_layers', counter)

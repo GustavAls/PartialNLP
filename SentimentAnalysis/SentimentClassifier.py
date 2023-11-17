@@ -156,7 +156,7 @@ class SentimentClassifier:
         """
 
         if data_path is None:
-            train_data, test_data, val_data = self.load_text_dataset(dataset_name=dataset_name, seed=seed)
+            train_data, test_data, val_data = self.load_text_dataset(dataset_name=dataset_name, seed=0)
             with open(os.path.join(output_path, 'data_pickle.pkl'), 'wb') as handle:
                 pickle.dump({'train_data': train_data, 'test_data': test_data, 'val_data': val_data},
                             handle, protocol=pickle.HIGHEST_PROTOCOL)

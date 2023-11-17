@@ -30,15 +30,15 @@ from torch.utils.data import Dataset, DataLoader
 import utils
 from SentimentClassifier import construct_laplace, prepare_sentiment_classifier
 from sklearn.gaussian_process import GaussianProcessRegressor
-
+from sklearn.gaussian_process.kernels import RBF
 
 class LaplaceExperiments:
     def __init__(self, args):
         self.default_args = {'output_path': 'C:\\Users\\45292\\Documents\\Master\\SentimentClassification',
-                             'train_batch_size': 32, 'eval_batch_size': 32, 'device': 'cpu', 'num_epochs': 1.0,
+                             'train_batch_size': 1, 'eval_batch_size': 1, 'device': 'cpu', 'num_epochs': 1.0,
                              'dataset_name': 'imdb',
-                             'train': True, 'train_size': None, 'test_size': None, 'device_batch_size': 32,
-                             'learning_rate': 5e-05, 'seed': 0,
+                             'train': True, 'train_size': None, 'test_size': None, 'device_batch_size': 1,
+                             'learning_rate': 5e-05, 'seed': 0, 'train_size': 2, 'test_size': 2,
                              'laplace': True, 'swag': False, 'save_strategy': 'no',
                              'load_best_model_at_end': False, 'no_cuda': False}
 
@@ -46,10 +46,11 @@ class LaplaceExperiments:
         self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
 
         default_args = Namespace(**self.default_args)
+        self.default_args = default_args
         default_args.model_path = args.model_path
         self.sentiment_classifier = prepare_sentiment_classifier(default_args)
 
-        self.minimum_prior, self.maximum_prior, self.best_nll = 1.0, 1e5, np.inf
+        self.minimum_prior, self.maximum_prior, self.best_nll = 1e-1, 1e5, np.inf
         self.train_loader, self.trainer, self.tokenized_val = self.sentiment_classifier.prepare_laplace(
             output_path=default_args.output_path,
             train_bs=default_args.train_batch_size,
@@ -80,10 +81,20 @@ class LaplaceExperiments:
 
     def train_and_predict_new_prior(self, priors, nlls):
 
-        prediction_space = np.linspace(self.minimum_prior, self.maximum_prior, 1000)
-        gaussian_process = GaussianProcessRegressor().fit(priors, nlls)
+        if isinstance(priors, list):
+            prior = np.array(priors)[:, None]
+        if isinstance(nlls, list):
+            nll = np.array(nlls)[:, None]
+
+        prior = prior / max(prior)
+        prior = prior - min(prior)
+        prediction_space = np.linspace(0, 1, 1000).reshape(-1, 1)
+        choice_space = np.linspace(self.minimum_prior, self.maximum_prior, 1000)
+        kernel = RBF()
+        gaussian_process = GaussianProcessRegressor(kernel = kernel, normalize_y=True).fit(prior, nll)
         predictions, std = gaussian_process.predict(prediction_space, return_std=True)
-        minimum_prediction = prediction_space[np.argmin(predictions - std)]
+        minimum_prediction = choice_space[np.argmin(predictions - 1.96 *std)]
+
         return minimum_prediction
 
     def optimize_prior_precision(self, num_steps=7):
@@ -93,12 +104,12 @@ class LaplaceExperiments:
         la = self.fit_laplace(prior_precision=self.minimum_prior)
         best_la = copy.deepcopy(la)
         evaluator = utils.evaluate_laplace(la, self.trainer, self.tokenized_val)
-        negative_log_likelihoods.append(evaluator['nll'])
+        negative_log_likelihoods.append(evaluator.results['nll'])
         self.best_nll = negative_log_likelihoods[-1]
 
         la = self.fit_laplace(prior_precision=self.maximum_prior)
         evaluator = utils.evaluate_laplace(la, self.trainer, self.tokenized_val)
-        negative_log_likelihoods.append(evaluator['nll'])
+        negative_log_likelihoods.append(evaluator.results['nll'])
 
         if negative_log_likelihoods[-1] < self.best_nll:
             best_la = copy.deepcopy(la)
@@ -106,12 +117,12 @@ class LaplaceExperiments:
 
         for step in range(num_steps):
             next_point = self.train_and_predict_new_prior(priors, negative_log_likelihoods)
-            priors.append(next_point)
+            priors.append(next_point.item())
 
-            la = self.fit_laplace(prior_precision=self.maximum_prior)
+            la = self.fit_laplace(prior_precision=priors[-1])
             evaluator = utils.evaluate_laplace(la, self.trainer, self.tokenized_val)
-            negative_log_likelihoods.append(evaluator['nll'])
-            if negative_log_likelihoods < self.best_nll:
+            negative_log_likelihoods.append(evaluator.results['nll'])
+            if negative_log_likelihoods[-1] < self.best_nll:
                 best_la = copy.deepcopy(la)
                 self.best_nll = negative_log_likelihoods[-1]
 
@@ -142,5 +153,14 @@ class LaplaceExperiments:
         with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+
+if __name__ == '__main__':
+
+    args = {'model_path': r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782",
+            'dataset_name': 'imdb',
+            'num_optim_steps': 7}
+    args = Namespace(**args)
+    lap_exp = LaplaceExperiments(args = args)
+    lap_exp.random_ramping_experiment()
 
 
