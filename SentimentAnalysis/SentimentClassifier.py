@@ -50,10 +50,20 @@ class SentimentClassifier:
         data = load_dataset(dataset_name)
         if 0 < self.train_size <= 1:
             self.train_size = int(len(data['train']) * self.train_size)
-        train_data = data["train"].shuffle(seed=seed) if self.train_size == 1.0 else data["train"].shuffle(seed=42).select([i for i in list(range(int(self.train_size)))])
-        test_data = data["test"] if self.test_size == 1 else data["test"].shuffle(seed=42).select([i for i in list(range(int(self.test_size)))])
+
+        if self.train_size == 1.0:
+            train_data_length = len(data['train']['label'])
+            validation_data_indices = set(list(np.random.choice(range(train_data_length), int(train_data_length/5))))
+            training_data_indices = set(range(train_data_length))-validation_data_indices
+            train_data = data['train'].select(list(training_data_indices))
+            val_data = data['train'].select(list(validation_data_indices))
+        else:
+            train_data = data["train"].shuffle(seed=42).select([i for i in list(range(int(self.train_size)))])
+            val_data =  data["train"].shuffle(seed=42).select([i for i in list(range(int(self.train_size)))])
+            test_data = data["test"] if self.test_size == 1 else \
+                data["test"].shuffle(seed=42).select([i for i in list(range(int(self.test_size)))])
         del data
-        return train_data, test_data
+        return train_data, test_data, val_data
 
     def tokenize(self, examples):
         if self.dataset_name == 'imdb':
@@ -74,11 +84,21 @@ class SentimentClassifier:
 
     def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, lr=5e-05, seed=0,
                train=True, logging_perc = -1, save_strategy = 'epoch', evaluation_strategy='epoch',
-               load_best_model_at_end = False, no_cuda = False, eval_steps=-1):
+               load_best_model_at_end = False, no_cuda = False, eval_steps=-1, data_path = None):
 
-        train_data, test_data = self.load_text_dataset(dataset_name=dataset_name, seed=seed)
+        if data_path is None:
+            train_data, test_data, val_data = self.load_text_dataset(dataset_name=dataset_name, seed=seed)
+            with open(os.path.join(output_path, 'data_pickle.pkl'), 'wb') as handle:
+                pickle.dump({'train_data': train_data, 'test_data': test_data, 'val_data': val_data},
+                            handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        else:
+            data = pickle.load(open(data_path, 'rb'))
+            train_data, test_data, val_data = data['train_data'], data['test_data'], data['val_data']
+
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
+
 
         # Defaults if parameters shouldnt be interpreted as ranges
         if logging_perc == -1:
