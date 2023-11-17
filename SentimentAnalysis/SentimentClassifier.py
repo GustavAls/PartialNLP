@@ -239,7 +239,7 @@ def construct_laplace(sent_class, laplace_cfg, args):
         if module_name.split(".")[0] != 'model':
             laplace_cfg.module_names[idx] = ".".join(('model', module_name))
 
-    partial_constructor = PartialConstructor(model, module_names='all')
+    partial_constructor = PartialConstructor(model, module_names='model.classifier')
     partial_constructor.select()
 
     la = lp.Laplace(model, laplace_cfg.ml_task,
@@ -248,8 +248,6 @@ def construct_laplace(sent_class, laplace_cfg, args):
                     prior_precision=laplace_cfg.prior_precision)
 
     la.fit(train_loader)
-    out = la(next(iter(train_loader)))
-    breakpoint()
 
     return la
 
