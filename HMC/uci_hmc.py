@@ -892,7 +892,7 @@ def run_for_percentile(
     return results
 
 
-def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, num_epochs, MAP_params,
+def make_vi_run(run, dataset_, prior_variance, scale, results_dict, save_path, num_epochs, MAP_params_,
                 node_based=True, add_node_based = False,l_scale=1.0, is_svi_map=False, inf_norm_mask = False,
                 random_mask = False, only_full = False):
     rng_key = random.PRNGKey(1)
@@ -903,7 +903,7 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
 
     if node_based:
         keys = ["W1_auto_loc", "W2_auto_loc", "W_output_auto_loc", "b1_auto_loc", "b2_auto_loc", "b_output_auto_loc"]
-        mask_values = [np.random.normal(0, 1, size=(MAP_params[key].shape[0],)) for key in keys]
+        mask_values = [np.random.normal(0, 1, size=(MAP_params_[key].shape[0],)) for key in keys]
         save_name = os.path.join(save_path, f"results_vi_node_run_{run}.pkl")
     elif add_node_based:
         save_name = os.path.join(save_path, f"results_vi_node_add_run_{run}.pkl")
@@ -914,85 +914,85 @@ def make_vi_run(run, dataset, prior_variance, scale, results_dict, save_path, nu
         prior_variance = 100 - percentile + 1
 
         print("Running for percentile: ", percentile, "%")
-        if str(percentile) not in results_dict.keys():
-            sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params)
-            if node_based:
-                if inf_norm_mask:
-                    if random_mask:
-                        raise ValueError("You have selected both random mask, and inf_norm_mask, both "
-                                    "cannot be at the same time")
+        # if str(percentile) not in results_dict.keys():
+        sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params_)
+        if node_based:
+            if inf_norm_mask:
+                if random_mask:
+                    raise ValueError("You have selected both random mask, and inf_norm_mask, both "
+                                "cannot be at the same time")
 
-                    sample_mask_tuple = create_sample_mask_largest_inf_norm(percentile, MAP_params)
-                else:
-                    sample_mask_tuple = create_sample_mask_random(percentile, MAP_params, mask_values)
+                sample_mask_tuple = create_sample_mask_largest_inf_norm(percentile, MAP_params_)
             else:
-                sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params, random_mask)
+                sample_mask_tuple = create_sample_mask_random(percentile, MAP_params_, mask_values)
+        else:
+            sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params_, random_mask)
 
-            if node_based:
-                mixed_bnn = generate_node_based_bnn(
-                    MAP_params,
-                    sample_mask_tuple,
-                    prior_variance,
-                    scale=scale,
-                    l_scale=l_scale,
-                    use_prior=True,
-                    is_svi_map=is_svi_map)
+        if node_based:
+            mixed_bnn = generate_node_based_bnn(
+                MAP_params_,
+                sample_mask_tuple,
+                prior_variance,
+                scale=scale,
+                l_scale=l_scale,
+                use_prior=True,
+                is_svi_map=is_svi_map)
 
-                model = lambda X, y=None: generate_node_based_bnn(
-                    MAP_params, sample_mask_tuple, prior_variance, scale, use_prior=True
-                )(X, y)
-            elif add_node_based:
-                mixed_bnn = generate_additive_node_based_bnn(
-                    MAP_params,
-                    sample_mask_tuple,
-                    prior_variance,
-                    scale=scale,
-                    l_scale=l_scale,
-                    use_prior=True)
+            model = lambda X, y=None: generate_node_based_bnn(
+                MAP_params_, sample_mask_tuple, prior_variance, scale, use_prior=True
+            )(X, y)
+        elif add_node_based:
+            mixed_bnn = generate_additive_node_based_bnn(
+                MAP_params_,
+                sample_mask_tuple,
+                prior_variance,
+                scale=scale,
+                l_scale=l_scale,
+                use_prior=True)
 
-                model = lambda X, y=None: generate_additive_node_based_bnn(
-                    MAP_params, sample_mask_tuple, prior_variance, scale, use_prior=True
-                )(X, y)
-            else:
-                mixed_bnn = generate_mixed_bnn_by_param(
-                    MAP_params,
-                    sample_mask_tuple,
-                    prior_variance,
-                    scale=scale,
-                    l_scale=l_scale,
-                    use_prior=True
-                )
-                model = lambda X, y=None: generate_mixed_bnn_by_param(
-                    MAP_params, sample_mask_tuple, prior_variance, scale, use_prior=True
-                )(X, y)
+            model = lambda X, y=None: generate_additive_node_based_bnn(
+                MAP_params_, sample_mask_tuple, prior_variance, scale, use_prior=True
+            )(X, y)
+        else:
+            mixed_bnn = generate_mixed_bnn_by_param(
+                MAP_params_,
+                sample_mask_tuple,
+                prior_variance,
+                scale=scale,
+                l_scale=l_scale,
+                use_prior=True
+            )
+            model = lambda X, y=None: generate_mixed_bnn_by_param(
+                MAP_params_, sample_mask_tuple, prior_variance, scale, use_prior=True
+            )(X, y)
 
-            svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
-            svi_results = svi.run(rng_key, num_epochs, X=dataset.X_train, y=dataset.y_train)
+        svi = SVI(model, autoguide.AutoNormal(mixed_bnn), optimizer, Trace_ELBO())
+        svi_results = svi.run(rng_key, num_epochs, X=dataset_.X_train, y=dataset_.y_train)
 
-            # Evaluate the model
-            predictive_train, predictive_val, predictive_test = create_predictives(model, svi_results.params,
-                                                                                   dataset,
-                                                                                   mixed_bnn, num_mc_samples=200,
-                                                                                   delta=False)
+        # Evaluate the model
+        predictive_train, predictive_val, predictive_test = create_predictives(model, svi_results.params,
+                                                                               dataset_,
+                                                                               mixed_bnn, num_mc_samples=200,
+                                                                               delta=False)
 
-            nll_glm, elpd, elpd_sqrt, elpd_gamma_prior = compute_metrics(predictive_train, predictive_val,
-                                                                         predictive_test, dataset,
-                                                                         sigma_obs=(svi_results.params['prec_obs_auto_scale'] ** (-1)).item())
+        nll_glm, elpd, elpd_sqrt, elpd_gamma_prior = compute_metrics(predictive_train, predictive_val,
+                                                                     predictive_test, dataset_,
+                                                                     sigma_obs=(svi_results.params['prec_obs_auto_scale'] ** (-1)).item())
 
-            print('nll glm', nll_glm, 'elpd', elpd, 'elpd spourious sqrt', elpd_sqrt, 'elpd gamma',
-                  elpd_gamma_prior)
-            results_dict[f"{percentile}" if not only_full else f"{percentile}_{counter}"] = \
-                {'predictive_train': predictive_train["mean"],
-                                             'predictive_val': predictive_val["mean"],
-                                             'predictive_test': predictive_test["mean"],
-                                             'glm_nll': nll_glm,
-                                             'elpd': elpd,
-                                             'elpd_spurious_sqrt': elpd_sqrt,
-                                             'elpd_gamma_prior': elpd_gamma_prior}
-            counter += 1
+        print('nll glm', nll_glm, 'elpd', elpd, 'elpd spourious sqrt', elpd_sqrt, 'elpd gamma',
+              elpd_gamma_prior)
+        results_dict[f"{percentile}" if not only_full else f"{percentile}_{counter}"] = \
+            {'predictive_train': predictive_train["mean"],
+                                         'predictive_val': predictive_val["mean"],
+                                         'predictive_test': predictive_test["mean"],
+                                         'glm_nll': nll_glm,
+                                         'elpd': elpd,
+                                         'elpd_spurious_sqrt': elpd_sqrt,
+                                         'elpd_gamma_prior': elpd_gamma_prior}
+        counter += 1
 
-            with open(save_name, 'wb') as handle:
-                pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        with open(save_name, 'wb') as handle:
+            pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 def train_MAP_solution(mle_model, dataset, num_epochs):
@@ -1052,11 +1052,11 @@ if __name__ == "__main__":
     parser.add_argument("--scale_prior",  type=ast.literal_eval, default=True)
     parser.add_argument("--prior_variance", type=float, default=4.0) #0.1 is good for yacht, 4.0 for other datasets
     parser.add_argument("--likelihood_scale", type=float, default=1.0) #6.0 is good for yacht, 1.0   for other datasets
-    parser.add_argument('--vi', type=ast.literal_eval, default=False)
-    parser.add_argument('--node_based', type=ast.literal_eval, default=False)
-    parser.add_argument('--hmc', type=ast.literal_eval, default=False)
+    parser.add_argument('--vi', type=ast.literal_eval, default=True)
+    parser.add_argument('--node_based', type=ast.literal_eval, default=True)
+    parser.add_argument('--hmc', type=ast.literal_eval, default=True)
     parser.add_argument('--l_var', type=float, default=1.0)
-    parser.add_argument('--node_based_add', type=ast.literal_eval, default=False)
+    parser.add_argument('--node_based_add', type=ast.literal_eval, default=True)
     parser.add_argument('--inf_norm_mask', type=ast.literal_eval, default=False)
     parser.add_argument('--random_mask', type=ast.literal_eval, default=False)
     parser.add_argument('--only_full', type=ast.literal_eval, default = False)
@@ -1162,7 +1162,7 @@ if __name__ == "__main__":
                         }
     }
 
-    vi_results_dict = {
+    results_dict_init = {
                         'dataset': dataset,
                         'map_results':  {'map_params': MAP_params,
                                          'predictive_train': predictive_train["mean"],
@@ -1174,54 +1174,60 @@ if __name__ == "__main__":
                                          'elpd_gamma_prior': nll_one
                                          }
                      }
+    if not args.hmc:
+        # if args.node_based_add:
+        # nb_vi_add_dict_path = os.path.join(args.output_path, f"results_vi_node_add_run_{args.run}.pkl")
+        # if os.path.exists(nb_vi_add_dict_path):
+        #     nb_vi_add_results_dict = pickle.load(open(nb_vi_add_dict_path, "rb"))
+        #     MAP_params = nb_vi_add_results_dict['map_results']['map_params']
+        # else:
+        #     nb_vi_add_results_dict = results_dict_init
+        #     MAP_params = nb_vi_add_results_dict['map_results']['map_params']
 
-    dict_length = 11
-    if args.vi:
-        # Overwrite dictionary if it exists
-        vi_dict_path = os.path.join(args.output_path, f"results_vi_run_{args.run}.pkl")
-        if os.path.exists(vi_dict_path):
-            vi_results_dict = pickle.load(open(vi_dict_path, "rb"))
-            MAP_params = vi_results_dict['map_results']['map_params']
-        if len(vi_results_dict.keys()) < dict_length:
-            # VI run
-            print("Running VI")
-            make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance,scale= args.likelihood_scale, results_dict=vi_results_dict,
-                        MAP_params=MAP_params, save_path=args.output_path,  num_epochs=args.num_epochs, node_based=False, l_scale=args.l_var,
-                        random_mask=args.random_mask, only_full=args.only_full)
+        print("Running node based rank 1 VI")
+        make_vi_run(run=args.run, dataset_=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=results_dict_init,
+                    MAP_params_=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs,
+                    node_based=False, add_node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map,
+                    random_mask=args.random_mask, only_full=args.only_full)
 
-    if args.node_based:
-        nb_vi_dict_path = os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl")
-        if os.path.exists(nb_vi_dict_path):
-            vi_results_dict = pickle.load(open(nb_vi_dict_path, "rb"))
-            MAP_params = vi_results_dict['map_results']['map_params']
-        if len(vi_results_dict.keys()) < dict_length:
-            # Node based
-            print("Running node based VI")
-            make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=vi_results_dict,
-                        MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs, node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map,
-                        inf_norm_mask=args.inf_norm_mask, random_mask=args.random_mask, only_full=args.only_full)
 
-    if args.node_based_add:
-        nb_vi_add_dict_path = os.path.join(args.output_path, f"results_vi_node_add_run_{args.run}.pkl")
-        if os.path.exists(nb_vi_add_dict_path):
-            vi_results_dict = pickle.load(open(nb_vi_add_dict_path, "rb"))
-            MAP_params = vi_results_dict['map_results']['map_params']
-        if len(vi_results_dict.keys()) < dict_length:
-            print("Running node based rank 1 VI")
-            make_vi_run(run=args.run, dataset=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale,
-                        results_dict=vi_results_dict,
-                        MAP_params=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs,
-                        node_based=False, add_node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map,
-                        random_mask=args.random_mask, only_full=args.only_full)
+        # if args.node_based:
+        # nb_vi_dict_path = os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl")
+        # if os.path.exists(nb_vi_dict_path):
+        #     nb_vi_results_dict = pickle.load(open(nb_vi_dict_path, "rb"))
+        #     MAP_params = nb_vi_results_dict['map_results']['map_params']
+        # else:
+        #     nb_vi_results_dict = results_dict_init
+        #     MAP_params = nb_vi_results_dict['map_results']['map_params']
 
-    if args.hmc:
-        hmc_dict_path = os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")
-        if os.path.exists(hmc_dict_path):
-            hmc_result_dict = pickle.load(open(hmc_dict_path, "rb"))
-            MAP_params = hmc_result_dict['map_results']['map_params']
-        if len(hmc_result_dict.keys()) < dict_length:
-            # HMC run
-            make_hmc_run(run=args.run, dataset=dataset, scale_prior=args.scale_prior,
-                         prior_variance=args.prior_variance,
-                         save_path=args.output_path, likelihood_scale=args.likelihood_scale, percentiles=percentiles,
-                         results_dict=hmc_result_dict, MAP_params=MAP_params, random_mask=args.random_mask)
+        print("Running node based VI")
+        make_vi_run(run=args.run, dataset_=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=results_dict_init,
+                    MAP_params_=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs, node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map,
+                    inf_norm_mask=args.inf_norm_mask, random_mask=args.random_mask, only_full=args.only_full)
+
+
+        # vi_dict_path = os.path.join(args.output_path, f"results_vi_run_{args.run}.pkl")
+        # if os.path.exists(vi_dict_path):
+        #     vi_results_dict = pickle.load(open(vi_dict_path, "rb"))
+        #     MAP_params = vi_results_dict['map_results']['map_params']
+        # else:
+        #     vi_results_dict = results_dict_init
+        #     MAP_params = vi_results_dict['map_results']['map_params']
+
+        print("Running VI")
+        make_vi_run(run=args.run, dataset_=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale,
+                    results_dict=results_dict_init,
+                    MAP_params_=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs, node_based=False,
+                    l_scale=args.l_var,
+                    random_mask=args.random_mask, only_full=args.only_full)
+
+    else:
+        # hmc_dict_path = os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")
+        # if os.path.exists(hmc_dict_path):
+        #     hmc_result_dict = pickle.load(open(hmc_dict_path, "rb"))
+        MAP_params = hmc_result_dict['map_results']['map_params']
+        # HMC run
+        make_hmc_run(run=args.run, dataset=dataset, scale_prior=args.scale_prior,
+                     prior_variance=args.prior_variance,
+                     save_path=args.output_path, likelihood_scale=args.likelihood_scale, percentiles=percentiles,
+                     results_dict=hmc_result_dict, MAP_params=MAP_params, random_mask=args.random_mask)
