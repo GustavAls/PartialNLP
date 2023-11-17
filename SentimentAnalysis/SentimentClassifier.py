@@ -143,7 +143,8 @@ class SentimentClassifier:
             trainer.evaluate()
             print("Evaluation is done")
 
-    def prepare_laplace(self, output_path, train_bs, eval_bs, dataset_name, device_batch_size, lr=5e-05):
+    def prepare_laplace(self, output_path, train_bs, eval_bs, dataset_name, device_batch_size, lr=5e-05,
+                        data_path = None):
         """
 
         :param output_path: Ouput path, for compatibility with other function calls, this function does not save
@@ -153,9 +154,20 @@ class SentimentClassifier:
         :param device_batch_size: per device batch size
         :return: None
         """
-        train_data, test_data = self.load_text_dataset(dataset_name=dataset_name)
+
+        if data_path is None:
+            train_data, test_data, val_data = self.load_text_dataset(dataset_name=dataset_name, seed=seed)
+            with open(os.path.join(output_path, 'data_pickle.pkl'), 'wb') as handle:
+                pickle.dump({'train_data': train_data, 'test_data': test_data, 'val_data': val_data},
+                            handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        else:
+            data = pickle.load(open(data_path, 'rb'))
+            train_data, test_data, val_data = data['train_data'], data['test_data'], data['val_data']
+
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
+        tokenized_val = val_data.map(self.tokenize, batched=True, batch_size=eval_bs)
 
         training_args = TrainingArguments(output_dir=output_path,
                                           learning_rate=lr,
@@ -182,7 +194,7 @@ class SentimentClassifier:
 
         epoch_iterator, model, trainer = trainer.train()
         self.model = model
-        return epoch_iterator, trainer
+        return epoch_iterator, trainer, tokenized_val
 
 
 def prepare_sentiment_classifier(args, model_name="distilbert-base-uncased"):
