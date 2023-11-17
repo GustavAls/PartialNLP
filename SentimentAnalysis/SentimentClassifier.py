@@ -50,9 +50,8 @@ class SentimentClassifier:
         data = load_dataset(dataset_name, download_mode="force_redownload")
         if 0 < self.train_size <= 1:
             self.train_size = int(len(data['train']) * self.train_size)
-        train_data = data["train"].shuffle(seed=seed) if self.train_size is None else data["train"].shuffle(seed=42).select([i for i in list(range(self.train_size))])
-        test_data = data["test"] if self.test_size is None else data["test"].shuffle(seed=42).select([i for i in list(range(self.test_size))])
-        breakpoint()
+        train_data = data["train"].shuffle(seed=seed) if self.train_size == 1.0 else data["train"].shuffle(seed=42).select([i for i in list(range(int(self.train_size)))])
+        test_data = data["test"] if self.test_size == 1 else data["test"].shuffle(seed=42).select([i for i in list(range(int(self.test_size)))])
         del data
         return train_data, test_data
 
@@ -384,8 +383,8 @@ if __name__ == "__main__":
     parser.add_argument("--num_epochs", type=float, default=1)
     parser.add_argument("--dataset_name", type=str, default="sst2")
     parser.add_argument("--train", type=ast.literal_eval, default=True)
-    parser.add_argument("--train_size", type=float, default=None) # Set to number for subset of data
-    parser.add_argument("--test_size", type=int, default=None) # Set to number for subset of data
+    parser.add_argument("--train_size", type=float, default=1) # 1 gives full dataset
+    parser.add_argument("--test_size", type=float, default=1) # 1 gives full dataset
     parser.add_argument("--device_batch_size", type=int, default=4)
     parser.add_argument("--learning_rate", type=float, default=5e-05)
     parser.add_argument("--seed", type=int, default=0)
