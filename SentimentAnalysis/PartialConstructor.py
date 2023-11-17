@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from transformers.modeling_outputs import SequenceClassifierOutput
 from torch.utils.data import DataLoader, Dataset
+import numpy as np
 
 TRANSFORMER_INCOMPATIBLE_MODULES = (nn.Embedding, nn.LayerNorm, nn.BatchNorm1d,
                                     nn.BatchNorm2d, nn.BatchNorm3d)
@@ -21,12 +22,21 @@ def get_ignore_modules(self):
 
 
 class PartialConstructor:
-    def __init__(self, model, module_names):
+    def __init__(self, model, module_names = None):
         self.model = model
         self.module_names = module_names
         if self.module_names == 'all':
             self.module_names = [name for name, _ in self.model.named_modules()]
         self.subnet_indices = None
+
+    def select_random_percentile(self, num_params):
+        counter = 0
+        names = []
+        for name, module in self.model.named_modules:
+            if isinstance(module, TRANSFORMER_COMPATIBLE_MODULES):
+                counter += 1
+                names.append(name)
+        self.module_names = np.random.choice(names, size=(num_params, ))
 
     def select(self):
         counter = 0

@@ -27,19 +27,24 @@ from PartialConstructor import PartialConstructor, PartialConstructorSwag, Trunc
 import torch.nn as nn
 from Laplace.laplace import Laplace
 from torch.utils.data import Dataset, DataLoader
+import utils
 
 
 class SentimentClassifier:
-    def __init__(self, network_name, id2label=None, label2id=None, train_size=None, test_size=None, dataset_name="sst2"):
+    def __init__(self, network_name, id2label=None, label2id=None, train_size=None, test_size=None,
+                 dataset_name="sst2"):
         self._tokenizer = AutoTokenizer.from_pretrained(network_name)
         if id2label is None and label2id is None:
             self.model = AutoModelForSequenceClassification.from_pretrained(network_name,
                                                                             num_labels=2)
         else:
-            self.model = AutoModelForSequenceClassification.from_pretrained(network_name,
+            model_path = r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
+            self.model = AutoModelForSequenceClassification.from_pretrained(model_path,
                                                                             num_labels=2,
                                                                             label2id=label2id,
                                                                             id2label=id2label)
+
+
         self.model.save_pretrained(os.path.join(os.getcwd(), "model"))
         self.collator = DataCollatorWithPadding(tokenizer=self._tokenizer)
         self.train_size = train_size
@@ -50,10 +55,22 @@ class SentimentClassifier:
         data = load_dataset(dataset_name)
         if 0 < self.train_size <= 1:
             self.train_size = int(len(data['train']) * self.train_size)
-        train_data = data["train"].shuffle(seed=seed) if self.train_size is None else data["train"].shuffle(seed=42).select([i for i in list(range(self.train_size))])
-        test_data = data["test"] if self.test_size is None else data["test"].shuffle(seed=42).select([i for i in list(range(self.test_size))])
+        train_data = data["train"].shuffle(seed=seed) if self.train_size is None else data["train"].shuffle(
+            seed=42).select([i for i in list(range(self.train_size))])
+
+        if self.test_size is not None:
+            test_data = data["test"] if self.test_size is None else data["test"].shuffle(seed=42).select(
+                [i for i in list(range(self.test_size))])
+            val_data = test_data
+        else:
+            full_test_size = len(data['test']['label'])
+            validation_indices = set(list(np.random.choice(range(full_test_size), size=(full_test_size // 5))))
+            test_indices = set(range(full_test_size)) - validation_indices
+            test_data = data['test'].select(list(test_indices))
+            val_data = data['test'].select(list(validation_indices))
+
         del data
-        return train_data, test_data
+        return train_data, test_data, val_data
 
     def tokenize(self, examples):
         if self.dataset_name == 'imdb':
@@ -73,25 +90,25 @@ class SentimentClassifier:
         return {"accuracy": accuracy, "f1": f1}
 
     def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, lr=5e-05, seed=0,
-               train=True, logging_perc = -1, save_strategy = 'epoch', load_best_model_at_end = False, no_cuda = False):
+               train=True, logging_perc=-1, save_strategy='epoch', load_best_model_at_end=False, no_cuda=False):
 
-        train_data, test_data = self.load_text_dataset(dataset_name=dataset_name, seed=seed)
+        train_data, test_data, val_data = self.load_text_dataset(dataset_name=dataset_name, seed=seed)
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
+        tokenized_val = val_data.map(self.tokenize, batched=True, batch_size=eval_bs)
 
         training_args = TrainingArguments(output_dir=output_path,
                                           learning_rate=lr,
                                           do_train=train,
                                           per_device_train_batch_size=device_batch_size,
                                           per_device_eval_batch_size=device_batch_size,
-                                          num_train_epochs=num_epochs,
-                                          evaluation_strategy=save_strategy,
+                                          num_train_epochs=2,
+                                          evaluation_strategy='epoch',
                                           save_strategy=save_strategy,
-                                          load_best_model_at_end=load_best_model_at_end,
+                                          eval_steps=1,
+                                          load_best_model_at_end=False,
                                           weight_decay=0.01,
-                                          logging_steps=logging_perc,
                                           no_cuda=no_cuda)
-
 
         # self.model = PartialConstructorSwag(self.model, n_iterations_between_snapshots=1,
         #                                     module_names=['classifier'],
@@ -125,10 +142,10 @@ class SentimentClassifier:
         :param device_batch_size: per device batch size
         :return: None
         """
-        train_data, test_data = self.load_text_dataset(dataset_name=dataset_name)
+        train_data, test_data, val_data = self.load_text_dataset(dataset_name=dataset_name)
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
-
+        tokenized_val = val_data.map(self.tokenize, batched=True, batch_size=eval_bs)
         training_args = TrainingArguments(output_dir=output_path,
                                           learning_rate=lr,
                                           do_train=True,
@@ -154,7 +171,7 @@ class SentimentClassifier:
 
         epoch_iterator, model, trainer = trainer.train()
         self.model = model
-        return epoch_iterator, trainer
+        return epoch_iterator, trainer, tokenized_val
 
 
 def prepare_sentiment_classifier(args, model_name="distilbert-base-uncased"):
@@ -213,31 +230,26 @@ def prepare_and_run_sentiment_classifier(args, sentiment_classifier=None):
                                 lr=args.learning_rate,
                                 seed=args.seed,
                                 train=args.train,
-                                logging_perc = args.logging_perc,
-                                evaluation_strategy = args.save_strategy,
-                                save_strategy = args.save_strategy,
-                                load_best_model_at_end = args.load_best_model_at_end,
-                                no_cuda = args.no_cuda)
+                                logging_perc=args.logging_perc,
+                                save_strategy=args.save_strategy,
+                                load_best_model_at_end=args.load_best_model_at_end,
+                                no_cuda=args.no_cuda)
 
     return None
 
 
 def construct_laplace(sent_class, laplace_cfg, args):
-    train_loader, trainer = sent_class.prepare_laplace(output_path=args.output_path,
-                                                       train_bs=args.train_batch_size,
-                                                       eval_bs=args.eval_batch_size,
-                                                       dataset_name=args.dataset_name,
-                                                       device_batch_size=args.device_batch_size,
-                                                       lr=args.learning_rate)
+    train_loader, trainer, tokenized_val = sent_class.prepare_laplace(output_path=args.output_path,
+                                                                      train_bs=args.train_batch_size,
+                                                                      eval_bs=args.eval_batch_size,
+                                                                      dataset_name=args.dataset_name,
+                                                                      device_batch_size=args.device_batch_size,
+                                                                      lr=args.learning_rate)
 
     if not isinstance(sent_class.model, Extension):
         model = Extension(sent_class.model)
     else:
         model = sent_class.model
-
-    for idx, module_name in enumerate(laplace_cfg.module_names):
-        if module_name.split(".")[0] != 'model':
-            laplace_cfg.module_names[idx] = ".".join(('model', module_name))
 
     partial_constructor = PartialConstructor(model, module_names='model.classifier')
     partial_constructor.select()
@@ -249,7 +261,11 @@ def construct_laplace(sent_class, laplace_cfg, args):
 
     la.fit(train_loader)
 
-    return la
+    # if args.save_path:
+    #     utils.save_laplace(args.save_path, laplace_cfg)
+    evaluator = utils.evaluate_laplace(la, trainer)
+
+    return la, evaluator
 
 
 def construct_swag(sentiment_classifier, swag_cfg):
@@ -268,7 +284,6 @@ def construct_swag(sentiment_classifier, swag_cfg):
 
 
 def save_object_(obj, output_path, swag_or_laplace='laplace', cfg=None):
-
     changed_things = check_cfg_status(cfg, swag_or_laplace)
 
     if swag_or_laplace == 'laplace':
@@ -277,7 +292,6 @@ def save_object_(obj, output_path, swag_or_laplace='laplace', cfg=None):
         to_be_saved = {'swag': obj, 'cfg': cfg}
     else:
         raise ValueError("swag_or_laplace should be a string in ['swag', 'laplace']")
-
 
     if len(changed_things) == 0:
         filename = swag_or_laplace + "_" + 'default.pkl'
@@ -301,8 +315,7 @@ def save_object_(obj, output_path, swag_or_laplace='laplace', cfg=None):
             pickle.dump(to_be_saved, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-def check_cfg_status(cfg, swag_or_laplace = 'laplace'):
-
+def check_cfg_status(cfg, swag_or_laplace='laplace'):
     if cfg is None:
         return {}
     elif isinstance(cfg, str):
@@ -373,8 +386,8 @@ if __name__ == "__main__":
     parser.add_argument("--num_epochs", type=float, default=1)
     parser.add_argument("--dataset_name", type=str, default="sst2")
     parser.add_argument("--train", type=ast.literal_eval, default=True)
-    parser.add_argument("--train_size", type=float, default=None) # Set to number for subset of data
-    parser.add_argument("--test_size", type=int, default=None) # Set to number for subset of data
+    parser.add_argument("--train_size", type=float, default=None)  # Set to number for subset of data
+    parser.add_argument("--test_size", type=int, default=None)  # Set to number for subset of data
     parser.add_argument("--device_batch_size", type=int, default=4)
     parser.add_argument("--learning_rate", type=float, default=5e-05)
     parser.add_argument("--seed", type=int, default=0)
@@ -382,15 +395,15 @@ if __name__ == "__main__":
     parser.add_argument('--swag', type=ast.literal_eval, default=False)
     parser.add_argument('--swag_cfg', default=None)
     parser.add_argument('--la_cfg', default=None)
-    parser.add_argument('--logging_perc',type = float, default = 0.1) # -1 for default from transformers
-    parser.add_argument('--save_strategy', default = 'no') # 'epoch' for default from transformers
+    parser.add_argument('--logging_perc', type=float, default=0.1)  # -1 for default from transformers
+    parser.add_argument('--save_strategy', default='no')  # 'epoch' for default from transformers
     parser.add_argument('--load_best_model_at_end', type=ast.literal_eval, default=False)
     parser.add_argument('--no_cuda', type=ast.literal_eval, default=False)
     parser.add_argument('--dataramping', type=ast.literal_eval, default=False)
 
     args = parser.parse_args()
 
-    if int(args.train_size)-args.train_size == 0:
+    if int(args.train_size) - args.train_size == 0:
         args.train_size = int(args.train_size)
 
     if args.dataramping:
