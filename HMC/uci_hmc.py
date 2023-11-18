@@ -912,9 +912,7 @@ def make_vi_run(run, dataset_, prior_variance, scale, results_dict, save_path, n
     counter = 0
     for percentile in percentiles:
         prior_variance = 100 - percentile + 1
-
         print("Running for percentile: ", percentile, "%")
-        # if str(percentile) not in results_dict.keys():
         sample_mask_tuple = create_sample_mask_largest_abs_values(percentile, MAP_params_)
         if node_based:
             if inf_norm_mask:
@@ -1138,9 +1136,6 @@ if __name__ == "__main__":
     print("SIGMA", sigma)
     fvar = np.ones_like(test) * np.sqrt(sigma)
 
-    # tp.plot(test, fvar, dataset.y_test * dataset.scl_Y.scale_.item() + dataset.scl_Y.mean_.item(),
-    #         dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item())
-
     nll_one = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(),
                                 sigma ** 2)
     nll_two = tp.calculate_nll_(test, dataset.y_test, dataset.scl_Y.scale_.item(), dataset.scl_Y.mean_.item(),
@@ -1174,46 +1169,23 @@ if __name__ == "__main__":
                                          'elpd_gamma_prior': nll_one
                                          }
                      }
-    if not args.hmc:
-        # if args.node_based_add:
-        # nb_vi_add_dict_path = os.path.join(args.output_path, f"results_vi_node_add_run_{args.run}.pkl")
-        # if os.path.exists(nb_vi_add_dict_path):
-        #     nb_vi_add_results_dict = pickle.load(open(nb_vi_add_dict_path, "rb"))
-        #     MAP_params = nb_vi_add_results_dict['map_results']['map_params']
-        # else:
-        #     nb_vi_add_results_dict = results_dict_init
-        #     MAP_params = nb_vi_add_results_dict['map_results']['map_params']
-
+    if args.node_based_add:
+        MAP_params = results_dict_init['map_results']['map_params']
         print("Running node based rank 1 VI")
         make_vi_run(run=args.run, dataset_=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=results_dict_init,
                     MAP_params_=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs,
                     node_based=False, add_node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map,
                     random_mask=args.random_mask, only_full=args.only_full)
 
-
-        # if args.node_based:
-        # nb_vi_dict_path = os.path.join(args.output_path, f"results_vi_node_run_{args.run}.pkl")
-        # if os.path.exists(nb_vi_dict_path):
-        #     nb_vi_results_dict = pickle.load(open(nb_vi_dict_path, "rb"))
-        #     MAP_params = nb_vi_results_dict['map_results']['map_params']
-        # else:
-        #     nb_vi_results_dict = results_dict_init
-        #     MAP_params = nb_vi_results_dict['map_results']['map_params']
-
+    if args.node_based:
+        MAP_params = results_dict_init['map_results']['map_params']
         print("Running node based VI")
         make_vi_run(run=args.run, dataset_=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale, results_dict=results_dict_init,
                     MAP_params_=MAP_params, save_path=args.output_path, num_epochs=args.num_epochs, node_based=True, l_scale=args.l_var, is_svi_map=is_svi_map,
                     inf_norm_mask=args.inf_norm_mask, random_mask=args.random_mask, only_full=args.only_full)
 
-
-        # vi_dict_path = os.path.join(args.output_path, f"results_vi_run_{args.run}.pkl")
-        # if os.path.exists(vi_dict_path):
-        #     vi_results_dict = pickle.load(open(vi_dict_path, "rb"))
-        #     MAP_params = vi_results_dict['map_results']['map_params']
-        # else:
-        #     vi_results_dict = results_dict_init
-        #     MAP_params = vi_results_dict['map_results']['map_params']
-
+    if args.vi:
+        MAP_params = results_dict_init['map_results']['map_params']
         print("Running VI")
         make_vi_run(run=args.run, dataset_=dataset, prior_variance=args.prior_variance, scale=args.likelihood_scale,
                     results_dict=results_dict_init,
@@ -1221,12 +1193,8 @@ if __name__ == "__main__":
                     l_scale=args.l_var,
                     random_mask=args.random_mask, only_full=args.only_full)
 
-    else:
-        # hmc_dict_path = os.path.join(args.output_path, f"results_hmc_run_{args.run}.pkl")
-        # if os.path.exists(hmc_dict_path):
-        #     hmc_result_dict = pickle.load(open(hmc_dict_path, "rb"))
+    if args.hmc:
         MAP_params = hmc_result_dict['map_results']['map_params']
-        # HMC run
         make_hmc_run(run=args.run, dataset=dataset, scale_prior=args.scale_prior,
                      prior_variance=args.prior_variance,
                      save_path=args.output_path, likelihood_scale=args.likelihood_scale, percentiles=percentiles,
