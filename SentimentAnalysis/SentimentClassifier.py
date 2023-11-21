@@ -95,7 +95,8 @@ class SentimentClassifier:
                 data.to_csv(data_path)
         else:
             for name in split_names:
-                data_csv = load_dataset('csv', data_files=f'{name}_data_run_{run}.csv')
+                data_path = os.path.join(output_path, f'{name}_data_run_{run}.csv')
+                data_csv = load_dataset('csv', data_files=data_path)
                 if name == "train":
                     train_data = data_csv
                 elif name == "val":
