@@ -427,10 +427,10 @@ if __name__ == "__main__":
     parser.add_argument('--swag', type=ast.literal_eval, default=False)
     parser.add_argument('--swag_cfg', default=None)
     parser.add_argument('--la_cfg', default=None)
-    parser.add_argument('--logging_perc',type = float, default = 0.1) # for default from transformers
+    parser.add_argument('--logging_perc',type = float, default = -1) # for default from transformers
+    parser.add_argument('--eval_steps', type = float, default = -1) # for default from transformers
     parser.add_argument('--save_strategy', default = 'epoch') # 'epoch' for default from transformers
     parser.add_argument('--evaluation_strategy', default = 'steps')
-    parser.add_argument('--eval_steps', type = float, default = None) # for default from transformers
     parser.add_argument('--load_best_model_at_end', type=ast.literal_eval, default=False)
     parser.add_argument('--no_cuda', type=ast.literal_eval, default=False)
     parser.add_argument('--dataramping', type=ast.literal_eval, default=False)
