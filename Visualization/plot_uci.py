@@ -180,12 +180,12 @@ def plot_estimator(df, errorbar_func, estimator=None, ax=None, data_name=None, s
 
 
 def plot_partial_percentages(percentages, res, data_name=None, df=None, num_runs=15, ax=None, show=True,
-                             multidataset = False, map=True):
+                             multidataset = False, map=True, is_ll=True):
     if df is None:
         df = pd.DataFrame()
         df['percentages'] = num_runs * percentages
         for key, val in res.items():
-            df[key + '_nll'] = [(-1) * ll for ll in val.flatten()]
+            df[key + '_nll'] = [(-1) * ll if is_ll else ll for ll in val.flatten()]
 
     if ax is None:
         fig1, ax1 = plt.subplots(1, 1)
@@ -755,7 +755,8 @@ class PlotFunctionHolder:
                                  res={'Additive': np.array(metrics_add), 'Multiplicative': np.array(metrics_mul)},
                                  data_name=data_name,
                                  num_runs=len(metrics_mul),
-                                 ax=[ax1,ax2], show=False, map=map)
+                                 ax=[ax1,ax2], show=False, map=map,
+                                 is_ll=True if self.plot_helper_vi_hmc.eval_method == 'nll' else False)
 
         ylabel = self.eval_methods_to_names[self.plot_helper_vi_hmc.eval_method]
         ax1.set_ylabel(ylabel)
@@ -789,7 +790,8 @@ class PlotFunctionHolder:
                                  res={'Multi max': np.array(metrics_mul_max), 'Multi rand': np.array(metrics_mul)},
                                  data_name=data_name,
                                  num_runs=len(metrics_mul),
-                                 ax=[ax1,ax2], show=False, map=map)
+                                 ax=[ax1,ax2], show=False, map=map,
+                                 is_ll=True if self.plot_helper_vi_hmc.eval_method == 'nll' else False)
 
         ylabel = self.eval_methods_to_names[self.plot_helper_vi_hmc.eval_method]
         ax1.set_ylabel(ylabel)
@@ -861,7 +863,8 @@ class PlotFunctionHolder:
                                  res={'VI': np.array(metrics_vi), 'HMC': np.array(metrics_hmc)},
                                  data_name=data_name,
                                  num_runs=len(metrics_vi),
-                                 ax=[ax1, ax2], show=False, map=map)
+                                 ax=[ax1, ax2], show=False, map=map,
+                                 is_ll=True if self.plot_helper_vi_hmc.eval_method == 'nll' else False)
 
         ylabel = self.eval_methods_to_names[self.plot_helper_la_swa.eval_method]
         ax1.set_ylabel(ylabel)
@@ -921,7 +924,8 @@ class PlotFunctionHolder:
                                  res={'SWAG': np.array(metrics_swa), 'Laplace': np.array(metrics_la)},
                                  data_name=data_name,
                                  num_runs=len(metrics_la),
-                                 ax=[ax1,ax2], show=False, map=map)
+                                 ax=[ax1,ax2], show=False, map=map,
+                                 is_ll=True if self.plot_helper_vi_hmc.eval_method == 'nll' else False)
 
 
         ax1.set_ylabel(ylabel)
@@ -971,7 +975,8 @@ class PlotFunctionHolder:
                                  res={'Max': np.array(metrics_max), 'Random': np.array(metrics_rand)},
                                  data_name=plot_criteria + " " + data_name,
                                  num_runs=len(metrics_max),
-                                 ax=[ax1,ax2], show=False, map=map)
+                                 ax=[ax1,ax2], show=False, map=map,
+                                 is_ll=True if self.plot_helper_vi_hmc.eval_method == 'nll' else False)
 
         ax1.set_ylabel(ylabel)
         ax2.set_ylabel(ylabel)
@@ -1222,28 +1227,12 @@ if __name__ == '__main__':
     path_la = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_Laplace_SWAG_all_metrics'
     path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_torch'
 
-    # path_la_rand = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_Laplace_SWAG_all_metrics_rand'
-    # path_vi_rand = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_torch_rand'
+    path_la_rand = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_Laplace_SWAG_all_metrics_rand'
+    path_vi_rand = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_torch_rand'
 
     # datasets = ['energy', 'yacht']
     datasets = ['boston', 'energy', 'yacht']
     prediction_folders = [ dataset + "_models" for dataset in datasets]
-
-    # plot_holder = PlotFunctionHolder(path_la, path_vi, eval_method='nll', calculate=True,
-    #                                  save_path=r'C:\Users\45292\Documents\Master\Figures\UCI\HMC')
-    # plot_holder.plot_prior_laplace()
-    # breakpoint()
-    # # plot_holder.write_latex_table()
-    # SHARMAS HMC PLOT RECREATED
-    # path_svi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_SVI_sharma_hmc'
-    # for prediction_folder in prediction_folders:
-    #     la_swa_path = os.path.join(path_la, prediction_folder)
-    #     save_path = os.path.join(os.getcwd(), r"Figures\SVI")
-    #
-    #     vi_hmc_path = os.path.join(path_svi, prediction_folder)
-    #     plot_holder = PlotFunctionHolder(la_swa_path=la_swa_path, vi_hmc_path=vi_hmc_path,
-    #                                      eval_method='test_ll_homoscedastic', calculate=False, save_path=save_path)
-    #     plot_holder.plot_partial_percentages_hmc_homoscedastic_nll()
 
     # NORMAL PLOTTING, WITH CORRECT NLL CALCULATION
     for prediction_folder in prediction_folders:
@@ -1253,15 +1242,19 @@ if __name__ == '__main__':
         la_swa_path_rand = os.path.join(path_la_rand, prediction_folder)
         vi_hmc_path_rand = os.path.join(path_vi_rand, prediction_folder)
 
-        save_path = os.path.join(os.getcwd(), r"Figures\Torch")
+        save_path = os.path.join(os.getcwd(), r"Figures\MSE")
         plot_holder = PlotFunctionHolder(la_swa_path=la_swa_path, vi_hmc_path=vi_hmc_path, calculate=True, save_path=save_path,
+                                         la_swa_path_rand=la_swa_path_rand, vi_hmc_path_rand=vi_hmc_path_rand,
                                          eval_method='mse')
-        # plot_holder.plot_partial_percentages_vi_hmc(cr)
-        # plot_holder.set_eval_method('mse')
-        plot_holder.plot_partial_percentages_rand_vs_max(criteria='hmc')
-        if 'yacht' in prediction_folder:
-            plot_holder.plot_partial_percentages_rand_vs_max(criteria='hmc', map=False)
-        #     plot_holder.plot_partial_percentages_nodes(map=False)
+        plot_holder.write_latex_table()
+        # plot_holder.plot_partial_percentages_nodes()
+        # plot_holder.plot_partial_percentages_vi_hmc()
+        # plot_holder.plot_partial_percentages_rand_vs_max(criteria='node_run')
+        # plot_holder.plot_partial_percentages_rand_vs_max(criteria='add')
+        # if 'yacht' in prediction_folder:
+            # plot_holder.plot_partial_percentages_rand_vs_max(criteria='node_run', map=False)
+            # plot_holder.plot_partial_percentages_rand_vs_max(criteria='add', map=False)
+            # plot_holder.plot_partial_percentages_nodes(map=False)
         #     plot_holder.plot_partial_percentages_la_swa(map=False)
 
     breakpoint()

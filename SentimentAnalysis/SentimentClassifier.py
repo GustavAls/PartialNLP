@@ -84,11 +84,11 @@ class SentimentClassifier:
 
     def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, lr=5e-05, seed=0,
                train=True, logging_perc = -1, save_strategy = 'epoch', evaluation_strategy='epoch',
-               load_best_model_at_end = False, no_cuda = False, eval_steps=-1, data_path = None):
+               load_best_model_at_end = False, no_cuda = False, eval_steps=-1, data_path = None, run=0):
 
         if data_path is None:
             train_data, test_data, val_data = self.load_text_dataset(dataset_name=dataset_name, seed=seed)
-            with open(os.path.join(output_path, 'data_pickle.pkl'), 'wb') as handle:
+            with open(os.path.join(output_path, f'data_run_{run}.pkl'), 'wb') as handle:
                 pickle.dump({'train_data': train_data, 'test_data': test_data, 'val_data': val_data},
                             handle, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -239,7 +239,8 @@ def run_dataramping(args, sentiment_classifier=None, num_steps=10):
                                     evaluation_strategy=args.evaluation_strategy,
                                     load_best_model_at_end=args.load_best_model_at_end,
                                     no_cuda=args.no_cuda,
-                                    eval_steps=args.eval_steps)
+                                    eval_steps=args.eval_steps,
+                                    )
 
 
 def prepare_and_run_sentiment_classifier(args, sentiment_classifier=None):
@@ -259,7 +260,9 @@ def prepare_and_run_sentiment_classifier(args, sentiment_classifier=None):
                                 save_strategy = args.save_strategy,
                                 evaluation_strategy = args.evaluation_strategy,
                                 load_best_model_at_end = args.load_best_model_at_end,
-                                no_cuda = args.no_cuda)
+                                no_cuda = args.no_cuda,
+                                eval_steps=args.eval_steps,
+                                run=args.run)
 
     return None
 
@@ -425,12 +428,13 @@ if __name__ == "__main__":
     parser.add_argument('--swag_cfg', default=None)
     parser.add_argument('--la_cfg', default=None)
     parser.add_argument('--logging_perc',type = float, default = 0.1) # for default from transformers
-    parser.add_argument('--save_strategy', default = 'no') # 'epoch' for default from transformers
+    parser.add_argument('--save_strategy', default = 'epoch') # 'epoch' for default from transformers
     parser.add_argument('--evaluation_strategy', default = 'steps')
-    parser.add_argument('--eval_steps', type = float, default = 0.1) # for default from transformers
+    parser.add_argument('--eval_steps', type = float, default = None) # for default from transformers
     parser.add_argument('--load_best_model_at_end', type=ast.literal_eval, default=False)
     parser.add_argument('--no_cuda', type=ast.literal_eval, default=False)
     parser.add_argument('--dataramping', type=ast.literal_eval, default=False)
+    parser.add_argument('--run', type=int, default=0)
 
     args = parser.parse_args()
 
