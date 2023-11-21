@@ -30,18 +30,19 @@ class SWAGExperiments:
         self.default_args = Namespace(**self.default_args)
         self.default_args.model_path = args.model_path
         self.default_args_swag = {'n_iterations_between_snapshots': 100,
-                                  'module_names': None, 'num_columns': 0, 'num_mc_samples': 50,
-                                  'min_var': 1e-20, 'reduction': 'mean', 'num_classes': 2}
+                                  'module_names': None, 'num_columns': 3, 'num_mc_samples': 50,
+                                  'min_var': 1e-20, 'reduction': 'mean', 'num_classes': 2,'optim_max_num_steps': 10,
+                                  'max_num_steps': 10}
 
         self.partial_constructor = None
 
         self.sentiment_classifier = None
-        self.train_loader, self.trainer, self.tokenized_val = None
+        self.train_loader, self.trainer, self.tokenized_val, self.optimizer = (None, None, None, None)
         self.loss_fn = nn.CrossEntropyLoss()
-        self.optimizer = None
+
 
     def initialize_sentiment_classifier(self):
-        self.sentiment_classifier = prepare_sentiment_classifier(**self.default_args)
+        self.sentiment_classifier = prepare_sentiment_classifier(self.default_args)
         self.loss_fn = nn.CrossEntropyLoss()
         self.train_loader, self.trainer, self.tokenized_val = self.sentiment_classifier.prepare_laplace(
             output_path=self.default_args.output_path,
@@ -81,13 +82,11 @@ class SWAGExperiments:
 
         max_num_steps = kwargs.get('max_num_steps', np.inf)
         counter = 0
-        for epoch in range(self.default_args.num_epochs):
+        for epoch in range(max(int(self.default_args.num_epochs), 1)):
             for step, x in enumerate(self.train_loader):
                 self.optimizer.zero_grad()
-                labels = x['labels']
                 out = self.partial_constructor(**x)
-                loss = self.loss_fn(out, labels)
-                loss.backwards()
+                out.loss.backward()
                 self.optimizer.step()
 
                 if self.partial_constructor.scheduler():
@@ -147,15 +146,27 @@ class SWAGExperiments:
 
 def run_random_ramping_experiments(args):
 
-    model_paths = []
-    args = {'model_path': model_paths[args.run_number],
+    model_paths = [r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"]
+    exp_args = {'model_path': model_paths[args.run_number],
             'dataset_name': args.dataset_name}
-    args = Namespace(**args)
-    lap_exp = SWAGExperiments(args = args)
-    lap_exp.random_ramping_experiment(args.run_number, args.uninformed_prior)
+    exp_args = Namespace(**exp_args)
+    swag_exp = SWAGExperiments(args = exp_args)
+    swag_exp.random_ramping_experiment(args.run_number)
 
 
+if __name__ == '__main__':
 
+    parser = argparse.ArgumentParser(
+        description="Run training and or evaluation of Sentiment Classifier with swag"
+    )
+    parser.add_argument("--run_number", type=int, default=0)
+    parser.add_argument('--dataset_name', type = str, default='imdb')
+    parser.add_argument('--experiment', type = str, default = '')
+    args = parser.parse_args()
+
+
+    if args.experiment == 'random_ramping':
+        run_random_ramping_experiments(args)
 
 
 
