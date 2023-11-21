@@ -99,6 +99,7 @@ class LaplaceExperiments:
 
     def optimize_prior_precision(self, num_steps=7):
 
+        self.best_nll = np.inf
         negative_log_likelihoods = []
         priors = [self.minimum_prior, self.maximum_prior]
         la = self.fit_laplace(prior_precision=self.minimum_prior)
