@@ -62,7 +62,8 @@ class LaplaceExperiments:
             eval_bs=default_args.eval_batch_size,
             dataset_name=default_args.dataset_name,
             device_batch_size=default_args.device_batch_size,
-            lr=default_args.learning_rate)
+            lr=default_args.learning_rate,
+            data_path = args.data_path)
 
         if not isinstance(self.sentiment_classifier.model, Extension):
             self.model = Extension(self.sentiment_classifier.model)
@@ -174,12 +175,14 @@ class LaplaceExperiments:
 
 def run_random_ramping_experiments(args):
 
-    model_paths = []
-    args = {'model_path': model_paths[args.run_number],
-            'dataset_name': args.dataset_name,
-            'num_optim_steps': 7}
-    args = Namespace(**args)
-    lap_exp = LaplaceExperiments(args = args)
+    model_paths = [0]
+    la_args = {'model_path': model_paths[args.run_number],
+               'dataset_name': args.dataset_name,
+               'num_optim_steps': 7}
+
+    la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
+    la_args = Namespace(**la_args)
+    lap_exp = LaplaceExperiments(args = la_args)
     lap_exp.random_ramping_experiment(args.run_number, args.uninformed_prior)
 
 
@@ -190,7 +193,7 @@ if __name__ == '__main__':
         description="Run training and or evaluation of Sentiment Classifier"
     )
     parser.add_argument("--run_number", type=int, default=0)
-    parser.add_argument('--dateset_name', type = str, default='IMDB')
+    parser.add_argument('--dataset_name', type = str, default='imdb')
     parser.add_argument('--uninformed_prior', type = ast.literal_eval, default=False)
     parser.add_argument('--experiment', type = str, default = '')
     args = parser.parse_args()

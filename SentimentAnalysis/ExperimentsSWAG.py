@@ -24,11 +24,12 @@ class SWAGExperiments:
                              'dataset_name': 'imdb',
                              'train': True, 'train_size': None, 'test_size': None, 'device_batch_size': 1,
                              'learning_rate': 5e-05, 'seed': 0, 'train_size': 2, 'test_size': 2,
-                             'laplace': True, 'swag': True, 'save_strategy': 'no',
+                             'laplace': True, 'swag': False, 'save_strategy': 'no',
                              'load_best_model_at_end': False, 'no_cuda': False}
 
         self.default_args = Namespace(**self.default_args)
         self.default_args.model_path = args.model_path
+        self.default_args.data_path = getattr(args, 'data_path', None)
         self.default_args_swag = {'n_iterations_between_snapshots': 100,
                                   'module_names': None, 'num_columns': 3, 'num_mc_samples': 50,
                                   'min_var': 1e-20, 'reduction': 'mean', 'num_classes': 2,'optim_max_num_steps': 10,
@@ -50,7 +51,8 @@ class SWAGExperiments:
             eval_bs=self.default_args.eval_batch_size,
             dataset_name=self.default_args.dataset_name,
             device_batch_size=self.default_args.device_batch_size,
-            lr=self.default_args.learning_rate)
+            lr=self.default_args.learning_rate,
+            data_path = self.default_args.data_path)
 
 
     def initialize_swag(self, model, **kwargs):
@@ -147,8 +149,10 @@ class SWAGExperiments:
 def run_random_ramping_experiments(args):
 
     model_paths = [r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"]
+    dataset_paths = []
     exp_args = {'model_path': model_paths[args.run_number],
-            'dataset_name': args.dataset_name}
+                'dataset_name': args.dataset_name,
+                'dataset_path': dataset_paths[args.run_number]}
     exp_args = Namespace(**exp_args)
     swag_exp = SWAGExperiments(args = exp_args)
     swag_exp.random_ramping_experiment(args.run_number)

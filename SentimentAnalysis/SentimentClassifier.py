@@ -36,6 +36,7 @@ class SentimentClassifier:
             self.model = AutoModelForSequenceClassification.from_pretrained(network_name,
                                                                             num_labels=2)
         else:
+
             self.model = AutoModelForSequenceClassification.from_pretrained(network_name,
                                                                             num_labels=2,
                                                                             label2id=label2id,
@@ -209,7 +210,12 @@ def prepare_sentiment_classifier(args, model_name="distilbert-base-uncased"):
     if args.dataset_name == 'imdb' or args.dataset_name == 'sst2':
         id2label = {0: "NEGATIVE", 1: "POSITIVE"}
         label2id = {"NEGATIVE": 0, "POSITIVE": 1}
-        sentiment_classifier = SentimentClassifier(model_name,
+        if hasattr(args, 'model_path'):
+            model_path_or_name = args.model_path
+        else:
+            model_path_or_name = model_name
+
+        sentiment_classifier = SentimentClassifier(model_path_or_name,
                                                    id2label=id2label,
                                                    label2id=label2id,
                                                    train_size=args.train_size,
