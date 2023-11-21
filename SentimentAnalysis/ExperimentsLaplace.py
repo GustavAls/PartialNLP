@@ -42,7 +42,12 @@ class LaplaceExperiments:
                              'laplace': True, 'swag': False, 'save_strategy': 'no',
                              'load_best_model_at_end': False, 'no_cuda': False}
 
+        self.base_full_prior = 1e4
+        self.base_min_prior = 1
+        self.num_params = 0
+        self.num_stoch_params = 0
         self.args = args
+        self.module_names = None
         self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
 
         default_args = Namespace(**self.default_args)
@@ -68,7 +73,9 @@ class LaplaceExperiments:
         partial_constructor = PartialConstructor(self.model)
         partial_constructor.select_random_percentile(num_params)
         partial_constructor.select()
-
+        self.num_stoch_params = partial_constructor.get_num_stochastic_parameters()
+        self.num_params = partial_constructor.get_num_params()
+        self.module_names = partial_constructor.module_names
     def fit_laplace(self, prior_precision=1.0):
         la = lp.Laplace(self.model, 'classification',
                         subset_of_weights='all',  # Deprecated
@@ -104,9 +111,13 @@ class LaplaceExperiments:
         priors = [self.minimum_prior, self.maximum_prior]
         if use_uninformed:
             UserWarning("Optimizing called but using uninformed prior")
-            la = self.fit_laplace(prior_precision=10)
+            percentage_of_stoch_params = self.num_stoch_params/self.num_params
+            coeff = (self.base_full_prior - self.base_min_prior)
+            prior = self.base_min_prior + coeff * percentage_of_stoch_params
+            la = self.fit_laplace(prior_precision=prior)
             return la
 
+        la = self.fit_laplace(prior_precision=self.minimum_prior)
         best_la = copy.deepcopy(la)
         evaluator = utils.evaluate_laplace(la, self.trainer, self.tokenized_val)
         negative_log_likelihoods.append(evaluator.results['nll'])
@@ -141,17 +152,19 @@ class LaplaceExperiments:
             else:
                 os.mkdir(path)
 
+
     def random_ramping_experiment(self, run_number = 0, use_uninformed = False):
 
         print("Running random ramping experiment on ", self.default_args.dataset_name)
-        results = {}
+        results = {'results': {}, 'module_selection': {}}
 
         for num_modules in self.num_modules:
             self.create_partial_random_ramping_construction(num_modules)
             la = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed = use_uninformed)
             evaluator = utils.evaluate_laplace(la, self.trainer)
             evaluator.results['prior_precision'] = self.best_nll
-            results[num_modules] = copy.deepcopy(evaluator)
+            results['results'][num_modules] = copy.deepcopy(evaluator)
+            results['module_selection'][num_modules] = copy.deepcopy(self.module_names)
 
         save_path = os.path.join(self.args.output_path, 'random_module_ramping')
         self.ensure_path_existence(save_path)

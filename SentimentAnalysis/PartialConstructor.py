@@ -53,6 +53,11 @@ class PartialConstructor:
         setattr(self.model, 'num_partial_layers', counter)
         return None
 
+    def get_num_stochastic_parameters(self):
+        return len(nn.utils.parameters_to_vector(param for param in self.model.parameters() if param.requires_grad))
+
+    def get_num_params(self):
+        len(nn.utils.parameters_to_vector(self.model.parameters()))
     def get_subnetwork_indices(self):
         #  TODO implement subnetwork indices selection for partial within module work
         return self.subnet_indices
