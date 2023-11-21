@@ -58,7 +58,7 @@ class Evaluator:
 
         if results is None:
             results = {}
-        results['nll'] = self.nll_metric(self.predictions, self.labels)
+        results['nll'] = self.nll_metric(self.predictions, self.labels).item()
 
         for key, val in self.torchmetrics_.items():
             results[key] = val(self.predictions, self.labels).item()

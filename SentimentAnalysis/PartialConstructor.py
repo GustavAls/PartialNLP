@@ -92,7 +92,7 @@ def identity_reduction(predictions):
 
 class PartialConstructorSwag:
     def __init__(self, model, n_iterations_between_snapshots=100, module_names=None, num_columns=0, num_mc_samples=50,
-                 min_var=1e-20, reduction='mean', num_classes=2):
+                 min_var=1e-20, reduction='mean', num_classes=2, **kwargs):
 
         self.model = model
         self.device = next(model.parameters()).device
@@ -136,8 +136,11 @@ class PartialConstructorSwag:
 
     def select_random_percentile(self, num_params):
 
-        names = [name for name, _ in self.model.named_modules()]
-        self.module_names = np.random.choice(names, size = (num_params))
+        names = []
+        for name, module in self.model.named_modules():
+            if isinstance(module, TRANSFORMER_COMPATIBLE_MODULES):
+                names.append(name)
+        self.module_names = np.random.choice(names, size = (num_params, ))
 
 
     def _init_parameters(self):
@@ -156,7 +159,7 @@ class PartialConstructorSwag:
         self._init_parameters()
         self.step_counter = 0
         self.train()
-
+        self.deviations = []
 
     def select(self):
         for name, module in self.model.named_modules():
@@ -217,13 +220,15 @@ class PartialConstructorSwag:
 
     def sample(self):
 
+        num_columns = self.deviations.shape[-1]
         z1 = torch.normal(mean=torch.zeros((self.theta_mean.numel())), std=1.0).to(self.device)
-        z2 = torch.normal(mean=torch.zeros(self.num_columns), std=1.0).to(self.device)
+        z2 = torch.normal(mean=torch.zeros(num_columns), std=1.0).to(self.device)
 
         if self.num_columns > 0:
             theta = self.theta_mean + 2 ** -0.5 * (self.squared_theta_mean ** 0.5 * z1) + (
                     2 * (self.num_columns - 1)) ** -0.5 * (
                             self.deviations @ z2[:, None]).flatten()
+
         else:
             theta = self.theta_mean + self.squared_theta_mean * z1
 
@@ -234,13 +239,14 @@ class PartialConstructorSwag:
         batch_size = kwargs['input_ids'].shape[0]
         predictions = torch.zeros((batch_size, self.num_classes, self.num_mc_samples))
 
+        softmax = nn.Softmax(dim = 1)
         for mc_sample in range(self.num_mc_samples):
+            self.sample()
             out = self.model(**kwargs)
             predictions[:, :, mc_sample] = out.logits.detach()
-
+        predictions = softmax(predictions)
         predictions = self.reduction(predictions)
         return predictions
-
 
 
 class Extension(nn.Module):
