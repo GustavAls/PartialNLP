@@ -97,12 +97,16 @@ class LaplaceExperiments:
 
         return minimum_prediction
 
-    def optimize_prior_precision(self, num_steps=7):
+    def optimize_prior_precision(self, num_steps=7, use_uninformed = False):
 
         self.best_nll = np.inf
         negative_log_likelihoods = []
         priors = [self.minimum_prior, self.maximum_prior]
-        la = self.fit_laplace(prior_precision=self.minimum_prior)
+        if use_uninformed:
+            UserWarning("Optimizing called but using uninformed prior")
+            la = self.fit_laplace(prior_precision=10)
+            return la
+
         best_la = copy.deepcopy(la)
         evaluator = utils.evaluate_laplace(la, self.trainer, self.tokenized_val)
         negative_log_likelihoods.append(evaluator.results['nll'])
@@ -137,14 +141,14 @@ class LaplaceExperiments:
             else:
                 os.mkdir(path)
 
-    def random_ramping_experiment(self, run_number = 0):
+    def random_ramping_experiment(self, run_number = 0, use_uninformed = False):
 
         print("Running random ramping experiment on ", self.default_args.dataset_name)
         results = {}
 
         for num_modules in self.num_modules:
             self.create_partial_random_ramping_construction(num_modules)
-            la = self.optimize_prior_precision(self.args.num_optim_steps)
+            la = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed = use_uninformed)
             evaluator = utils.evaluate_laplace(la, self.trainer)
             evaluator.results['prior_precision'] = self.best_nll
             results[num_modules] = copy.deepcopy(evaluator)
@@ -155,13 +159,30 @@ class LaplaceExperiments:
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-if __name__ == '__main__':
+def run_random_ramping_experiments(args):
 
-    args = {'model_path': r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782",
-            'dataset_name': 'imdb',
+    model_paths = []
+    args = {'model_path': model_paths[args.run_number],
+            'dataset_name': args.dataset_name,
             'num_optim_steps': 7}
     args = Namespace(**args)
     lap_exp = LaplaceExperiments(args = args)
-    lap_exp.random_ramping_experiment()
+    lap_exp.random_ramping_experiment(args.run_number, args.uninformed_prior)
+
+
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(
+        description="Run training and or evaluation of Sentiment Classifier"
+    )
+    parser.add_argument("--run_number", type=int, default=0)
+    parser.add_argument('--dateset_name', type = str, default='IMDB')
+    parser.add_argument('--uninformed_prior', type = ast.literal_eval, default=False)
+    parser.add_argument('--experiment', type = str, default = '')
+    args = parser.parse_args()
+
+    if args.experiment == 'random_ramping':
+        run_random_ramping_experiments(args)
 
 

@@ -31,6 +31,7 @@ import uncertainty_toolbox as uct
 from torch.nn import BCELoss, CrossEntropyLoss
 from sklearn.metrics import f1_score, balanced_accuracy_score, accuracy_score
 from torchmetrics.classification import BinaryCalibrationError, MulticlassCalibrationError
+
 def save_laplace(save_path, laplace_cfg, **kwargs):
     pass
 
@@ -105,3 +106,21 @@ def evaluate_laplace(la, trainer: Trainer, eval_dataset = None):
     evaluator.get_all_metrics()
     return evaluator
 
+
+def evaluate_swag(swag: PartialConstructorSwag,trainer: Trainer, eval_dataset = None):
+
+    eval_dataset = trainer.get_eval_dataloader(eval_dataset=eval_dataset)
+    swag.eval()
+
+    predictions, labels = [], []
+    for step, x in enumerate(eval_dataset):
+        output = swag.predict_mc(**x)
+        predictions.append(output)
+        labels.append(x['labels'])
+
+    predictions, labels = (torch.cat(predictions, dim = 0).detach().cpu(),
+                           torch.cat(labels, dim = 0).detach().cpu())
+
+    evaluator = Evaluator(predictions, labels)
+    evaluator.get_all_metrics()
+    return evaluator

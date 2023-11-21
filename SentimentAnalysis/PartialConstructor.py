@@ -90,10 +90,9 @@ def identity_reduction(predictions):
     return predictions
 
 
-class PartialConstructorSwag(nn.Module):
+class PartialConstructorSwag:
     def __init__(self, model, n_iterations_between_snapshots=100, module_names=None, num_columns=0, num_mc_samples=50,
                  min_var=1e-20, reduction='mean', num_classes=2):
-        super(PartialConstructorSwag, self).__init__()
 
         self.model = model
         self.device = next(model.parameters()).device
@@ -105,7 +104,7 @@ class PartialConstructorSwag(nn.Module):
         self.num_mc_samples = num_mc_samples
         self.min_var = min_var
         self.num_classes = num_classes
-
+        self.is_training = True
         if reduction == 'mean':
             self.reduction = mean_reduction
 
@@ -121,6 +120,12 @@ class PartialConstructorSwag(nn.Module):
         self.n_snapshots = 0
         self.theta_mean = None
         self.swag_eval = False
+        self.step_counter = 0
+
+    def train(self, is_training = True):
+        self.is_training = is_training
+    def eval(self):
+        return self.eval_swa()
 
     def parameter_to_vector(self):
         return nn.utils.parameters_to_vector((param for param in self.model.parameters() if param.requires_grad))
@@ -128,6 +133,12 @@ class PartialConstructorSwag(nn.Module):
     def vector_to_parameters(self, param_new):
         return nn.utils.vector_to_parameters(param_new,
                                              (param for param in self.model.parameters() if param.requires_grad))
+
+    def select_random_percentile(self, num_params):
+
+        names = [name for name, _ in self.model.named_modules()]
+        self.module_names = np.random.choice(names, size = (num_params))
+
 
     def _init_parameters(self):
 
@@ -138,6 +149,14 @@ class PartialConstructorSwag(nn.Module):
         self.n_parameters = len(parameters_to_learn)
         self.theta_mean = torch.zeros_like(parameters_to_learn)
         self.squared_theta_mean = torch.zeros_like(parameters_to_learn)
+
+    def init_new_model_for_optim(self, model):
+        self.model = model
+        self.select()
+        self._init_parameters()
+        self.step_counter = 0
+        self.train()
+
 
     def select(self):
         for name, module in self.model.named_modules():
@@ -163,7 +182,7 @@ class PartialConstructorSwag(nn.Module):
             self.deviations.append(deviation.reshape(-1, 1))
 
     def scheduler(self):
-        return (self.forward_call_iterator % self.number_of_iterations_bs == 0) and self.forward_call_iterator > 0
+        return (self.step_counter+1) % self.number_of_iterations_bs == 0
 
     def eval_swa(self):
         self.swag_eval = True
@@ -172,7 +191,7 @@ class PartialConstructorSwag(nn.Module):
 
         return self.train(False)
 
-    def forward(self,
+    def __call__(self,
                 input_ids=None,
                 attention_mask=None,
                 head_mask=None,
@@ -183,13 +202,17 @@ class PartialConstructorSwag(nn.Module):
                 return_dict=None
                 ):
 
-        if not self.swag_eval:
-            self.forward_call_iterator += 1
-            if self.scheduler():
-                self.snapshot()
 
-        out = self.model(input_ids, attention_mask, head_mask, inputs_embeds, labels, output_attentions,
+        if self.is_training:
+            out = self.model(input_ids, attention_mask, head_mask, inputs_embeds, labels, output_attentions,
                          output_hidden_states, return_dict)
+            self.step_counter += 1
+
+        else:
+            kwargs = {'input_ids': input_ids, 'attention_mask': attention_mask, 'head_mask': head_mask,
+                      'input_embeds': inputs_embeds, 'labels': labels, 'output_attentions': output_attentions,
+                      'output_hidden_states': output_hidden_states, 'return_dict': return_dict}
+            out = self.predict_mc(**kwargs)
         return out
 
     def sample(self):
