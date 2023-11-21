@@ -92,7 +92,7 @@ class SentimentClassifier:
             train_data, test_data, val_data = self.load_text_dataset(dataset_name=dataset_name, seed=seed)
             for name, data in zip(split_names, [train_data, test_data, val_data]):
                 data_path = os.path.join(output_path, f'{name}_data_run_{run}.csv')
-                data_csv = data.to_csv(data_path)
+                data.to_csv(data_path)
         else:
             for name in split_names:
                 data_csv = load_dataset('csv', data_files=f'{name}_data_run_{run}.csv')
