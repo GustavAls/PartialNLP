@@ -52,6 +52,7 @@ class SentimentClassifier:
             self.train_size = int(len(data['train']) * self.train_size)
 
         if self.train_size == 1.0:
+            # Use data.train_test_split(test_size=0.1)?
             train_data_length = len(data['train']['label'])
             validation_data_indices = set(list(np.random.choice(range(train_data_length), int(train_data_length/5))))
             training_data_indices = set(range(train_data_length))-validation_data_indices
@@ -86,15 +87,21 @@ class SentimentClassifier:
                train=True, logging_perc = -1, save_strategy = 'epoch', evaluation_strategy='epoch',
                load_best_model_at_end = False, no_cuda = False, eval_steps=-1, data_path = None, run=0):
 
+        split_names = ["train", "val", "test"]
         if data_path is None:
             train_data, test_data, val_data = self.load_text_dataset(dataset_name=dataset_name, seed=seed)
-            with open(os.path.join(output_path, f'data_run_{run}.pkl'), 'wb') as handle:
-                pickle.dump({'train_data': train_data, 'test_data': test_data, 'val_data': val_data},
-                            handle, protocol=pickle.HIGHEST_PROTOCOL)
-
+            for name, data in zip(split_names, [train_data, test_data, val_data]):
+                data_path = os.path.join(output_path, f'{name}_data_run_{run}.csv')
+                data_csv = data.to_csv(data_path)
         else:
-            data = pickle.load(open(data_path, 'rb'))
-            train_data, test_data, val_data = data['train_data'], data['test_data'], data['val_data']
+            for name in split_names:
+                data_csv = load_dataset('csv', data_files=f'{name}_data_run_{run}.csv')
+                if name == "train":
+                    train_data = data_csv
+                elif name == "val":
+                    val_data = data_csv
+                elif name == "test":
+                    test_data = data_csv
 
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
