@@ -83,10 +83,7 @@ class SentimentClassifier:
         f1 = load_f1.compute(predictions=predictions, references=labels)["f1"]
         return {"accuracy": accuracy, "f1": f1}
 
-    def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, lr=5e-05, seed=0,
-               train=True, logging_perc = -1, save_strategy = 'epoch', evaluation_strategy='epoch',
-               load_best_model_at_end = False, no_cuda = False, eval_steps=-1, data_path = None, run=0):
-
+    def load_save_dataset(self, train_data, test_data, val_data, data_path, dataset_name, seed):
         split_names = ["train", "val", "test"]
         if data_path is None:
             train_data, test_data, val_data = self.load_text_dataset(dataset_name=dataset_name, seed=seed)
@@ -103,6 +100,17 @@ class SentimentClassifier:
                     val_data = data_csv
                 elif name == "test":
                     test_data = data_csv
+        return train_data, val_data, test_data
+
+
+    def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, lr=5e-05, seed=0,
+               train=True, logging_perc = -1, save_strategy = 'epoch', evaluation_strategy='epoch',
+               load_best_model_at_end = False, no_cuda = False, eval_steps=-1, data_path = None, run=0):
+
+        train_data, val_data, test_data = self.load_save_dataset(train_data=train_data,
+                                                                 val_data=val_data, test_data=test_data,
+                                                                 data_path=data_path, dataset_name=dataset_name,
+                                                                 seed=seed)
 
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
@@ -128,12 +136,6 @@ class SentimentClassifier:
                                           logging_steps=logging_perc,
                                           no_cuda=no_cuda)
 
-
-        # self.model = PartialConstructorSwag(self.model, n_iterations_between_snapshots=1,
-        #                                     module_names=['classifier'],
-        #                                     num_columns=10)
-        # self.model.select()
-
         trainer = Trainer(
             model=self.model,
             args=training_args,
@@ -152,7 +154,7 @@ class SentimentClassifier:
             print("Evaluation is done")
 
     def prepare_laplace(self, output_path, train_bs, eval_bs, dataset_name, device_batch_size, lr=5e-05,
-                        data_path = None):
+                        data_path = None, seed = 42):
         """
 
         :param output_path: Ouput path, for compatibility with other function calls, this function does not save
@@ -163,19 +165,13 @@ class SentimentClassifier:
         :return: None
         """
 
-        if data_path is None:
-            train_data, test_data, val_data = self.load_text_dataset(dataset_name=dataset_name, seed=0)
-            with open(os.path.join(output_path, 'data_pickle.pkl'), 'wb') as handle:
-                pickle.dump({'train_data': train_data, 'test_data': test_data, 'val_data': val_data},
-                            handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-        else:
-            data = pickle.load(open(data_path, 'rb'))
-            train_data, test_data, val_data = data['train_data'], data['test_data'], data['val_data']
+        train_data, val_data, test_data = self.load_save_dataset(train_data=train_data, test_data=test_data,
+                                                                 val_data=val_data, data_path=data_path,
+                                                                 dataset_name=dataset_name, seed=seed)
 
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
-        tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
         tokenized_val = val_data.map(self.tokenize, batched=True, batch_size=eval_bs)
+        tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
 
         training_args = TrainingArguments(output_dir=output_path,
                                           learning_rate=lr,
@@ -185,10 +181,8 @@ class SentimentClassifier:
                                           num_train_epochs=1,
                                           evaluation_strategy="epoch",
                                           save_strategy="epoch",
-                                          load_best_model_at_end=True,
                                           weight_decay=0.01,
-                                          laplace=True
-                                          )
+                                          laplace=True)
 
         trainer = Trainer(
             model=self.model,
@@ -281,7 +275,8 @@ def construct_laplace(sent_class, laplace_cfg, args):
                                                        eval_bs=args.eval_batch_size,
                                                        dataset_name=args.dataset_name,
                                                        device_batch_size=args.device_batch_size,
-                                                       lr=args.learning_rate)
+                                                       lr=args.learning_rate,
+                                                       seed=args.seed)
 
     if not isinstance(sent_class.model, Extension):
         model = Extension(sent_class.model)
@@ -435,11 +430,10 @@ if __name__ == "__main__":
     parser.add_argument('--swag', type=ast.literal_eval, default=False)
     parser.add_argument('--swag_cfg', default=None)
     parser.add_argument('--la_cfg', default=None)
-    parser.add_argument('--logging_perc',type = float, default = -1) # for default from transformers
-    parser.add_argument('--eval_steps', type = float, default = -1) # for default from transformers
+    parser.add_argument('--logging_perc',type = float, default = -1) # -1 for default from transformers
+    parser.add_argument('--eval_steps', type = float, default = -1) # -1 for default from transformers
     parser.add_argument('--save_strategy', default = 'epoch') # 'epoch' for default from transformers
-    parser.add_argument('--evaluation_strategy', default = 'steps')
-    parser.add_argument('--load_best_model_at_end', type=ast.literal_eval, default=False)
+    parser.add_argument('--evaluation_strategy', default = 'epoch')
     parser.add_argument('--no_cuda', type=ast.literal_eval, default=False)
     parser.add_argument('--dataramping', type=ast.literal_eval, default=False)
     parser.add_argument('--run', type=int, default=0)
