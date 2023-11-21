@@ -36,7 +36,7 @@ class LaplaceExperiments:
     def __init__(self, args):
         self.default_args = {'output_path': 'C:\\Users\\45292\\Documents\\Master\\SentimentClassification',
                              'train_batch_size': 1, 'eval_batch_size': 1, 'device': 'cpu', 'num_epochs': 1.0,
-                             'dataset_name': 'imdb',
+                             'dataset_name': 'imdb','val_size': 2,
                              'train': True, 'train_size': None, 'test_size': None, 'device_batch_size': 1,
                              'learning_rate': 5e-05, 'seed': 0, 'train_size': 2, 'test_size': 2,
                              'laplace': True, 'swag': False, 'save_strategy': 'no',
@@ -63,7 +63,8 @@ class LaplaceExperiments:
             dataset_name=default_args.dataset_name,
             device_batch_size=default_args.device_batch_size,
             lr=default_args.learning_rate,
-            data_path = args.data_path)
+            data_path = args.data_path,
+            run=args.run_number)
 
         if not isinstance(self.sentiment_classifier.model, Extension):
             self.model = Extension(self.sentiment_classifier.model)
@@ -175,16 +176,19 @@ class LaplaceExperiments:
 
 def run_random_ramping_experiments(args):
 
-    model_paths = [0]
-    la_args = {'model_path': model_paths[args.run_number],
-               'dataset_name': args.dataset_name,
-               'num_optim_steps': 7}
+    data_path = args.data_path
+    model_path = args.model_path
 
-    la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
+    la_args = {'model_path': model_path,
+               'dataset_name': args.dataset_name,
+               'num_optim_steps': 7,
+               'data_path': data_path,
+               'run_number': args.run_number}
+
+    # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
     la_args = Namespace(**la_args)
     lap_exp = LaplaceExperiments(args = la_args)
     lap_exp.random_ramping_experiment(args.run_number, args.uninformed_prior)
-
 
 
 if __name__ == '__main__':
@@ -196,6 +200,8 @@ if __name__ == '__main__':
     parser.add_argument('--dataset_name', type = str, default='imdb')
     parser.add_argument('--uninformed_prior', type = ast.literal_eval, default=False)
     parser.add_argument('--experiment', type = str, default = '')
+    parser.add_argument('--data_path', type = str, default='')
+    parser.add_argument('--model_path', type = str, default='')
     args = parser.parse_args()
 
     if args.experiment == 'random_ramping':

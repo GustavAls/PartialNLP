@@ -88,17 +88,18 @@ class SentimentClassifier:
         split_names = ["train", "val", "test"]
         if data_path is None:
             train_data, test_data, val_data = self.load_text_dataset(dataset_name=dataset_name)
-            for name, data in zip(split_names, [train_data, test_data, val_data]):
-                data_path = os.path.join(output_path, f'{name}_data_run_{run}.csv')
+            for split, data in zip(split_names, [train_data, test_data, val_data]):
+                data_path = os.path.join(output_path, f'{split}_data_run_{run}.csv')
                 data.to_csv(data_path)
         else:
-            for name in split_names:
-                data_csv_path = os.path.join(data_path, f'{name}_data_run_{run}.csv')
-                if name == "train":
+            for split in split_names:
+                data_csv_path = os.path.join(os.path.join(data_path, f"run_{run}"), f'{split}_data_run_{run}.csv')
+
+                if split == "train":
                     train_data = HuggingFaceDataset.from_csv(data_csv_path)
-                elif name == "val":
+                elif split == "val":
                     val_data = HuggingFaceDataset.from_csv(data_csv_path)
-                elif name == "test":
+                elif split == "test":
                     test_data = HuggingFaceDataset.from_csv(data_csv_path)
 
             if 0 < self.train_size <= 1:
