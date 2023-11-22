@@ -94,6 +94,7 @@ class SWAGExperiments:
                     self.partial_constructor.snapshot()
 
                 if counter == max_num_steps:
+                    self.partial_constructor.snapshot()
                     return self.partial_constructor
 
                 counter += 1
