@@ -104,7 +104,7 @@ class SentimentClassifier:
         dataframe_test.to_csv(os.path.join(output_path, f'test_data.csv'))
         print("Saved train, val, test to csv files in ")
 
-    def load_save_dataset(self, data_path, dataset_name, run, output_path):
+    def load_save_dataset(self, data_path, dataset_name, run, output_path = None):
         split_names = ["train", "val", "test"]
         if data_path is None:
             train_data, test_data, val_data = self.load_text_dataset(dataset_name=dataset_name)
