@@ -31,7 +31,7 @@
 
 # Activate the python environment
 module load python3/3.9.11
-source ~/PartialNLP/partial_venv/bin/activate
+source ~/PartialNLP/scratch/s184400/partial_venv/bin/activate
 # Set python path
 export PYTHONPATH=$PYTHONPATH:~/PartialNLP/
 export PYTHONPATH=$PYTHONPATH:~/
