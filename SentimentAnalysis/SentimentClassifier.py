@@ -5,6 +5,7 @@ import pickle
 import torch
 from datasets import load_dataset
 from datasets import Dataset as HuggingFaceDataset
+import pandas as pd
 import evaluate
 from transformers import (AutoTokenizer,
                           DataCollatorWithPadding,
@@ -84,13 +85,27 @@ class SentimentClassifier:
         f1 = load_f1.compute(predictions=predictions, references=labels)["f1"]
         return {"accuracy": accuracy, "f1": f1}
 
-    def load_save_dataset(self, data_path, dataset_name, run):
+
+    def to_dataframe(self, dataset):
+        dataframe = pd.DataFrame()
+        dataframe['text'] = dataset['text']
+        dataframe['label'] = dataset['label']
+        return dataframe
+    def data_to_csv(self, train, val, test, output_path, run):
+
+        dataframe_train = self.to_dataframe(train)
+        dataframe_train.to_csv(os.path.join(output_path, f'train_data_run_{run}.csv'))
+        dataframe_val = self.to_dataframe(val)
+        dataframe_val.to_csv(os.path.join(output_path, f'val_data_run_{run}.csv'))
+        dataframe_test = self.to_dataframe(test)
+        dataframe_test.to_csv(os.path.join(output_path, f'val_data_run_{run}.csv'))
+        print("Saved train, val, test to csv files in ")
+
+    def load_save_dataset(self, data_path, dataset_name, run, output_path):
         split_names = ["train", "val", "test"]
         if data_path is None:
             train_data, test_data, val_data = self.load_text_dataset(dataset_name=dataset_name)
-            for split, data in zip(split_names, [train_data, test_data, val_data]):
-                data_path = os.path.join(output_path, f'{split}_data_run_{run}.csv')
-                data.to_csv(data_path)
+            self.data_to_csv(train_data, val_data, test_data, output_path, run)
         else:
             for split in split_names:
                 data_csv_path = os.path.join(os.path.join(data_path, f"run_{run}"), f'{split}_data_run_{run}.csv')
@@ -130,7 +145,7 @@ class SentimentClassifier:
 
         training_args = TrainingArguments(output_dir=output_path,
                                           learning_rate=lr,
-                                          do_train=train,
+                                          do_train=True,
                                           per_device_train_batch_size=device_batch_size,
                                           per_device_eval_batch_size=device_batch_size,
                                           num_train_epochs=num_epochs,
