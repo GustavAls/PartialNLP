@@ -38,6 +38,17 @@ class PartialConstructor:
                 names.append(name)
         self.module_names = np.random.choice(names, size=(num_params, ))
 
+    def select_max_operator_norm(self, num_params):
+
+        names, norms = [], []
+        for name, module in self.model.named_modules():
+            if isinstance(module, TRANSFORMER_COMPATIBLE_MODULES):
+                names.append(name)
+                norms.append(torch.linalg.matrix_norm(module.weight.data, ord = 2).item())
+
+        argsorted = np.argsort(norms)
+        self.module_names = [names[i] for i in argsorted[::-1][:num_params]]
+
     def select(self):
         counter = 0
         for name, module in self.model.named_modules():
@@ -146,6 +157,17 @@ class PartialConstructorSwag:
             if isinstance(module, TRANSFORMER_COMPATIBLE_MODULES):
                 names.append(name)
         self.module_names = np.random.choice(names, size = (num_params, ))
+
+    def select_max_operator_norm(self, num_params):
+
+        names, norms = [], []
+        for name, module in self.model.named_modules():
+            if isinstance(module, TRANSFORMER_COMPATIBLE_MODULES):
+                names.append(name)
+                norms.append(torch.linalg.matrix_norm(module.weight.data, ord = 2).item())
+
+        argsorted = np.argsort(norms)
+        self.module_names = [names[i] for i in argsorted[::-1][:num_params]]
 
 
     def _init_parameters(self):

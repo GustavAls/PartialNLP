@@ -78,6 +78,15 @@ class LaplaceExperiments:
         self.num_stoch_params = partial_constructor.get_num_stochastic_parameters()
         self.num_params = partial_constructor.get_num_params()
         self.module_names = partial_constructor.module_names
+
+    def create_partial_max_norm_ramping(self, num_params):
+        partial_constructor = PartialConstructor(self.model)
+        partial_constructor.select_max_operator_norm(num_params)
+        partial_constructor.select()
+        self.num_stoch_params = partial_constructor.get_num_stochastic_parameters()
+        self.num_params = partial_constructor.get_num_params()
+        self.module_names = partial_constructor.module_names
+
     def fit_laplace(self, prior_precision=1.0):
         la = lp.Laplace(self.model, 'classification',
                         subset_of_weights='all',  # Deprecated
@@ -173,6 +182,24 @@ class LaplaceExperiments:
         with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+    def max_norm_ramping_experiment(self, run_number = 0, use_uninformed = False):
+
+        print("Running random ramping experiment on ", self.default_args.dataset_name)
+        results = {'results': {}, 'module_selection': {}}
+
+        for num_modules in self.num_modules:
+            self.create_partial_max_norm_ramping(num_modules)
+            la = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed = use_uninformed)
+            evaluator = utils.evaluate_laplace(la, self.trainer)
+            evaluator.results['prior_precision'] = self.best_nll
+            results['results'][num_modules] = copy.deepcopy(evaluator)
+            results['module_selection'][num_modules] = copy.deepcopy(self.module_names)
+
+        save_path = os.path.join(self.args.output_path, 'random_module_ramping')
+        self.ensure_path_existence(save_path)
+        with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
+            pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
 
 def run_random_ramping_experiments(args):
 
@@ -194,6 +221,28 @@ def run_random_ramping_experiments(args):
     lap_exp.random_ramping_experiment(args.run_number, args.uninformed_prior)
 
 
+def run_max_norm_ramping_experiments(args):
+
+    data_path = args.data_path
+    model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
+
+    model_path = os.path.join(data_path, model_ext_path)
+    args.model_path = model_path
+    la_args = {'model_path': model_path,
+               'dataset_name': args.dataset_name,
+               'num_optim_steps': 7,
+               'data_path': data_path,
+               'run_number': args.run_number,
+               'output_path': args.output_path}
+
+    # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
+    la_args = Namespace(**la_args)
+    lap_exp = LaplaceExperiments(args = la_args)
+    lap_exp.max_norm_ramping_experiment(args.run_number, args.uninformed_prior)
+
+
+
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(
@@ -211,6 +260,7 @@ if __name__ == '__main__':
     if args.experiment == 'random_ramping':
         run_random_ramping_experiments(args)
 
-
+    if args.experiment == 'operator_norm_ramping':
+        run_max_norm_ramping_experiments(args)
 
 

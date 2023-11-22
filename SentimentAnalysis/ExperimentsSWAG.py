@@ -31,7 +31,7 @@ class SWAGExperiments:
         # peters_default_args = {'output_path': args.output_path,
         #                      'train_batch_size': 1, 'eval_batch_size': 1, 'device': 'cpu', 'num_epochs': 1.0,
         #                      'dataset_name': 'imdb',
-        #                          'train': True, 'train_size': 2, 'test_size':2, 'device_batch_size': 1,
+        #                          'train': True, 'train_size': 2, 'test_size':5, 'device_batch_size': 1,
         #                      'learning_rate': 5e-05, 'seed': 0, 'val_size': 2,
         #                      'laplace': True, 'swag': False, 'save_strategy': 'no',
         #                      'load_best_model_at_end': False, 'no_cuda': False}
@@ -67,6 +67,10 @@ class SWAGExperiments:
 
         kwargs = kwargs if len(kwargs) > 0 else self.default_args_swag
         self.partial_constructor = PartialConstructorSwag(model, **kwargs)
+
+    def create_partial_max_operator_norm(self, num_params):
+        self.partial_constructor.select_max_operator_norm(num_params)
+        self.partial_constructor.select()
 
     def create_partial_random_ramping_construction(self, num_params):
         self.partial_constructor.select_random_percentile(num_params)
@@ -165,6 +169,33 @@ class SWAGExperiments:
         with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+    def max_norm_ramping_experiment(self, run_number=0):
+
+        num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
+        results = {}
+        for number_of_modules in num_modules:
+            print("Training with number of stochastic modules equal to", number_of_modules)
+            self.initialize_sentiment_classifier()
+            self.initialize_swag(copy.deepcopy(self.trainer.model))
+            self.create_partial_max_operator_norm(number_of_modules)
+            optimimum_learning_rate = self.optimize_lr()
+
+            train_kwargs = {'learning_rate': optimimum_learning_rate,
+                            'max_num_steps': self.default_args_swag['max_num_steps']}
+
+            self.partial_constructor.init_new_model_for_optim(copy.deepcopy(self.trainer.model))
+            self.fit(**train_kwargs)
+
+            evaluator = utils.evaluate_swag(self.partial_constructor, self.trainer)
+            results[number_of_modules] = evaluator
+
+        save_path = os.path.join(self.default_args.output_path, 'random_module_ramping')
+        self.ensure_path_existence(save_path)
+        with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
+            pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+
 
 def run_random_ramping_experiments(args):
     data_path = args.data_path
@@ -181,6 +212,20 @@ def run_random_ramping_experiments(args):
     swag_exp = SWAGExperiments(args=exp_args)
     swag_exp.random_ramping_experiment(args.run_number)
 
+def run_max_norm_ramping_experiments(args):
+    data_path = args.data_path
+    model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
+
+    model_path = os.path.join(data_path, model_ext_path)
+    args.model_path = model_path
+    exp_args = {'model_path': model_path,
+                'dataset_name': args.dataset_name,
+                'data_path': data_path,
+                'output_path': args.output_path}
+
+    exp_args = Namespace(**exp_args)
+    swag_exp = SWAGExperiments(args=exp_args)
+    swag_exp.max_norm_ramping_experiment(args.run_number)
 
 if __name__ == '__main__':
 
@@ -197,3 +242,5 @@ if __name__ == '__main__':
 
     if args.experiment == 'random_ramping':
         run_random_ramping_experiments(args)
+    if args.experiment == 'operator_norm_ramping':
+        run_max_norm_ramping_experiments(args)
