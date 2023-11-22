@@ -155,8 +155,8 @@ class PartialConstructorSwag:
 
         parameters_to_learn = self.parameter_to_vector()
         self.n_parameters = len(parameters_to_learn)
-        self.theta_mean = torch.zeros_like(parameters_to_learn)
-        self.squared_theta_mean = torch.zeros_like(parameters_to_learn)
+        self.theta_mean = torch.zeros_like(parameters_to_learn).to(self.device)
+        self.squared_theta_mean = torch.zeros_like(parameters_to_learn).to(self.device)
 
     def init_new_model_for_optim(self, model):
         self.model = model
