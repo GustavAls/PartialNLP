@@ -23,8 +23,8 @@ class SWAGExperiments:
         self.default_args = {'output_path': args.output_path,
                              'train_batch_size': 1, 'eval_batch_size': 1, 'device': 'cpu', 'num_epochs': 1.0,
                              'dataset_name': 'imdb',
-                             'train': True, 'train_size': None, 'test_size': None, 'device_batch_size': 1,
-                             'learning_rate': 5e-05, 'seed': 0, 'val_size': None,
+                                 'train': True, 'train_size': 20, 'test_size': 20, 'device_batch_size': 1,
+                             'learning_rate': 5e-05, 'seed': 0, 'val_size': 20,
                              'laplace': True, 'swag': False, 'save_strategy': 'no',
                              'load_best_model_at_end': False, 'no_cuda': False}
 
@@ -32,7 +32,7 @@ class SWAGExperiments:
         self.default_args.model_path = args.model_path
         self.default_args.data_path = getattr(args, 'data_path', None)
         self.default_args_swag = {'n_iterations_between_snapshots': 20,
-                                  'module_names': None, 'num_columns': 20, 'num_mc_samples': 200,
+                                  'module_names': None, 'num_columns': 20, 'num_mc_samples': 50,
                                   'min_var': 1e-20, 'reduction': 'mean', 'num_classes': 2, 'optim_max_num_steps': 400 ,
                                   'max_num_steps': 2000}
 
@@ -156,7 +156,7 @@ def run_random_ramping_experiments(args):
     args.model_path = model_path
     exp_args = {'model_path': model_path,
                 'dataset_name': args.dataset_name,
-                'dataset_path': data_path,
+                'data_path': data_path,
                 'output_path': args.output_path}
 
     exp_args = Namespace(**exp_args)
@@ -174,6 +174,7 @@ if __name__ == '__main__':
     parser.add_argument('--experiment', type=str, default='')
     parser.add_argument('--data_path', type = str, default='')
     parser.add_argument('--output_path', type = str, default='')
+    parser.add_argument('--model_path', type=str, default='')
     args = parser.parse_args()
 
     if args.experiment == 'random_ramping':

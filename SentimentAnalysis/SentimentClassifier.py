@@ -105,8 +105,8 @@ class SentimentClassifier:
             if 0 < self.train_size <= 1:
                 self.train_size = int(len(train_data) * self.train_size)
 
-            train_data = train_data.select([i for i in list(range(int(self.train_size)))])
-            val_data = val_data.select([i for i in list(range(int(self.val_size)))])
+            train_data = train_data if self.train_size == 1 else train_data.select([i for i in list(range(int(self.train_size)))])
+            val_data = val_data if self.val_size == 1 else val_data.select([i for i in list(range(int(self.val_size)))])
             test_data = test_data if self.test_size == 1 else test_data.select([i for i in list(range(int(self.test_size)))])
 
         return train_data, val_data, test_data
