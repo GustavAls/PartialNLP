@@ -163,10 +163,9 @@ class SWAGExperiments:
 
 def run_random_ramping_experiments(args):
     data_path = args.data_path
-    data_path_ext = os.path.join(data_path, f'run_{args.run_number}')
-    model_ext_path = [path for path in os.listdir(data_path_ext) if 'checkpoint' in path][0]
+    model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
 
-    model_path = os.path.join(data_path_ext, model_ext_path)
+    model_path = os.path.join(data_path, model_ext_path)
     args.model_path = model_path
     exp_args = {'model_path': model_path,
                 'dataset_name': args.dataset_name,
