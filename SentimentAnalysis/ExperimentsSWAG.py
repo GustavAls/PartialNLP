@@ -28,15 +28,15 @@ class SWAGExperiments:
                              'laplace': True, 'swag': False, 'save_strategy': 'no',
                              'load_best_model_at_end': False, 'no_cuda': False}
 
-        peters_default_args = {'output_path': args.output_path,
-                             'train_batch_size': 1, 'eval_batch_size': 1, 'device': 'cpu', 'num_epochs': 1.0,
-                             'dataset_name': 'imdb',
-                                 'train': True, 'train_size': 2, 'test_size':2, 'device_batch_size': 32,
-                             'learning_rate': 5e-05, 'seed': 0, 'val_size': 1,
-                             'laplace': True, 'swag': False, 'save_strategy': 'no',
-                             'load_best_model_at_end': False, 'no_cuda': False}
-
-        self.default_args = peters_default_args
+        # peters_default_args = {'output_path': args.output_path,
+        #                      'train_batch_size': 1, 'eval_batch_size': 1, 'device': 'cpu', 'num_epochs': 1.0,
+        #                      'dataset_name': 'imdb',
+        #                          'train': True, 'train_size': 2, 'test_size':2, 'device_batch_size': 1,
+        #                      'learning_rate': 5e-05, 'seed': 0, 'val_size': 2,
+        #                      'laplace': True, 'swag': False, 'save_strategy': 'no',
+        #                      'load_best_model_at_end': False, 'no_cuda': False}
+        #
+        # self.default_args = peters_default_args
         self.default_args = Namespace(**self.default_args)
         self.default_args.model_path = args.model_path
         self.default_args.data_path = getattr(args, 'data_path', None)
@@ -86,14 +86,14 @@ class SWAGExperiments:
         learning_rate = kwargs.get('learning_rate') if 'learning_rate' in kwargs else self.default_args.learning_rate
 
         self.optimizer = torch.optim.SGD(self.partial_constructor.model.parameters(),
-                                         lr=learning_rate)
+                                         lr=learning_rate, weight_decay=3e-4, momentum=0.9)
 
         self.ensure_prior_calls(**kwargs)
 
         max_num_steps = kwargs.get('max_num_steps', np.inf)
         counter = 0
         pbar = tqdm(total=max_num_steps//self.partial_constructor.number_of_iterations_bs, desc='Training SWAG')
-        for epoch in range(max(int(self.default_args.num_epochs), 1)):
+        for epoch in range(max(int(self.default_args.num_epochs), 1, 3)):
             for step, x in enumerate(self.train_loader):
                 self.optimizer.zero_grad()
                 out = self.partial_constructor(**x)
@@ -106,10 +106,13 @@ class SWAGExperiments:
 
                 if counter == max_num_steps:
                     self.partial_constructor.snapshot()
+                    pbar.update(pbar.total)
+                    pbar.close()
                     return self.partial_constructor
 
                 counter += 1
 
+        pbar.update(pbar.total)
         pbar.close()
         self.partial_constructor.snapshot()
         return self.partial_constructor
@@ -124,6 +127,8 @@ class SWAGExperiments:
             evaluator = utils.evaluate_swag(self.partial_constructor, self.trainer, self.tokenized_val)
             neg_log_likelihoods.append(evaluator.results['nll'])
             self.partial_constructor.init_new_model_for_optim(copy.deepcopy(self.trainer.model))
+            pbar.update(1)
+
         pbar.close()
         optimimum_learning_rate = sorted(zip(neg_log_likelihoods, learning_rates))[0][1]
         return optimimum_learning_rate
