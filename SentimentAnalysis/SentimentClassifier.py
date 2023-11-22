@@ -51,7 +51,7 @@ class SentimentClassifier:
 
     def load_text_dataset(self, dataset_name="imdb"):
         data = load_dataset(dataset_name)
-        if 0 < self.train_size <= 1:
+        if 0 < self.train_size < 1:
             self.train_size = int(len(data['train']) * self.train_size)
 
         if self.train_size == 1.0:
@@ -60,6 +60,9 @@ class SentimentClassifier:
             training_data_indices = set(range(train_data_length))-validation_data_indices
             train_data = data['train'].select(list(training_data_indices))
             val_data = data['train'].select(list(validation_data_indices))
+            test_data = data["test"] if self.test_size == 1 else \
+                data["test"].shuffle(seed=42).select([i for i in list(range(int(self.test_size)))])
+
         else:
             train_data = data["train"].shuffle(seed=42).select([i for i in list(range(int(self.train_size)))])
             val_data =  data["train"].shuffle(seed=42).select([i for i in list(range(int(self.train_size)))])
@@ -94,11 +97,11 @@ class SentimentClassifier:
     def data_to_csv(self, train, val, test, output_path, run):
 
         dataframe_train = self.to_dataframe(train)
-        dataframe_train.to_csv(os.path.join(output_path, f'train_data_run_{run}.csv'))
+        dataframe_train.to_csv(os.path.join(output_path, f'train_data.csv'))
         dataframe_val = self.to_dataframe(val)
-        dataframe_val.to_csv(os.path.join(output_path, f'val_data_run_{run}.csv'))
+        dataframe_val.to_csv(os.path.join(output_path, f'val_data.csv'))
         dataframe_test = self.to_dataframe(test)
-        dataframe_test.to_csv(os.path.join(output_path, f'val_data_run_{run}.csv'))
+        dataframe_test.to_csv(os.path.join(output_path, f'test_data.csv'))
         print("Saved train, val, test to csv files in ")
 
     def load_save_dataset(self, data_path, dataset_name, run, output_path):
@@ -108,7 +111,7 @@ class SentimentClassifier:
             self.data_to_csv(train_data, val_data, test_data, output_path, run)
         else:
             for split in split_names:
-                data_csv_path = os.path.join(os.path.join(data_path, f"run_{run}"), f'{split}_data_run_{run}.csv')
+                data_csv_path = os.path.join(data_path, f'{split}_data.csv')
 
                 if split == "train":
                     train_data = HuggingFaceDataset.from_csv(data_csv_path)
@@ -131,7 +134,10 @@ class SentimentClassifier:
                logging_perc = -1, save_strategy = 'epoch', evaluation_strategy='epoch',
                load_best_model_at_end = False, no_cuda = False, eval_steps=-1, data_path = None, run=0):
 
-        train_data, val_data, test_data = self.load_save_dataset(data_path=data_path, dataset_name=dataset_name, run=run)
+        train_data, val_data, test_data = self.load_save_dataset(data_path=data_path,
+                                                                 dataset_name=dataset_name,
+                                                                 run=run,
+                                                                 output_path=output_path)
 
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
@@ -280,7 +286,7 @@ def prepare_and_run_sentiment_classifier(args, sentiment_classifier=None):
                                 logging_perc = args.logging_perc,
                                 save_strategy = args.save_strategy,
                                 evaluation_strategy = args.evaluation_strategy,
-                                load_best_model_at_end = args.load_best_model_at_end,
+                                load_best_model_at_end = True,
                                 no_cuda = args.no_cuda,
                                 eval_steps=args.eval_steps,
                                 run=args.run)
