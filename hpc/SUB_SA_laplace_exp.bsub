@@ -3,7 +3,7 @@
 ### –- specify queue --
 #BSUB -q gpuv100
 ### -- set the job Name --
-#BSUB -J swag_exp[1-5]
+#BSUB -J laplace_exp[1-5]
 ### -- ask for number of cores (default: 1) --
 #BSUB -n 4
 #BSUB -R "span[hosts=1]"
@@ -46,7 +46,7 @@ echo "Running script..."
 dataset="imdb"
 
 # Create some folders
-dir_outpath="scratch/s184400/SA_results/swag/${dataset}_first_exp/run_${run}"
+dir_outpath="scratch/s184400/SA_results/laplace/${dataset}_first_exp/run_${run}"
 dir_datapath="scratch/s184400/SA_results/Init/${dataset}_dataset/run_${run}"
 
 runs=(0 1 2 3 4)
@@ -67,7 +67,7 @@ mkdir -p $dir_outpath
 #--num_epochs 1 \
 
 # Run the training
-python3 SentimentAnalysis/ExperimentsSWAG.py \
+python3 SentimentAnalysis/ExperimentsLaplace.py \
     --output_path $dir_outpath \
     --data_path $dir_datapath \
     --experiment "random_ramping" \
