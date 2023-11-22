@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 import torch
 import torchvision
-from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn, get_kl_loss, dnn_to_bnn_layer_wise
+from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn, get_kl_loss
 import numpy as np
 import torch
 from torch.nn import MSELoss
@@ -318,7 +318,7 @@ def train_model_with_layer_stochasticity(untrained_model, dataloader, dataloader
     for max_layers in range(1, 4):
         model = copy.deepcopy(untrained_model)
         model = model.to(train_args['device'])
-        dnn_to_bnn_layer_wise(model, const_bnn_prior_parameters, None, max_layers)
+        # dnn_to_bnn_layer_wise(model, const_bnn_prior_parameters, None, max_layers)
 
         train(model,
               dataloader,
