@@ -36,9 +36,9 @@ class LaplaceExperiments:
     def __init__(self, args):
         self.default_args = {'output_path': 'C:\\Users\\45292\\Documents\\Master\\SentimentClassification',
                              'train_batch_size': 1, 'eval_batch_size': 1, 'device': 'cpu', 'num_epochs': 1.0,
-                             'dataset_name': 'imdb','val_size': 2,
+                             'dataset_name': 'imdb',
                              'train': True, 'train_size': None, 'test_size': None, 'device_batch_size': 1,
-                             'learning_rate': 5e-05, 'seed': 0, 'train_size': 2, 'test_size': 2,
+                             'learning_rate': 5e-05, 'seed': 0,'val_size': None,
                              'laplace': True, 'swag': False, 'save_strategy': 'no',
                              'load_best_model_at_end': False, 'no_cuda': False}
 
@@ -205,6 +205,7 @@ if __name__ == '__main__':
     parser.add_argument('--experiment', type = str, default = '')
     parser.add_argument('--data_path', type = str, default='')
     parser.add_argument('--model_path', type = str, default='')
+    parser.add_argument('--')
     args = parser.parse_args()
 
     if args.experiment == 'random_ramping':

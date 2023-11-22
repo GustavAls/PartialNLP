@@ -9,6 +9,7 @@ from SentimentClassifier import *
 from argparse import Namespace
 from PartialConstructor import PartialConstructorSwag
 import utils
+
 TRANSFORMER_INCOMPATIBLE_MODULES = (nn.Embedding, nn.LayerNorm, nn.BatchNorm1d,
                                     nn.BatchNorm2d, nn.BatchNorm3d)
 
@@ -17,7 +18,7 @@ TRANSFORMER_COMPATIBLE_MODULES = (nn.Linear, nn.Conv2d, nn.Conv3d, nn.Conv1d)
 
 class SWAGExperiments:
 
-    def __init__(self, args = None):
+    def __init__(self, args=None):
         # TODO set correct train and val sizes
         self.default_args = {'output_path': 'C:\\Users\\45292\\Documents\\Master\\SentimentClassification',
                              'train_batch_size': 1, 'eval_batch_size': 1, 'device': 'cpu', 'num_epochs': 1.0,
@@ -32,7 +33,7 @@ class SWAGExperiments:
         self.default_args.data_path = getattr(args, 'data_path', None)
         self.default_args_swag = {'n_iterations_between_snapshots': 100,
                                   'module_names': None, 'num_columns': 3, 'num_mc_samples': 50,
-                                  'min_var': 1e-20, 'reduction': 'mean', 'num_classes': 2,'optim_max_num_steps': 10,
+                                  'min_var': 1e-20, 'reduction': 'mean', 'num_classes': 2, 'optim_max_num_steps': 10,
                                   'max_num_steps': 10}
 
         self.partial_constructor = None
@@ -40,7 +41,6 @@ class SWAGExperiments:
         self.sentiment_classifier = None
         self.train_loader, self.trainer, self.tokenized_val, self.optimizer = (None, None, None, None)
         self.loss_fn = nn.CrossEntropyLoss()
-
 
     def initialize_sentiment_classifier(self):
         self.sentiment_classifier = prepare_sentiment_classifier(self.default_args)
@@ -52,8 +52,7 @@ class SWAGExperiments:
             dataset_name=self.default_args.dataset_name,
             device_batch_size=self.default_args.device_batch_size,
             lr=self.default_args.learning_rate,
-            data_path = self.default_args.data_path)
-
+            data_path=self.default_args.data_path)
 
     def initialize_swag(self, model, **kwargs):
 
@@ -69,7 +68,7 @@ class SWAGExperiments:
         if self.optimizer is None:
             raise ValueError("Optimizer has not been initialized")
         if 'max_num_steps' not in kwargs:
-           UserWarning("Using full num epochs to train swag")
+            UserWarning("Using full num epochs to train swag")
 
         if self.partial_constructor.module_names is None or len(self.partial_constructor.module_names) == 0:
             raise ValueError("Partial constructor has not selected any modules to make bayesian")
@@ -78,7 +77,7 @@ class SWAGExperiments:
         learning_rate = kwargs.get('learning_rate') if 'learning_rate' in kwargs else self.default_args.learning_rate
 
         self.optimizer = torch.optim.SGD(self.partial_constructor.model.parameters(),
-                                         lr = learning_rate)
+                                         lr=learning_rate)
 
         self.ensure_prior_calls(**kwargs)
 
@@ -122,7 +121,7 @@ class SWAGExperiments:
             else:
                 os.mkdir(path)
 
-    def random_ramping_experiment(self, run_number = 0):
+    def random_ramping_experiment(self, run_number=0):
 
         num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
         results = {}
@@ -146,15 +145,20 @@ class SWAGExperiments:
         with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-def run_random_ramping_experiments(args):
 
-    model_paths = [r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"]
-    dataset_paths = []
-    exp_args = {'model_path': model_paths[args.run_number],
+def run_random_ramping_experiments(args):
+    data_path = args.data_path
+    data_path_ext = os.path.join(data_path, f'run_{args.run_number}')
+    model_ext_path = [path for path in os.listdir(data_path_ext) if 'checkpoint' in path][0]
+
+    model_path = os.path.join(data_path_ext, model_ext_path)
+    args.model_path = model_path
+    exp_args = {'model_path': model_path,
                 'dataset_name': args.dataset_name,
-                'dataset_path': dataset_paths[args.run_number]}
+                'dataset_path': data_path}
+
     exp_args = Namespace(**exp_args)
-    swag_exp = SWAGExperiments(args = exp_args)
+    swag_exp = SWAGExperiments(args=exp_args)
     swag_exp.random_ramping_experiment(args.run_number)
 
 
@@ -164,15 +168,10 @@ if __name__ == '__main__':
         description="Run training and or evaluation of Sentiment Classifier with swag"
     )
     parser.add_argument("--run_number", type=int, default=0)
-    parser.add_argument('--dataset_name', type = str, default='imdb')
-    parser.add_argument('--experiment', type = str, default = '')
+    parser.add_argument('--dataset_name', type=str, default='imdb')
+    parser.add_argument('--experiment', type=str, default='')
+    parser.add_argument('--data_path', type = str, default='')
     args = parser.parse_args()
-
 
     if args.experiment == 'random_ramping':
         run_random_ramping_experiments(args)
-
-
-
-
-
