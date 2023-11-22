@@ -9,7 +9,7 @@ from SentimentClassifier import *
 from argparse import Namespace
 from PartialConstructor import PartialConstructorSwag
 import utils
-
+from tqdm import tqdm
 TRANSFORMER_INCOMPATIBLE_MODULES = (nn.Embedding, nn.LayerNorm, nn.BatchNorm1d,
                                     nn.BatchNorm2d, nn.BatchNorm3d)
 
@@ -28,6 +28,15 @@ class SWAGExperiments:
                              'laplace': True, 'swag': False, 'save_strategy': 'no',
                              'load_best_model_at_end': False, 'no_cuda': False}
 
+        peters_default_args = {'output_path': args.output_path,
+                             'train_batch_size': 1, 'eval_batch_size': 1, 'device': 'cpu', 'num_epochs': 1.0,
+                             'dataset_name': 'imdb',
+                                 'train': True, 'train_size': 2, 'test_size':2, 'device_batch_size': 32,
+                             'learning_rate': 5e-05, 'seed': 0, 'val_size': 1,
+                             'laplace': True, 'swag': False, 'save_strategy': 'no',
+                             'load_best_model_at_end': False, 'no_cuda': False}
+
+        self.default_args = peters_default_args
         self.default_args = Namespace(**self.default_args)
         self.default_args.model_path = args.model_path
         self.default_args.data_path = getattr(args, 'data_path', None)
@@ -83,6 +92,7 @@ class SWAGExperiments:
 
         max_num_steps = kwargs.get('max_num_steps', np.inf)
         counter = 0
+        pbar = tqdm(total=max_num_steps//self.partial_constructor.number_of_iterations_bs, desc='Training SWAG')
         for epoch in range(max(int(self.default_args.num_epochs), 1)):
             for step, x in enumerate(self.train_loader):
                 self.optimizer.zero_grad()
@@ -92,6 +102,7 @@ class SWAGExperiments:
 
                 if self.partial_constructor.scheduler():
                     self.partial_constructor.snapshot()
+                    pbar.update(1)
 
                 if counter == max_num_steps:
                     self.partial_constructor.snapshot()
@@ -99,6 +110,7 @@ class SWAGExperiments:
 
                 counter += 1
 
+        pbar.close()
         self.partial_constructor.snapshot()
         return self.partial_constructor
 
@@ -106,12 +118,13 @@ class SWAGExperiments:
 
         learning_rates = np.logspace(-3, -1, num=6, endpoint=True)
         neg_log_likelihoods = []
-        for learning_rate in learning_rates:
+        pbar = tqdm(learning_rates, desc='Optimizing Learning Rates')
+        for learning_rate in pbar:
             self.fit(**{'learning_rate': learning_rate, 'max_num_steps': self.default_args_swag['optim_max_num_steps']})
             evaluator = utils.evaluate_swag(self.partial_constructor, self.trainer, self.tokenized_val)
             neg_log_likelihoods.append(evaluator.results['nll'])
             self.partial_constructor.init_new_model_for_optim(copy.deepcopy(self.trainer.model))
-
+        pbar.close()
         optimimum_learning_rate = sorted(zip(neg_log_likelihoods, learning_rates))[0][1]
         return optimimum_learning_rate
 

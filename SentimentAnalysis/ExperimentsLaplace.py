@@ -37,8 +37,8 @@ class LaplaceExperiments:
         self.default_args = {'output_path': args.output_path,
                              'train_batch_size': 1, 'eval_batch_size': 1, 'device': 'cpu', 'num_epochs': 1.0,
                              'dataset_name': 'imdb',
-                             'train': True, 'train_size': None, 'test_size': None, 'device_batch_size': 1,
-                             'learning_rate': 5e-05, 'seed': 0,'val_size': None,
+                             'train': True, 'train_size': 2, 'test_size': 2, 'device_batch_size': 1,
+                             'learning_rate': 5e-05, 'seed': 0,'val_size': 2,
                              'laplace': True, 'swag': False, 'save_strategy': 'no',
                              'load_best_model_at_end': False, 'no_cuda': False}
 

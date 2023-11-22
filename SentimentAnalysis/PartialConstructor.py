@@ -248,7 +248,7 @@ class PartialConstructorSwag:
         for mc_sample in range(self.num_mc_samples):
             self.sample()
             out = self.model(**kwargs)
-            predictions[:, :, mc_sample] = out.logits.detach()
+            predictions[:, :, mc_sample] = out.logits.detach().cpu()
         predictions = softmax(predictions)
         predictions = self.reduction(predictions)
         return predictions
