@@ -34,7 +34,7 @@ from sklearn.gaussian_process.kernels import RBF
 
 class LaplaceExperiments:
     def __init__(self, args):
-        self.default_args = {'output_path': 'C:\\Users\\45292\\Documents\\Master\\SentimentClassification',
+        self.default_args = {'output_path': args.output_path,
                              'train_batch_size': 1, 'eval_batch_size': 1, 'device': 'cpu', 'num_epochs': 1.0,
                              'dataset_name': 'imdb',
                              'train': True, 'train_size': None, 'test_size': None, 'device_batch_size': 1,
@@ -186,7 +186,8 @@ def run_random_ramping_experiments(args):
                'dataset_name': args.dataset_name,
                'num_optim_steps': 7,
                'data_path': data_path,
-               'run_number': args.run_number}
+               'run_number': args.run_number,
+               'output_path': args.output_path}
 
     # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
     la_args = Namespace(**la_args)
@@ -205,7 +206,7 @@ if __name__ == '__main__':
     parser.add_argument('--experiment', type = str, default = '')
     parser.add_argument('--data_path', type = str, default='')
     parser.add_argument('--model_path', type = str, default='')
-    parser.add_argument('--')
+    parser.add_argument('--output_path', type = str, default='')
     args = parser.parse_args()
 
     if args.experiment == 'random_ramping':
