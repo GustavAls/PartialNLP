@@ -126,6 +126,7 @@ class SWAGExperiments:
         num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
         results = {}
         for number_of_modules in num_modules:
+            print("Training with number of stochastic modules equal to", number_of_modules)
             self.initialize_sentiment_classifier()
             self.initialize_swag(copy.deepcopy(self.trainer.model))
             self.create_partial_random_ramping_construction(number_of_modules)
