@@ -32,7 +32,7 @@ module load python3/3.9.11
 source ~/PartialNLP/scratch/s184400/partial_venv/bin/activate
 # Set python path
 export PYTHONPATH=$PYTHONPATH:~/PartialNLP/
-export PYTHONPATH=$PYTHONPATH:~/
+export PYTHONPATH=$PYTHONPATH:~/PartialNLP/scratch/s184400/cloned_repos/
 
 nvidia-smi
 # Load the cuda module
