@@ -35,10 +35,10 @@ from sklearn.gaussian_process.kernels import RBF
 class LaplaceExperiments:
     def __init__(self, args):
         self.default_args = {'output_path': args.output_path,
-                             'train_batch_size': 1, 'eval_batch_size': 1, 'device': 'cpu', 'num_epochs': 1.0,
+                             'train_batch_size': 32, 'eval_batch_size': 32, 'device': 'cpu', 'num_epochs': 1.0,
                              'dataset_name': 'imdb',
-                             'train': True, 'train_size': 2, 'test_size': 2, 'device_batch_size': 1,
-                             'learning_rate': 5e-05, 'seed': 0,'val_size': 2,
+                             'train': True, 'train_size': 1, 'test_size': 1, 'device_batch_size': 32,
+                             'learning_rate': 5e-05, 'seed': 0,'val_size': 1,
                              'laplace': True, 'swag': False, 'save_strategy': 'no',
                              'load_best_model_at_end': False, 'no_cuda': False}
 
@@ -169,6 +169,8 @@ class LaplaceExperiments:
         print("Running random ramping experiment on ", self.default_args.dataset_name)
         results = {'results': {}, 'module_selection': {}}
 
+        save_path = os.path.join(self.args.output_path, 'random_module_ramping')
+        self.ensure_path_existence(save_path)
         for num_modules in self.num_modules:
             self.create_partial_random_ramping_construction(num_modules)
             la = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed = use_uninformed)
@@ -177,10 +179,8 @@ class LaplaceExperiments:
             results['results'][num_modules] = copy.deepcopy(evaluator)
             results['module_selection'][num_modules] = copy.deepcopy(self.module_names)
 
-        save_path = os.path.join(self.args.output_path, 'random_module_ramping')
-        self.ensure_path_existence(save_path)
-        with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
-            pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
+                pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     def max_norm_ramping_experiment(self, run_number = 0, use_uninformed = False):
 

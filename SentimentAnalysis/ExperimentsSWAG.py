@@ -20,23 +20,23 @@ class SWAGExperiments:
 
     def __init__(self, args=None):
         # TODO set correct train and val sizes
-        self.default_args = {'output_path': args.output_path,
-                             'train_batch_size': 32, 'eval_batch_size': 32, 'device': 'cpu', 'num_epochs': 1.0,
+        # self.default_args = {'output_path': args.output_path,
+        #                      'train_batch_size': 32, 'eval_batch_size': 32, 'device': 'cpu', 'num_epochs': 1.0,
+        #                      'dataset_name': 'imdb',
+        #                          'train': True, 'train_size': 1, 'test_size': 1, 'device_batch_size': 32,
+        #                      'learning_rate': 5e-05, 'seed': 0, 'val_size': 1,
+        #                      'laplace': True, 'swag': False, 'save_strategy': 'no',
+        #                      'load_best_model_at_end': False, 'no_cuda': False}
+
+        peters_default_args = {'output_path': args.output_path,
+                             'train_batch_size': 1, 'eval_batch_size': 1, 'device': 'cpu', 'num_epochs': 1.0,
                              'dataset_name': 'imdb',
-                                 'train': True, 'train_size': 1, 'test_size': 1, 'device_batch_size': 32,
-                             'learning_rate': 5e-05, 'seed': 0, 'val_size': 1,
+                                 'train': True, 'train_size': 2, 'test_size':5, 'device_batch_size': 1,
+                             'learning_rate': 5e-05, 'seed': 0, 'val_size': 2,
                              'laplace': True, 'swag': False, 'save_strategy': 'no',
                              'load_best_model_at_end': False, 'no_cuda': False}
 
-        # peters_default_args = {'output_path': args.output_path,
-        #                      'train_batch_size': 1, 'eval_batch_size': 1, 'device': 'cpu', 'num_epochs': 1.0,
-        #                      'dataset_name': 'imdb',
-        #                          'train': True, 'train_size': 2, 'test_size':5, 'device_batch_size': 1,
-        #                      'learning_rate': 5e-05, 'seed': 0, 'val_size': 2,
-        #                      'laplace': True, 'swag': False, 'save_strategy': 'no',
-        #                      'load_best_model_at_end': False, 'no_cuda': False}
-        #
-        # self.default_args = peters_default_args
+        self.default_args = peters_default_args
         self.default_args = Namespace(**self.default_args)
         self.default_args.model_path = args.model_path
         self.default_args.data_path = getattr(args, 'data_path', None)
@@ -148,6 +148,9 @@ class SWAGExperiments:
 
         num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
         results = {}
+        save_path = os.path.join(self.default_args.output_path, 'random_module_ramping')
+        self.ensure_path_existence(save_path)
+
         for number_of_modules in num_modules:
             print("Training with number of stochastic modules equal to", number_of_modules)
             self.initialize_sentiment_classifier()
@@ -164,10 +167,8 @@ class SWAGExperiments:
             evaluator = utils.evaluate_swag(self.partial_constructor, self.trainer)
             results[number_of_modules] = evaluator
 
-        save_path = os.path.join(self.default_args.output_path, 'random_module_ramping')
-        self.ensure_path_existence(save_path)
-        with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
-            pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
+                pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     def max_norm_ramping_experiment(self, run_number=0):
 
