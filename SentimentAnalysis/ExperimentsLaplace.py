@@ -180,6 +180,15 @@ class LaplaceExperiments:
             else:
                 os.mkdir(path)
 
+    def get_num_remaining_modules(self, path, run_number):
+        paths = os.listdir(path)
+        if len(paths) == 0:
+            return self.num_modules
+        if os.path.exists((p := os.path.join(path, f"run_number_{run_number}.pkl"))):
+            results_file = pickle.load(open(p, 'rb'))
+            number_of_modules = list(results_file.keys())
+            new_modules_to_run = sorted(list(set(self.num_modules) - set(number_of_modules)))
+            return new_modules_to_run
 
     def random_ramping_experiment(self, run_number = 0, use_uninformed = False):
 
@@ -188,7 +197,8 @@ class LaplaceExperiments:
 
         save_path = self.args.output_path
         self.ensure_path_existence(save_path)
-        for num_modules in self.num_modules:
+        remaining_modules = self.get_num_remaining_modules(save_path, run_number)
+        for num_modules in remaining_modules:
             self.create_partial_random_ramping_construction(num_modules)
             la = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed = use_uninformed)
             evaluator = utils.evaluate_laplace(la, self.trainer)
@@ -205,7 +215,8 @@ class LaplaceExperiments:
         results = {'results': {}, 'module_selection': {}}
         save_path = self.args.output_path
         self.ensure_path_existence(save_path)
-        for num_modules in self.num_modules:
+        remaining_modules = self.get_num_remaining_modules(save_path, run_number)
+        for num_modules in remaining_modules:
             self.create_partial_max_norm_ramping(num_modules)
             la = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed = use_uninformed)
             evaluator = utils.evaluate_laplace(la, self.trainer)

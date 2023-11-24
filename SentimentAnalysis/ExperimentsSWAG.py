@@ -1,4 +1,6 @@
 import copy
+import os.path
+import pickle
 
 import torch
 import torch.nn as nn
@@ -24,7 +26,7 @@ class SWAGExperiments:
         self.default_args = {'output_path': args.output_path,
                              'train_batch_size': args.batch_size, 'eval_batch_size': args.batch_size,'device_batch_size': args.batch_size,
                              'device': 'cuda', 'num_epochs': 1.0, 'dataset_name': args.dataset_name, 'train': True,
-                             'train_size': 1, 'val_size': 1, 'test_size': 1,  'learning_rate': 5e-05,
+                             'train_size': 4, 'val_size': 4, 'test_size': 4,  'learning_rate': 5e-05,
                              'laplace': True, 'save_strategy': 'no', 'load_best_model_at_end': False, 'no_cuda': False }
 
         # peters_default_args = {'output_path': args.output_path,
@@ -155,13 +157,24 @@ class SWAGExperiments:
             else:
                 os.mkdir(path)
 
+    def get_num_remaining_modules(self, path, run_number):
+
+        paths = os.listdir(path)
+        if len(paths) == 0:
+            return self.num_modules
+        if os.path.exists((p := os.path.join(path,f"run_number_{run_number}.pkl"))):
+            results_file = pickle.load(open(p, 'rb'))
+            number_of_modules = list(results_file.keys())
+            new_modules_to_run = sorted(list(set(self.num_modules) - set(number_of_modules)))
+            return new_modules_to_run
+
     def random_ramping_experiment(self, run_number=0):
 
         results = {}
         save_path = self.default_args.output_path
         self.ensure_path_existence(save_path)
-
-        for number_of_modules in self.num_modules:
+        remaining_modules = self.get_num_remaining_modules(save_path, run_number)
+        for number_of_modules in remaining_modules:
             print("Training with number of stochastic modules equal to", number_of_modules)
             self.initialize_sentiment_classifier()
             self.initialize_swag(copy.deepcopy(self.trainer.model))
@@ -185,8 +198,8 @@ class SWAGExperiments:
         results = {}
         save_path = self.default_args.output_path
         self.ensure_path_existence(save_path)
-
-        for number_of_modules in self.num_modules:
+        remaining_modules = self.get_num_remaining_modules(save_path, run_number)
+        for number_of_modules in remaining_modules:
             print("Training with number of stochastic modules equal to", number_of_modules)
             self.initialize_sentiment_classifier()
             self.initialize_swag(copy.deepcopy(self.trainer.model))
@@ -233,7 +246,8 @@ def run_max_norm_ramping_experiments(args):
     exp_args = {'model_path': model_path,
                 'dataset_name': args.dataset_name,
                 'data_path': data_path,
-                'output_path': args.output_path}
+                'output_path': args.output_path,
+                'batch_size': args.batch_size}
 
     exp_args = Namespace(**exp_args)
     swag_exp = SWAGExperiments(args=exp_args)
@@ -248,7 +262,8 @@ def run_max_norm_ramping_only_subclass(args):
     exp_args = {'model_path': model_path,
                 'dataset_name': args.dataset_name,
                 'data_path': data_path,
-                'output_path': args.output_path}
+                'output_path': args.output_path,
+                'batch_size': args.batch_size}
 
     exp_args = Namespace(**exp_args)
     swag_exp = SWAGExperiments(args=exp_args)
