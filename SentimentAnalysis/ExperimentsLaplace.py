@@ -35,12 +35,11 @@ from sklearn.gaussian_process.kernels import RBF
 class LaplaceExperiments:
     def __init__(self, args):
         self.default_args = {'output_path': args.output_path,
-                             'train_batch_size': 1, 'eval_batch_size': 1, 'device': 'cpu', 'num_epochs': 1.0,
-                             'dataset_name': 'imdb',
-                             'train': True, 'train_size': 1, 'test_size': 1, 'device_batch_size': 1,
-                             'learning_rate': 5e-05, 'seed': 0,'val_size': 1,
-                             'laplace': True, 'swag': False, 'save_strategy': 'no',
-                             'load_best_model_at_end': False, 'no_cuda': False}
+                             'train_batch_size': args.batch_size, 'eval_batch_size': args.batch_size,
+                             'device_batch_size': args.batch_size,
+                             'device': 'cuda', 'num_epochs': 1.0, 'dataset_name': args.dataset_name, 'train': True,
+                             'train_size': 2, 'val_size': 2, 'test_size': 2, 'learning_rate': 5e-05,
+                             'laplace': True, 'save_strategy': 'no', 'load_best_model_at_end': False, 'no_cuda': False}
 
         self.base_full_prior = 1e4
         self.base_min_prior = 1
@@ -209,11 +208,12 @@ def run_random_ramping_experiments(args):
     model_path = os.path.join(data_path, model_ext_path)
     args.model_path = model_path
     la_args = {'model_path': model_path,
-               'dataset_name': args.dataset_name,
                'num_optim_steps': 7,
                'data_path': data_path,
                'run_number': args.run_number,
-               'output_path': args.output_path}
+               'output_path': args.output_path,
+               'batch_size' : args.batch_size,
+               'dataset_name': args.dataset_name}
 
     # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
     la_args = Namespace(**la_args)
@@ -255,6 +255,8 @@ if __name__ == '__main__':
     parser.add_argument('--data_path', type = str, default='')
     parser.add_argument('--model_path', type = str, default='')
     parser.add_argument('--output_path', type = str, default='')
+    parser.add_argument('--batch_size', type=int, default=1)
+
     args = parser.parse_args()
 
     if args.experiment == 'random_ramping':

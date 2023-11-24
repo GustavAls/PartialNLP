@@ -20,23 +20,20 @@ class SWAGExperiments:
 
     def __init__(self, args=None):
         # TODO set correct train and val sizes
-        # self.default_args = {'output_path': args.output_path,
-        #                      'train_batch_size': 32, 'eval_batch_size': 32, 'device': 'cpu', 'num_epochs': 1.0,
+        self.default_args = {'output_path': args.output_path,
+                             'train_batch_size': args.batch_size, 'eval_batch_size': args.batch_size,'device_batch_size': args.batch_size,
+                             'device': 'cuda', 'num_epochs': 1.0, 'dataset_name': args.dataset_name, 'train': True,
+                             'train_size': args.train_size, 'val_size': args.val_size, 'test_size': args.test_size,  'learning_rate': 5e-05,
+                             'laplace': True, 'save_strategy': 'no', 'load_best_model_at_end': False, 'no_cuda': False }
+
+        # peters_default_args = {'output_path': args.output_path,
+        #                      'train_batch_size': 1, 'eval_batch_size': 1, 'device': 'cpu', 'num_epochs': 1.0,
         #                      'dataset_name': 'imdb',
-        #                          'train': True, 'train_size': 1, 'test_size': 1, 'device_batch_size': 32,
-        #                      'learning_rate': 5e-05, 'seed': 0, 'val_size': 1,
+        #                          'train': True, 'train_size': 2, 'test_size':5, 'device_batch_size': 1,
+        #                      'learning_rate': 5e-05, 'seed': 0, 'val_size': 2,
         #                      'laplace': True, 'swag': False, 'save_strategy': 'no',
         #                      'load_best_model_at_end': False, 'no_cuda': False}
-
-        peters_default_args = {'output_path': args.output_path,
-                             'train_batch_size': 1, 'eval_batch_size': 1, 'device': 'cpu', 'num_epochs': 1.0,
-                             'dataset_name': 'imdb',
-                                 'train': True, 'train_size': 2, 'test_size':5, 'device_batch_size': 1,
-                             'learning_rate': 5e-05, 'seed': 0, 'val_size': 2,
-                             'laplace': True, 'swag': False, 'save_strategy': 'no',
-                             'load_best_model_at_end': False, 'no_cuda': False}
-
-        self.default_args = peters_default_args
+        # self.default_args = peters_default_args
         self.default_args = Namespace(**self.default_args)
         self.default_args.model_path = args.model_path
         self.default_args.data_path = getattr(args, 'data_path', None)
@@ -207,7 +204,8 @@ def run_random_ramping_experiments(args):
     exp_args = {'model_path': model_path,
                 'dataset_name': args.dataset_name,
                 'data_path': data_path,
-                'output_path': args.output_path}
+                'output_path': args.output_path,
+                'batch_size': args.batch_size}
 
     exp_args = Namespace(**exp_args)
     swag_exp = SWAGExperiments(args=exp_args)
@@ -239,6 +237,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_path', type = str, default='')
     parser.add_argument('--output_path', type = str, default='')
     parser.add_argument('--model_path', type=str, default='')
+    parser.add_argument('--batch_size', type=int, default=1)
     args = parser.parse_args()
 
     if args.experiment == 'random_ramping':
