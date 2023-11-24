@@ -26,7 +26,7 @@ class SWAGExperiments:
         self.default_args = {'output_path': args.output_path,
                              'train_batch_size': args.batch_size, 'eval_batch_size': args.batch_size,'device_batch_size': args.batch_size,
                              'device': 'cuda', 'num_epochs': 1.0, 'dataset_name': args.dataset_name, 'train': True,
-                             'train_size': 4, 'val_size': 4, 'test_size': 4,  'learning_rate': 5e-05,
+                             'train_size': args.train_size, 'val_size': args.val_size, 'test_size': args.test_size,  'learning_rate': 5e-05,
                              'laplace': True, 'save_strategy': 'no', 'load_best_model_at_end': False, 'no_cuda': False }
 
         # peters_default_args = {'output_path': args.output_path,
@@ -220,7 +220,6 @@ class SWAGExperiments:
 
 
 
-
 def run_random_ramping_experiments(args):
     data_path = args.data_path
     model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
@@ -231,7 +230,10 @@ def run_random_ramping_experiments(args):
                 'dataset_name': args.dataset_name,
                 'data_path': data_path,
                 'output_path': args.output_path,
-                'batch_size': args.batch_size}
+                'batch_size': args.batch_size,
+                'train_size': args.train_size,
+                'val_size': args.val_size,
+                'test_size': args.test_size}
 
     exp_args = Namespace(**exp_args)
     swag_exp = SWAGExperiments(args=exp_args)
@@ -286,6 +288,9 @@ if __name__ == '__main__':
     parser.add_argument('--model_path', type=str, default='')
     parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--subclass', type = str, default='')
+    parser.add_argument('--train_size', type=int, default=1)
+    parser.add_argument('--val_size', type=int, default=1)
+    parser.add_argument('--test_size', type=int, default=1)
 
     args = parser.parse_args()
 
