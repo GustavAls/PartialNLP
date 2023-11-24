@@ -202,7 +202,8 @@ class SentimentClassifier:
                                           evaluation_strategy="epoch",
                                           save_strategy="epoch",
                                           weight_decay=0.01,
-                                          laplace=True)
+                                          laplace=True,
+                                          no_cuda=False)
 
         trainer = Trainer(
             model=self.model,
