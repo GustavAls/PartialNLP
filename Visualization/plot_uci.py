@@ -24,6 +24,7 @@ mpl.rc('axes', labelsize=19)
 map_color = 'tab:red'
 stochastic_color = 'tab:green'
 point_err_color = 'tab:blue'
+plt.rcParams['axes.unicode_minus'] = False
 
 def get_cmap(n, name='hsv'):
     '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct
@@ -342,7 +343,7 @@ def plot_scatter(predictions, labels, data_name=None, method_name=None, df=None,
     ax.set_xlabel('Labels')
     ax.set_ylabel('Predictions')
     data_name = '' if data_name is None else ", " + data_name
-    title = f'Predictions and labels for {method_name}' + data_name
+    title = f'Preds and labels for {method_name}' + data_name
     ax.set_title(title)
     return ax
 
@@ -351,15 +352,10 @@ def plot_calibration(predictions, labels, pred_var=None, ax=None, label=None):
     if ax is None:
         fig, ax = plt.subplots(1, 1)
 
-    if predictions.ndim > 1:
-        predictions_mean = predictions.mean(-1)
-        predictions_std = predictions.std(-1)
-    else:
-        predictions_mean = predictions
-        predictions_std = np.sqrt(pred_var)
+    predictions_mean = predictions.mean(-1)
+    predictions_std = predictions.std(-1)
 
-    uct.plot_calibration(predictions_mean, predictions_std, labels, ax=ax, curve_label=label,
-                         show_miscalib=False)
+    uct.plot_calibration(predictions_mean, predictions_std, labels, ax=ax, curve_label=label, show_miscalib=False)
 
 
 def read_vi_data(path):
@@ -683,9 +679,6 @@ class PlotFunctionHolder:
 
         self.show()
 
-
-
-
     def get_criteria_between_datasets_la_swa(self, potential_paths, criteria, laplace = False):
 
         results = {}
@@ -706,21 +699,23 @@ class PlotFunctionHolder:
     def plot_pred_labels_la_swa(self, percentages=('1', '100')):
 
         data_name = self.find_data_name(self.la_swa_path)
-        for method, criteria in [('Laplace', 'laplace'), ('SWAG', 'swag')]:
+        for method, criteria in  [('Laplace', 'laplace'), ('SWAG', 'swag')]:
             fig, ax = plt.subplots(1, 1)
-            minmax = calculate_max_and_min_for_predictions(ph, run_type=criteria, epsilon=0.1, idx=4,
+            minmax = calculate_max_and_min_for_predictions(self.plot_helper_la_swa, run_type=criteria, epsilon=0.1, idx=4,
                                                            laplace=True if 'laplace' in criteria else False)
-            for run in percentages:
+            for percentage in percentages:
                 predictions, labels = self.plot_helper_la_swa.get_predictions_and_labels_for_percentage(
-                    run, 4, criteria, laplace=True if 'laplace' in criteria else False)
+                    percentage, 4, criteria, laplace=True if 'laplace' in criteria else False)
                 plot_scatter(predictions, labels, data_name=data_name, minmax=minmax,
-                             method_name=f"{method}, {run} stoch", ax=ax)
-                self.show()
+                             method_name=f"{method}, {percentage} stoch", ax=ax)
+                save_path = self.save_path
+                if save_path is not None:
+                    fig.savefig(os.path.join(save_path, f'Preds_labels_{method}_perc_{percentage}.pdf'), format='pdf')
+                    self.show()
 
     def plot_pred_labels_vi_hmc(self, percentages=('1', '100')):
 
         data_name = self.find_data_name(self.la_swa_path)
-
         for method, critera in [('VI', 'vi_run'), ('HMC', 'hmc')]:
 
             minmax = calculate_max_and_min_for_predictions(
@@ -731,11 +726,32 @@ class PlotFunctionHolder:
                     percentage, 4, critera)
                 plot_scatter(predictions, labels, data_name=data_name, minmax=minmax,
                              method_name=f"{method}, {percentage} stoch", ax=ax)
+                save_path = self.save_path
+                if save_path is not None:
+                    fig.savefig(os.path.join(save_path, f'Preds_labels_{method}_perc_{percentage}.pdf'), format='pdf')
+                self.show()
 
+    def plot_pred_labels_node_based(self, percentages=('1', '100')):
+
+        data_name = self.find_data_name(self.la_swa_path)
+
+        for method, critera in [('Additive', 'add'), ('Multiplicative', 'node_run')]:
+
+            minmax = calculate_max_and_min_for_predictions(
+                self.plot_helper_vi_hmc, run_type=critera, epsilon=0.1, idx=4)
+            for percentage in percentages:
+                fig, ax = plt.subplots(1, 1)
+                predictions, labels = self.plot_helper_vi_hmc.get_predictions_and_labels_for_percentage(
+                    percentage, 4, critera)
+                plot_scatter(predictions, labels, data_name=data_name, minmax=minmax,
+                             method_name=f"{method}, {percentage} stoch", ax=ax)
+                if save_path is not None:
+                    fig.savefig(os.path.join(save_path, f'Preds_labels_{method}_perc_{percentage}.pdf'), format='pdf')
                 self.show()
 
     def set_save_path(self, path):
         self.save_path = path
+
     def plot_partial_percentages_nodes(self, save_path = None, map=True):
 
         metrics_mul = self.plot_helper_vi_hmc.run_for_dataset(criteria='node_run', map=map)
@@ -998,15 +1014,15 @@ class PlotFunctionHolder:
             percentages = ['1', '5', '61', '100']
         save_path = save_path if save_path is not None else self.save_path
         data_name = self.find_data_name(self.la_swa_path)
+        num_runs = 15
         for method, criteria in [('Laplace', 'laplace'), ('SWAG', 'swag')]:
             fig, ax = plt.subplots(1, 1)
             for run in percentages:
-                predictions, labels = self.plot_helper_la_swa.get_predictions_and_labels_for_percentage(
-                    run, 4, criteria, laplace=True if 'laplace' in criteria else False
-                )
-                if 'laplace' == criteria:
-                    plot_calibration(predictions[0], labels, pred_var=predictions[1], ax=ax, label=f'{run} pct stoch')
-                else:
+                for idx in range(num_runs):
+                    predictions, labels = self.plot_helper_la_swa.get_predictions_and_labels_for_percentage(
+                        percentage=run, idx=0, path_name_criteria=criteria, laplace=True if 'laplace' in criteria else False
+                    )
+                    np.vstack()
                     plot_calibration(predictions, labels, ax=ax, label=f'{run} pct stoch')
             set_legends_to_plot(ax)
             ax.set_title(f'Average Calibration {method}')
@@ -1242,11 +1258,20 @@ if __name__ == '__main__':
         la_swa_path_rand = os.path.join(path_la_rand, prediction_folder)
         vi_hmc_path_rand = os.path.join(path_vi_rand, prediction_folder)
 
-        save_path = os.path.join(os.getcwd(), r"Figures\MSE")
+        save_path = os.path.join(os.getcwd(), r"Figures\Predictions")
         plot_holder = PlotFunctionHolder(la_swa_path=la_swa_path, vi_hmc_path=vi_hmc_path, calculate=True, save_path=save_path,
                                          la_swa_path_rand=la_swa_path_rand, vi_hmc_path_rand=vi_hmc_path_rand,
-                                         eval_method='mse')
-        plot_holder.write_latex_table()
+                                         eval_method='nll')
+        plot_holder.plot_pred_labels_vi_hmc()
+        plot_holder.plot_pred_labels_la_swa()
+        plot_holder.plot_pred_labels_node_based()
+
+        # plot_holder.plot_calibration_la_swa()
+        # plot_holder.plot_calibration_nodes()
+        # plot_holder.plot_calibration_vi_hmc()
+
+        # plot_holder.write_latex_table()
+
         # plot_holder.plot_partial_percentages_nodes()
         # plot_holder.plot_partial_percentages_vi_hmc()
         # plot_holder.plot_partial_percentages_rand_vs_max(criteria='node_run')
