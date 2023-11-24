@@ -1166,6 +1166,38 @@ class PlotFunctionHolder:
         df[column] = new_values
         return df
 
+    def plot_correlation_matrix(self, estimator = np.median, save_path = None):
+        metrics_la = np.array(self.plot_helper_la_swa.run_for_dataset(criteria='laplace', laplace=True))[:, 1:]
+        metrics_swa = np.array(self.plot_helper_la_swa.run_for_dataset(criteria='swag', laplace=False))[:, 1:]
+        metrics_vi = np.array(self.plot_helper_vi_hmc.run_for_dataset(criteria='vi_run'))[:, 1:]
+        metrics_hmc = np.array(self.plot_helper_vi_hmc.run_for_dataset(criteria='hmc'))[:, 1:]
+        metrics_add = np.array(self.plot_helper_vi_hmc.run_for_dataset(criteria='add'))[:, 1:]
+        metrics_mul = np.array(self.plot_helper_vi_hmc.run_for_dataset(criteria='node_run'))[:, 1:]
+
+        runs = np.zeros_like(metrics_mul)
+        runs = runs + np.array(range(metrics_mul.shape[0])).reshape(-1, 1)
+        percentiles = np.zeros_like(runs) + np.array([1,2, 5, 8, 14, 23, 37, 61, 100]).reshape(1, -1)
+
+        dataframe = pd.DataFrame()
+        dataframe['runs'] = runs.ravel()
+        dataframe['runs'] = dataframe['runs'].astype('category')
+        dataframe['percentiles'] = percentiles.ravel()
+
+        methods = ['Laplace', 'SWAG', 'VI', 'HMC', 'Additive', 'Multiplicative']
+
+        fig, ax = plt.subplots(1,1)
+
+        for method, metric in zip(methods,
+                                  [metrics_la, metrics_swa, metrics_vi, metrics_hmc, metrics_add, metrics_mul]):
+
+            dataframe[method] = metric.ravel()
+
+        cormat = dataframe.corr()
+        sns.heatmap(cormat, ax = ax)
+        plt.show()
+
+
+
     def write_latex_table(self,estimator = np.median,  save_path = None, bold_direction = 'percentage'):
         metrics_la = np.array(self.plot_helper_la_swa.run_for_dataset(criteria='laplace', laplace=True))[:, 1:]
         metrics_swa = np.array(self.plot_helper_la_swa.run_for_dataset(criteria='swag', laplace=False))[:, 1:]
