@@ -9,6 +9,7 @@ from SentimentClassifier import *
 from argparse import Namespace
 from PartialConstructor import PartialConstructorSwag
 import utils
+import time
 from tqdm import tqdm
 TRANSFORMER_INCOMPATIBLE_MODULES = (nn.Embedding, nn.LayerNorm, nn.BatchNorm1d,
                                     nn.BatchNorm2d, nn.BatchNorm3d)
@@ -21,28 +22,25 @@ class SWAGExperiments:
     def __init__(self, args=None):
         # TODO set correct train and val sizes
         self.default_args = {'output_path': args.output_path,
-                             'train_batch_size': 32, 'eval_batch_size': 32, 'device': 'cpu', 'num_epochs': 1.0,
-                             'dataset_name': 'imdb',
-                                 'train': True, 'train_size': 1, 'test_size': 1, 'device_batch_size': 32,
-                             'learning_rate': 5e-05, 'seed': 0, 'val_size': 1,
-                             'laplace': True, 'swag': False, 'save_strategy': 'no',
-                             'load_best_model_at_end': False, 'no_cuda': False}
+                             'train_batch_size': args.batch_size, 'eval_batch_size': args.batch_size,'device_batch_size': args.batch_size,
+                             'device': 'cuda', 'num_epochs': 1.0, 'dataset_name': args.dataset_name, 'train': True,
+                             'train_size': 1, 'val_size': 1, 'test_size': 1,  'learning_rate': 5e-05,
+                             'laplace': True, 'save_strategy': 'no', 'load_best_model_at_end': False, 'no_cuda': False }
 
         # peters_default_args = {'output_path': args.output_path,
         #                      'train_batch_size': 1, 'eval_batch_size': 1, 'device': 'cpu', 'num_epochs': 1.0,
         #                      'dataset_name': 'imdb',
-        #                          'train': True, 'train_size': 2, 'test_size':5, 'device_batch_size': 1,
-        #                      'learning_rate': 5e-05, 'seed': 0, 'val_size': 2,
+        #                          'train': True, 'train_size': 1, 'test_size': 1, 'device_batch_size': 32,
+        #                      'learning_rate': 5e-05, 'seed': 0, 'val_size': 1,
         #                      'laplace': True, 'swag': False, 'save_strategy': 'no',
         #                      'load_best_model_at_end': False, 'no_cuda': False}
-        #
         # self.default_args = peters_default_args
         self.default_args = Namespace(**self.default_args)
         self.default_args.model_path = args.model_path
         self.default_args.data_path = getattr(args, 'data_path', None)
-        self.default_args_swag = {'n_iterations_between_snapshots': 20,
+        self.default_args_swag = {'n_iterations_between_snapshots': 7,
                                   'module_names': None, 'num_columns': 20, 'num_mc_samples': 50,
-                                  'min_var': 1e-20, 'reduction': 'mean', 'num_classes': 2, 'optim_max_num_steps': 400,
+                                  'min_var': 1e-20, 'reduction': 'mean', 'num_classes': 2, 'optim_max_num_steps': 150 ,
                                   'max_num_steps': 2000}
 
         self.partial_constructor = None
@@ -61,7 +59,8 @@ class SWAGExperiments:
             train_bs=self.default_args.train_batch_size,
             eval_bs=self.default_args.eval_batch_size,
             dataset_name=self.default_args.dataset_name,
-            device_batch_size=self.default_args.device_batch_size,
+            train_device_batch_size=self.default_args.device_batch_size,
+            eval_device_batch_size=self.default_args.device_batch_size,
             lr=self.default_args.learning_rate,
             data_path=self.default_args.data_path)
 
@@ -158,9 +157,8 @@ class SWAGExperiments:
 
     def random_ramping_experiment(self, run_number=0):
 
-        # num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
         results = {}
-        save_path = os.path.join(self.default_args.output_path, 'random_module_ramping')
+        save_path = self.default_args.output_path
         self.ensure_path_existence(save_path)
 
         for number_of_modules in self.num_modules:
@@ -184,8 +182,10 @@ class SWAGExperiments:
 
     def max_norm_ramping_experiment(self, run_number=0):
 
-        # num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
         results = {}
+        save_path = self.default_args.output_path
+        self.ensure_path_existence(save_path)
+
         for number_of_modules in self.num_modules:
             print("Training with number of stochastic modules equal to", number_of_modules)
             self.initialize_sentiment_classifier()
@@ -202,10 +202,8 @@ class SWAGExperiments:
             evaluator = utils.evaluate_swag(self.partial_constructor, self.trainer)
             results[number_of_modules] = evaluator
 
-        save_path = os.path.join(self.default_args.output_path, 'random_module_ramping')
-        self.ensure_path_existence(save_path)
-        with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
-            pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
+                pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 
@@ -219,7 +217,8 @@ def run_random_ramping_experiments(args):
     exp_args = {'model_path': model_path,
                 'dataset_name': args.dataset_name,
                 'data_path': data_path,
-                'output_path': args.output_path}
+                'output_path': args.output_path,
+                'batch_size': args.batch_size}
 
     exp_args = Namespace(**exp_args)
     swag_exp = SWAGExperiments(args=exp_args)
@@ -270,7 +269,9 @@ if __name__ == '__main__':
     parser.add_argument('--data_path', type = str, default='')
     parser.add_argument('--output_path', type = str, default='')
     parser.add_argument('--model_path', type=str, default='')
+    parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--subclass', type = str, default='')
+
     args = parser.parse_args()
 
     if args.experiment == 'random_ramping':
