@@ -37,8 +37,8 @@ class LaplaceExperiments:
         self.default_args = {'output_path': args.output_path,
                              'train_batch_size': 1, 'eval_batch_size': 1, 'device': 'cpu', 'num_epochs': 1.0,
                              'dataset_name': 'imdb',
-                             'train': True, 'train_size': 1, 'test_size': 1, 'device_batch_size': 1,
-                             'learning_rate': 5e-05, 'seed': 0,'val_size': 1,
+                             'train': True, 'train_size': 2, 'test_size': 2, 'device_batch_size': 1,
+                             'learning_rate': 5e-05, 'seed': 0,'val_size': 2,
                              'laplace': True, 'swag': False, 'save_strategy': 'no',
                              'load_best_model_at_end': False, 'no_cuda': False}
 
@@ -94,8 +94,6 @@ class LaplaceExperiments:
             partial_constructor.set_use_only_attn()
         elif self.subclass == 'mlp':
             partial_constructor.set_use_only_mlp()
-        else:
-            raise ValueError("self.subclass should be in ['attn', 'mlp']")
 
         return partial_constructor
 
@@ -175,7 +173,6 @@ class LaplaceExperiments:
             else:
                 os.mkdir(path)
 
-
     def random_ramping_experiment(self, run_number = 0, use_uninformed = False):
 
         print("Running random ramping experiment on ", self.default_args.dataset_name)
@@ -196,7 +193,7 @@ class LaplaceExperiments:
 
     def max_norm_ramping_experiment(self, run_number = 0, use_uninformed = False):
 
-        print("Running random ramping experiment on ", self.default_args.dataset_name)
+        print("Running max norm ramping experiment on ", self.default_args.dataset_name)
         results = {'results': {}, 'module_selection': {}}
 
         for num_modules in self.num_modules:
@@ -291,7 +288,6 @@ if __name__ == '__main__':
 
     if args.experiment == 'random_ramping':
         run_random_ramping_experiments(args)
-
     if args.experiment == 'operator_norm_ramping':
         run_max_norm_ramping_experiments(args)
     if args.experiment == 'operator_norm_ramping_subclass':

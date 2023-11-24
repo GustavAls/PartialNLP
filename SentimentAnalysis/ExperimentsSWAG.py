@@ -135,6 +135,7 @@ class SWAGExperiments:
     def optimize_lr(self):
 
         learning_rates = np.logspace(-3, -1, num=6, endpoint=True)
+        learning_rates = np.array([1e-3, 1e-2, 2e-2, 1e-1])
         neg_log_likelihoods = []
         pbar = tqdm(learning_rates, desc='Optimizing Learning Rates')
         for learning_rate in pbar:
