@@ -182,7 +182,7 @@ class LaplaceExperiments:
         print("Running random ramping experiment on ", self.default_args.dataset_name)
         results = {'results': {}, 'module_selection': {}}
 
-        save_path = os.path.join(self.args.output_path, 'random_module_ramping')
+        save_path = self.args.output_path
         self.ensure_path_existence(save_path)
         for num_modules in self.num_modules:
             self.create_partial_random_ramping_construction(num_modules)

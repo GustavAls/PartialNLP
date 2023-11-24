@@ -157,7 +157,7 @@ class SWAGExperiments:
 
         # num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
         results = {}
-        save_path = os.path.join(self.default_args.output_path, 'random_module_ramping')
+        save_path = self.default_args.output_path
         self.ensure_path_existence(save_path)
 
         for number_of_modules in self.num_modules:
