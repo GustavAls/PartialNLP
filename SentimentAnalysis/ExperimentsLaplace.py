@@ -71,7 +71,7 @@ class LaplaceExperiments:
             self.model = self.sentiment_classifier.model
 
     def create_partial_random_ramping_construction(self, num_params):
-        partial_constructor = PartialConstructor(self.model)
+        partial_constructor = self.use_subclass_part_only(PartialConstructor(self.model))
         partial_constructor.select_random_percentile(num_params)
         partial_constructor.select()
         self.num_stoch_params = partial_constructor.get_num_stochastic_parameters()
@@ -79,12 +79,23 @@ class LaplaceExperiments:
         self.module_names = partial_constructor.module_names
 
     def create_partial_max_norm_ramping(self, num_params):
-        partial_constructor = PartialConstructor(self.model)
+        partial_constructor = self.use_subclass_part_only(PartialConstructor(self.model))
         partial_constructor.select_max_operator_norm(num_params)
         partial_constructor.select()
         self.num_stoch_params = partial_constructor.get_num_stochastic_parameters()
         self.num_params = partial_constructor.get_num_params()
         self.module_names = partial_constructor.module_names
+
+    def use_subclass_part_only(self, partial_constructor):
+
+        if self.subclass == 'attn':
+            partial_constructor.set_use_only_attn()
+        elif self.subclass == 'mlp':
+            partial_constructor.set_use_only_mlp()
+        else:
+            raise ValueError("self.subclass should be in ['attn', 'mlp']")
+
+        return partial_constructor
 
     def fit_laplace(self, prior_precision=1.0):
         la = lp.Laplace(self.model, 'classification',
@@ -194,7 +205,7 @@ class LaplaceExperiments:
             results['results'][num_modules] = copy.deepcopy(evaluator)
             results['module_selection'][num_modules] = copy.deepcopy(self.module_names)
 
-        save_path = os.path.join(self.args.output_path, 'random_module_ramping')
+        save_path = os.path.join(self.args.output_path, 'operator_norm_module_ramping')
         self.ensure_path_existence(save_path)
         with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -240,6 +251,25 @@ def run_max_norm_ramping_experiments(args):
     lap_exp = LaplaceExperiments(args = la_args)
     lap_exp.max_norm_ramping_experiment(args.run_number, args.uninformed_prior)
 
+def run_max_norm_ramping_only_subclass(args):
+    data_path = args.data_path
+    model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
+
+    model_path = os.path.join(data_path, model_ext_path)
+    args.model_path = model_path
+    la_args = {'model_path': model_path,
+               'dataset_name': args.dataset_name,
+               'num_optim_steps': 7,
+               'data_path': data_path,
+               'run_number': args.run_number,
+               'output_path': args.output_path}
+
+    # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
+    la_args = Namespace(**la_args)
+    lap_exp = LaplaceExperiments(args = la_args)
+    lap_exp.number_of_modules = [] # TODO fix correct here
+    lap_exp.subclass = args.subclass
+    lap_exp.max_norm_ramping_experiment(args.run_number, args.uninformed_prior)
 
 
 
@@ -256,6 +286,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_path', type = str, default='')
     parser.add_argument('--output_path', type = str, default='')
     parser.add_argument('--batch_size', type=int, default=1)
+    parser.add_argument('--subclass', type = str, default='')
 
     args = parser.parse_args()
 

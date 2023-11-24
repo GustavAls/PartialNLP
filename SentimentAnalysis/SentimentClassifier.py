@@ -188,7 +188,7 @@ class SentimentClassifier:
         """
 
         train_data, val_data, test_data = self.load_save_dataset(data_path=data_path, dataset_name=dataset_name, run=run)
-
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
         tokenized_val = val_data.map(self.tokenize, batched=True, batch_size=eval_bs)
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
@@ -215,6 +215,7 @@ class SentimentClassifier:
         )
 
         epoch_iterator, model, trainer = trainer.train()
+        model = model.to(device)
         self.model = model
         return epoch_iterator, trainer, tokenized_val
 

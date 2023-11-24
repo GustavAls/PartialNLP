@@ -28,23 +28,42 @@ class PartialConstructor:
         if self.module_names == 'all':
             self.module_names = [name for name, _ in self.model.named_modules()]
         self.subnet_indices = None
+        self.use_only_attn = False
+        self.use_only_mlp = False
+
+    def set_use_only_mlp(self):
+        self.use_only_mlp = True
+        self.use_only_attn = False
+
+    def set_use_only_attn(self):
+        self.use_only_mlp = False
+        self.use_only_attn = True
+
+    def named_modules(self):
+        attn = 'attention'
+        if self.use_only_mlp:
+            restriction = lambda x, y: (not (attn in x)) and isinstance(y, TRANSFORMER_COMPATIBLE_MODULES)
+        elif self.use_only_attn:
+            restriction = lambda x, y: attn in x and isinstance(y, TRANSFORMER_COMPATIBLE_MODULES)
+        else:
+            restriction = lambda x,y: '' in x and isinstance(y, TRANSFORMER_COMPATIBLE_MODULES)
+
+        return ((n, m) for n, m in self.model.named_modules() if restriction(n, m))
 
     def select_random_percentile(self, num_params):
         counter = 0
         names = []
-        for name, module in self.model.named_modules():
-            if isinstance(module, TRANSFORMER_COMPATIBLE_MODULES):
-                counter += 1
-                names.append(name)
+        for name, module in self.named_modules():
+            names.append(name)
+
         self.module_names = np.random.choice(names, size=(num_params, ))
 
     def select_max_operator_norm(self, num_params):
 
         names, norms = [], []
-        for name, module in self.model.named_modules():
-            if isinstance(module, TRANSFORMER_COMPATIBLE_MODULES):
-                names.append(name)
-                norms.append(torch.linalg.matrix_norm(module.weight.data, ord = 2).item())
+        for name, module in self.named_modules():
+            names.append(name)
+            norms.append(torch.linalg.matrix_norm(module.weight.data, ord = 2).item())
 
         argsorted = np.argsort(norms)
         self.module_names = [names[i] for i in argsorted[::-1][:num_params]]
@@ -137,6 +156,8 @@ class PartialConstructorSwag:
         self.theta_mean = None
         self.swag_eval = False
         self.step_counter = 0
+        self.use_only_mlp = False
+        self.use_only_attn = False
 
     def train(self, is_training = True):
         self.is_training = is_training
@@ -150,25 +171,40 @@ class PartialConstructorSwag:
         return nn.utils.vector_to_parameters(param_new,
                                              (param for param in self.model.parameters() if param.requires_grad))
 
-    def select_random_percentile(self, num_params):
+    def set_use_only_mlp(self):
+        self.use_only_mlp = True
+        self.use_only_attn = False
 
+    def set_use_only_attn(self):
+        self.use_only_mlp = False
+        self.use_only_attn = True
+
+    def named_modules(self):
+
+        attn = 'attention'
+        if self.use_only_mlp:
+            restriction = lambda x, y: (not (attn in x)) and isinstance(y, TRANSFORMER_COMPATIBLE_MODULES)
+        elif self.use_only_attn:
+            restriction = lambda x, y: attn in x and isinstance(y, TRANSFORMER_COMPATIBLE_MODULES)
+        else:
+            restriction = lambda x, y: '' in x and isinstance(y, TRANSFORMER_COMPATIBLE_MODULES)
+
+        return ((n, m) for n, m in self.model.named_modules() if restriction(n, m))
+
+    def select_random_percentile(self, num_params):
         names = []
-        for name, module in self.model.named_modules():
-            if isinstance(module, TRANSFORMER_COMPATIBLE_MODULES):
-                names.append(name)
+        for name, module in self.named_modules():
+            names.append(name)
         self.module_names = np.random.choice(names, size = (num_params, ))
 
     def select_max_operator_norm(self, num_params):
-
         names, norms = [], []
-        for name, module in self.model.named_modules():
-            if isinstance(module, TRANSFORMER_COMPATIBLE_MODULES):
-                names.append(name)
-                norms.append(torch.linalg.matrix_norm(module.weight.data, ord = 2).item())
+        for name, module in self.named_modules():
+            names.append(name)
+            norms.append(torch.linalg.matrix_norm(module.weight.data, ord = 2).item())
 
         argsorted = np.argsort(norms)
         self.module_names = [names[i] for i in argsorted[::-1][:num_params]]
-
 
     def _init_parameters(self):
 

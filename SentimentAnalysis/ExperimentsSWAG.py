@@ -29,8 +29,8 @@ class SWAGExperiments:
         # peters_default_args = {'output_path': args.output_path,
         #                      'train_batch_size': 1, 'eval_batch_size': 1, 'device': 'cpu', 'num_epochs': 1.0,
         #                      'dataset_name': 'imdb',
-        #                          'train': True, 'train_size': 2, 'test_size':5, 'device_batch_size': 1,
-        #                      'learning_rate': 5e-05, 'seed': 0, 'val_size': 2,
+        #                          'train': True, 'train_size': 1, 'test_size': 1, 'device_batch_size': 32,
+        #                      'learning_rate': 5e-05, 'seed': 0, 'val_size': 1,
         #                      'laplace': True, 'swag': False, 'save_strategy': 'no',
         #                      'load_best_model_at_end': False, 'no_cuda': False}
         # self.default_args = peters_default_args
@@ -60,10 +60,18 @@ class SWAGExperiments:
             lr=self.default_args.learning_rate,
             data_path=self.default_args.data_path)
 
+
+    def use_subclass_part_only(self):
+        if self.subclass == 'attn':
+            self.partial_constructor.set_use_only_attn()
+        elif self.subclass == 'mlp':
+            self.partial_constructor.set_use_only_mlp()
+
     def initialize_swag(self, model, **kwargs):
 
         kwargs = kwargs if len(kwargs) > 0 else self.default_args_swag
         self.partial_constructor = PartialConstructorSwag(model, **kwargs)
+        self.use_subclass_part_only()
 
     def create_partial_max_operator_norm(self, num_params):
         self.partial_constructor.select_max_operator_norm(num_params)
@@ -94,7 +102,8 @@ class SWAGExperiments:
         max_num_steps = kwargs.get('max_num_steps', np.inf)
         counter = 0
         pbar = tqdm(total=max_num_steps//self.partial_constructor.number_of_iterations_bs, desc='Training SWAG')
-        for epoch in range(max(int(self.default_args.num_epochs), 1, 3)):
+
+        for epoch in range(max(int(self.default_args.num_epochs), 1)):
             for step, x in enumerate(self.train_loader):
                 self.optimizer.zero_grad()
                 out = self.partial_constructor(**x)
@@ -105,7 +114,7 @@ class SWAGExperiments:
                     self.partial_constructor.snapshot()
                     pbar.update(1)
 
-                if counter == max_num_steps:
+                if counter >= max_num_steps:
                     self.partial_constructor.snapshot()
                     pbar.update(pbar.total)
                     pbar.close()
@@ -143,12 +152,12 @@ class SWAGExperiments:
 
     def random_ramping_experiment(self, run_number=0):
 
-        num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
+        # num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
         results = {}
         save_path = os.path.join(self.default_args.output_path, 'random_module_ramping')
         self.ensure_path_existence(save_path)
 
-        for number_of_modules in num_modules:
+        for number_of_modules in self.num_modules:
             print("Training with number of stochastic modules equal to", number_of_modules)
             self.initialize_sentiment_classifier()
             self.initialize_swag(copy.deepcopy(self.trainer.model))
@@ -169,9 +178,9 @@ class SWAGExperiments:
 
     def max_norm_ramping_experiment(self, run_number=0):
 
-        num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
+        # num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
         results = {}
-        for number_of_modules in num_modules:
+        for number_of_modules in self.num_modules:
             print("Training with number of stochastic modules equal to", number_of_modules)
             self.initialize_sentiment_classifier()
             self.initialize_swag(copy.deepcopy(self.trainer.model))
@@ -226,6 +235,25 @@ def run_max_norm_ramping_experiments(args):
     swag_exp = SWAGExperiments(args=exp_args)
     swag_exp.max_norm_ramping_experiment(args.run_number)
 
+def run_max_norm_ramping_only_subclass(args):
+    data_path = args.data_path
+    model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
+
+    model_path = os.path.join(data_path, model_ext_path)
+    args.model_path = model_path
+    exp_args = {'model_path': model_path,
+                'dataset_name': args.dataset_name,
+                'data_path': data_path,
+                'output_path': args.output_path}
+
+    exp_args = Namespace(**exp_args)
+    swag_exp = SWAGExperiments(args=exp_args)
+    swag_exp.subclass =args.subclass
+    swag_exp.num_modules = [2,3] # TODO figure out number of modules in these cases
+    swag_exp.max_norm_ramping_experiment(args.run_number)
+
+
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(
@@ -238,9 +266,15 @@ if __name__ == '__main__':
     parser.add_argument('--output_path', type = str, default='')
     parser.add_argument('--model_path', type=str, default='')
     parser.add_argument('--batch_size', type=int, default=1)
+    parser.add_argument('--subclass', type = str, default='')
+
     args = parser.parse_args()
 
     if args.experiment == 'random_ramping':
         run_random_ramping_experiments(args)
     if args.experiment == 'operator_norm_ramping':
         run_max_norm_ramping_experiments(args)
+    if args.experiment == 'operator_norm_ramping_subclass':
+        if args.subclass:
+            run_max_norm_ramping_only_subclass(args)
+
