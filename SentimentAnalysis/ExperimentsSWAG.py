@@ -51,6 +51,7 @@ class SWAGExperiments:
         self.train_loader, self.trainer, self.tokenized_val, self.optimizer = (None, None, None, None)
         self.loss_fn = nn.CrossEntropyLoss()
         self.subclass = None
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     def initialize_sentiment_classifier(self):
         self.sentiment_classifier = prepare_sentiment_classifier(self.default_args)
@@ -63,6 +64,7 @@ class SWAGExperiments:
             device_batch_size=self.default_args.device_batch_size,
             lr=self.default_args.learning_rate,
             data_path=self.default_args.data_path)
+
 
     def use_subclass_part_only(self):
         if self.subclass == 'attn':
