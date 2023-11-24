@@ -35,8 +35,8 @@ from sklearn.gaussian_process.kernels import RBF
 class LaplaceExperiments:
     def __init__(self, args):
         self.default_args = {'output_path': args.output_path,
-                             'train_batch_size': args.batch_size, 'eval_batch_size': args.batch_size,
-                             'device_batch_size': args.batch_size,
+                             'train_batch_size': args.train_batch_size, 'eval_batch_size': args.eval_batch_size,
+                             'train_device_batch_size': args.train_batch_size, 'eval_device_batch_size': args.eval_batch_size,
                              'device': 'cuda', 'num_epochs': 1.0, 'dataset_name': args.dataset_name, 'train': True,
                              'train_size': 1, 'val_size': 1, 'test_size': 1, 'learning_rate': 5e-05,
                              'laplace': True, 'save_strategy': 'no', 'load_best_model_at_end': False, 'no_cuda': False}
@@ -47,8 +47,9 @@ class LaplaceExperiments:
         self.num_stoch_params = 0
         self.args = args
         self.module_names = None
-        self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
-
+        # self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
+        # Memory consideration
+        self.num_modules = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         default_args = Namespace(**self.default_args)
         self.default_args = default_args
         default_args.model_path = args.model_path
@@ -61,9 +62,10 @@ class LaplaceExperiments:
             train_bs=default_args.train_batch_size,
             eval_bs=default_args.eval_batch_size,
             dataset_name=default_args.dataset_name,
-            device_batch_size=default_args.device_batch_size,
+            train_device_batch_size=default_args.train_device_batch_size,
+            eval_device_batch_size=default_args.eval_device_batch_size,
             lr=default_args.learning_rate,
-            data_path = args.data_path,
+            data_path=args.data_path,
             run=args.run_number)
 
         if not isinstance(self.sentiment_classifier.model, Extension):
@@ -199,7 +201,8 @@ class LaplaceExperiments:
 
         print("Running random ramping experiment on ", self.default_args.dataset_name)
         results = {'results': {}, 'module_selection': {}}
-
+        save_path = self.args.output_path
+        self.ensure_path_existence(save_path)
         for num_modules in self.num_modules:
             self.create_partial_max_norm_ramping(num_modules)
             la = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed = use_uninformed)
@@ -208,10 +211,8 @@ class LaplaceExperiments:
             results['results'][num_modules] = copy.deepcopy(evaluator)
             results['module_selection'][num_modules] = copy.deepcopy(self.module_names)
 
-        save_path = os.path.join(self.args.output_path, 'operator_norm_module_ramping')
-        self.ensure_path_existence(save_path)
-        with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
-            pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
+                pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 def run_random_ramping_experiments(args):
@@ -226,7 +227,8 @@ def run_random_ramping_experiments(args):
                'data_path': data_path,
                'run_number': args.run_number,
                'output_path': args.output_path,
-               'batch_size' : args.batch_size,
+               'train_batch_size' : args.train_batch_size,
+               'eval_batch_size' : args.eval_batch_size,
                'dataset_name': args.dataset_name,
                'subclass': args.subclass}
 
@@ -289,7 +291,8 @@ if __name__ == '__main__':
     parser.add_argument('--data_path', type = str, default='')
     parser.add_argument('--model_path', type = str, default='')
     parser.add_argument('--output_path', type = str, default='')
-    parser.add_argument('--batch_size', type=int, default=1)
+    parser.add_argument('--train_batch_size', type=int, default=1)
+    parser.add_argument('--eval_batch_size', type=int, default=1)
     parser.add_argument('--subclass', type = str, default='both')
 
     args = parser.parse_args()

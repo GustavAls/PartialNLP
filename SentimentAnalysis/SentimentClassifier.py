@@ -65,7 +65,7 @@ class SentimentClassifier:
 
         else:
             train_data = data["train"].shuffle(seed=42).select([i for i in list(range(int(self.train_size)))])
-            val_data =  data["train"].shuffle(seed=42).select([i for i in list(range(int(self.val_size)))])
+            val_data = data["train"].shuffle(seed=42).select([i for i in list(range(int(self.val_size)))])
             test_data = data["test"] if self.test_size == 1 else \
                 data["test"].shuffle(seed=42).select([i for i in list(range(int(self.test_size)))])
         del data
@@ -88,13 +88,13 @@ class SentimentClassifier:
         f1 = load_f1.compute(predictions=predictions, references=labels)["f1"]
         return {"accuracy": accuracy, "f1": f1}
 
-
     def to_dataframe(self, dataset):
         dataframe = pd.DataFrame()
         dataframe['text'] = dataset['text']
         dataframe['label'] = dataset['label']
         return dataframe
-    def data_to_csv(self, train, val, test, output_path, run):
+
+    def data_to_csv(self, train, val, test, output_path):
 
         dataframe_train = self.to_dataframe(train)
         dataframe_train.to_csv(os.path.join(output_path, f'train_data.csv'))
@@ -175,8 +175,8 @@ class SentimentClassifier:
 
         trainer.train()
 
-    def prepare_laplace(self, output_path, train_bs, eval_bs, dataset_name, device_batch_size, lr=5e-05,
-                        data_path = None, run=0):
+    def prepare_laplace(self, output_path, train_bs, eval_bs, dataset_name, train_device_batch_size, eval_device_batch_size,
+                        lr=5e-05, data_path = None, run=0):
         """
 
         :param output_path: Ouput path, for compatibility with other function calls, this function does not save
@@ -196,8 +196,8 @@ class SentimentClassifier:
         training_args = TrainingArguments(output_dir=output_path,
                                           learning_rate=lr,
                                           do_train=True,
-                                          per_device_train_batch_size=device_batch_size,
-                                          per_device_eval_batch_size=device_batch_size,
+                                          per_device_train_batch_size=train_device_batch_size,
+                                          per_device_eval_batch_size=eval_device_batch_size,
                                           num_train_epochs=1,
                                           evaluation_strategy="epoch",
                                           save_strategy="epoch",

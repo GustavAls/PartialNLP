@@ -59,7 +59,8 @@ class SWAGExperiments:
             train_bs=self.default_args.train_batch_size,
             eval_bs=self.default_args.eval_batch_size,
             dataset_name=self.default_args.dataset_name,
-            device_batch_size=self.default_args.device_batch_size,
+            train_device_batch_size=self.default_args.device_batch_size,
+            eval_device_batch_size=self.default_args.device_batch_size,
             lr=self.default_args.learning_rate,
             data_path=self.default_args.data_path)
 
@@ -155,7 +156,6 @@ class SWAGExperiments:
 
     def random_ramping_experiment(self, run_number=0):
 
-        # num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
         results = {}
         save_path = self.default_args.output_path
         self.ensure_path_existence(save_path)
@@ -181,8 +181,10 @@ class SWAGExperiments:
 
     def max_norm_ramping_experiment(self, run_number=0):
 
-        # num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
         results = {}
+        save_path = self.default_args.output_path
+        self.ensure_path_existence(save_path)
+
         for number_of_modules in self.num_modules:
             print("Training with number of stochastic modules equal to", number_of_modules)
             self.initialize_sentiment_classifier()
@@ -199,10 +201,8 @@ class SWAGExperiments:
             evaluator = utils.evaluate_swag(self.partial_constructor, self.trainer)
             results[number_of_modules] = evaluator
 
-        save_path = os.path.join(self.default_args.output_path, 'random_module_ramping')
-        self.ensure_path_existence(save_path)
-        with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
-            pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
+                pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 
