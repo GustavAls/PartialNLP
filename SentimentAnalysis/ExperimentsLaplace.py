@@ -38,7 +38,7 @@ class LaplaceExperiments:
                              'train_batch_size': args.batch_size, 'eval_batch_size': args.batch_size,
                              'device_batch_size': args.batch_size,
                              'device': 'cuda', 'num_epochs': 1.0, 'dataset_name': args.dataset_name, 'train': True,
-                             'train_size': 2, 'val_size': 2, 'test_size': 2, 'learning_rate': 5e-05,
+                             'train_size': 1, 'val_size': 1, 'test_size': 1, 'learning_rate': 5e-05,
                              'laplace': True, 'save_strategy': 'no', 'load_best_model_at_end': False, 'no_cuda': False}
 
         self.base_full_prior = 1e4
@@ -53,6 +53,7 @@ class LaplaceExperiments:
         self.default_args = default_args
         default_args.model_path = args.model_path
         self.sentiment_classifier = prepare_sentiment_classifier(default_args)
+        self.subclass = args.subclass
 
         self.minimum_prior, self.maximum_prior, self.best_nll = 1e-1, 1e5, np.inf
         self.train_loader, self.trainer, self.tokenized_val = self.sentiment_classifier.prepare_laplace(
@@ -92,6 +93,8 @@ class LaplaceExperiments:
             partial_constructor.set_use_only_attn()
         elif self.subclass == 'mlp':
             partial_constructor.set_use_only_mlp()
+        elif self.subclass == 'both':
+            pass
         else:
             raise ValueError("self.subclass should be in ['attn', 'mlp']")
 
@@ -224,7 +227,8 @@ def run_random_ramping_experiments(args):
                'run_number': args.run_number,
                'output_path': args.output_path,
                'batch_size' : args.batch_size,
-               'dataset_name': args.dataset_name}
+               'dataset_name': args.dataset_name,
+               'subclass': args.subclass}
 
     # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
     la_args = Namespace(**la_args)
@@ -286,7 +290,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_path', type = str, default='')
     parser.add_argument('--output_path', type = str, default='')
     parser.add_argument('--batch_size', type=int, default=1)
-    parser.add_argument('--subclass', type = str, default='')
+    parser.add_argument('--subclass', type = str, default='both')
 
     args = parser.parse_args()
 

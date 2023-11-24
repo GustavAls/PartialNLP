@@ -9,6 +9,7 @@ from SentimentClassifier import *
 from argparse import Namespace
 from PartialConstructor import PartialConstructorSwag
 import utils
+import time
 from tqdm import tqdm
 TRANSFORMER_INCOMPATIBLE_MODULES = (nn.Embedding, nn.LayerNorm, nn.BatchNorm1d,
                                     nn.BatchNorm2d, nn.BatchNorm3d)
@@ -23,7 +24,7 @@ class SWAGExperiments:
         self.default_args = {'output_path': args.output_path,
                              'train_batch_size': args.batch_size, 'eval_batch_size': args.batch_size,'device_batch_size': args.batch_size,
                              'device': 'cuda', 'num_epochs': 1.0, 'dataset_name': args.dataset_name, 'train': True,
-                             'train_size': args.train_size, 'val_size': args.val_size, 'test_size': args.test_size,  'learning_rate': 5e-05,
+                             'train_size': 1, 'val_size': 1, 'test_size': 1,  'learning_rate': 5e-05,
                              'laplace': True, 'save_strategy': 'no', 'load_best_model_at_end': False, 'no_cuda': False }
 
         # peters_default_args = {'output_path': args.output_path,
@@ -37,16 +38,18 @@ class SWAGExperiments:
         self.default_args = Namespace(**self.default_args)
         self.default_args.model_path = args.model_path
         self.default_args.data_path = getattr(args, 'data_path', None)
-        self.default_args_swag = {'n_iterations_between_snapshots': 20,
+        self.default_args_swag = {'n_iterations_between_snapshots': 7,
                                   'module_names': None, 'num_columns': 20, 'num_mc_samples': 50,
-                                  'min_var': 1e-20, 'reduction': 'mean', 'num_classes': 2, 'optim_max_num_steps': 400 ,
+                                  'min_var': 1e-20, 'reduction': 'mean', 'num_classes': 2, 'optim_max_num_steps': 150 ,
                                   'max_num_steps': 2000}
 
         self.partial_constructor = None
-
+        self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
         self.sentiment_classifier = None
         self.train_loader, self.trainer, self.tokenized_val, self.optimizer = (None, None, None, None)
         self.loss_fn = nn.CrossEntropyLoss()
+        self.subclass = None
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     def initialize_sentiment_classifier(self):
         self.sentiment_classifier = prepare_sentiment_classifier(self.default_args)
