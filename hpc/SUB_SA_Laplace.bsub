@@ -1,17 +1,17 @@
 #!/bin/sh
 ### General options
 ### –- specify queue --
-#BSUB -q gpuv100
+#BSUB -q hpc
 ### -- set the job Name --
-#BSUB -J SentiClass[1-5]
+#BSUB -J SA_datarun[1-5]
 ### -- ask for number of cores (default: 1) --
 #BSUB -n 4
 ### -- Select the resources: 1 gpu in exclusive process mode --
 #BSUB -gpu "num=1:mode=exclusive_process"
 ### -- set walltime limit: hh:mm --  maximum 24 hours for GPU-queues right now
-#BSUB -W 5:00
+#BSUB -W 4:00
 # request 10GB of system-memory
-#BSUB -R "rusage[mem=5GB]"
+#BSUB -R "rusage[mem=2GB]"
 #BSUB -R "span[hosts=1]"
 ### -- set the email address --
 # please uncomment the following line and put in your e-mail address,
@@ -29,7 +29,7 @@
 
 # Activate the python eviorment
 module load python3/3.9.11
-source ~/PartialNLP/partial_venv/bin/activate
+source ~/PartialNLP/scratch/s184400/partial_venv/bin/activate
 # Set python path
 export PYTHONPATH=$PYTHONPATH:~/PartialNLP/
 export PYTHONPATH=$PYTHONPATH:~/
@@ -42,16 +42,24 @@ module load cuda/11.7
 echo "Running script..."
 # Send sample job to GPU
 
+#train_sizes=(0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0)
+#num_epochs_list=(10.0 5.0 3.333333333333333 2.5 2.0 1.6666666666666667 1.4285714285714284 1.25 1.1111111111111112 1.0)
 runs=(0 1 2 3 4)
 
 # Get the values for this job array task using LSB_JOBINDEX
+#train_size="${train_sizes[$LSB_JOBINDEX - 1]}"
+#num_epoch="${num_epochs_list[$LSB_JOBINDEX - 1]}"
+
 run="${runs[$LSB_JOBINDEX - 1]}"
 
 ##### ADD INFO HERE ####
 dataset="imdb"
 
 # Create some folders
-dir_outpath="scratch/s184400/SA_results/Fine_tuning/${dataset}_logging/run_${run}"
+dir_outpath="scratch/s184400/SA_results/imdb/${dataset}_dataset/run_${run}"
+
+#--logging_perc 0.1 \
+#--eval_steps 0.1 \
 
 # Make the directories if they don't exist
 mkdir -p $dir_outpath
@@ -61,13 +69,20 @@ python3 SentimentAnalysis/SentimentClassifier.py \
     --output_path $dir_outpath \
     --train_batch_size 32 \
     --eval_batch_size 32 \
-    --num_epochs 1 \
+    --run $run \
+    --num_epochs 1.0 \
     --dataset_name $dataset \
-    --seed $run \
+    --seed 42 \
     --train True \
     --learning_rate 5e-05 \
     --device_batch_size 32 \
-    --logging_perc 10 \
+    --train_size 1.0 \
+    --laplace False \
+    --no_cuda False \
+    --save_strategy "epoch" \
+    --evaluation_strategy "epoch" \
+    --load_best_model_at_end False \
+    --dataramping False \
 
 
 if [ $? -eq 0 ]; then

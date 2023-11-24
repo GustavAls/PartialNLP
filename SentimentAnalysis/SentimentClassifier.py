@@ -65,7 +65,7 @@ class SentimentClassifier:
 
         else:
             train_data = data["train"].shuffle(seed=42).select([i for i in list(range(int(self.train_size)))])
-            val_data =  data["train"].shuffle(seed=42).select([i for i in list(range(int(self.train_size)))])
+            val_data =  data["train"].shuffle(seed=42).select([i for i in list(range(int(self.val_size)))])
             test_data = data["test"] if self.test_size == 1 else \
                 data["test"].shuffle(seed=42).select([i for i in list(range(int(self.test_size)))])
         del data

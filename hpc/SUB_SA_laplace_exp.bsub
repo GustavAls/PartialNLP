@@ -1,68 +1,79 @@
 #!/bin/sh
 ### General options
 ### –- specify queue --
-### CHANGE HERE FOR GPU/CPU
-##BSUB -q gpuv100
+#BSUB -q gpuv100
 ### -- set the job Name --
-#BSUB -J swag_yacht
+#BSUB -J laplace_exp[1-5]
 ### -- ask for number of cores (default: 1) --
-#BSUB -n 2
-#BSUB -R "span[block=2]"
+#BSUB -n 4
+#BSUB -R "span[hosts=1]"
 ### -- Select the resources: 1 gpu in exclusive process mode --
-### CHANGE HERE FOR GPU/CPU
-##BSUB -gpu "num=1:mode=exclusive_process"
+#BSUB -gpu "num=1:mode=exclusive_process"
 ### -- set walltime limit: hh:mm --  maximum 24 hours for GPU-queues right now
-#BSUB -W 24:00
-# request 10GB of system-memory
-#BSUB -R "rusage[mem=10GB]"
+#BSUB -W 6:00
+# request XGB of system-memory
+#BSUB -R "rusage[mem=8GB]"
 ### -- set the email address --
 # please uncomment the following line and put in your e-mail address,
 # if you want to receive e-mail notifications on a non-default address
-##BSUB -u your_email_address
+###BSUB -u your_email_address
 ### -- send notification at start --
 ##BSUB -B
 ### -- send notification at completion--
 ##BSUB -N
 ### -- Specify the output and error file. %J is the job-id --
 ### -- -o and -e mean append, -oo and -eo mean overwrite --
-#BSUB -o out/gpu_%J.out
-#BSUB -e out/gpu_%J.err
+#BSUB -o scratch/s184400/SA_results/out/gpu_%J.out
+#BSUB -e scratch/s184400/SA_results/out/gpu_%J.err
 # -- end of LSF options --
 
 # Activate the python eviorment
 module load python3/3.9.11
-source ~/PartialNLP/partial_venv/bin/activate
+source ~/PartialNLP/scratch/s184400/partial_venv/bin/activate
 # Set python path
 export PYTHONPATH=$PYTHONPATH:~/PartialNLP/
-#export PYTHONPATH=$PYTHONPATH:~/
+export PYTHONPATH=$PYTHONPATH:~/PartialNLP/scratch/s184400/cloned_repos/
 
+nvidia-smi
 # Load the cuda module
-module load cuda/11.6
-/appl/cuda/11.6.0/samples/bin/x86_64/linux/release/deviceQuery
+module load cuda/11.7
+/appl/cuda/11.7.0/samples/bin/x86_64/linux/release/deviceQuery
 
 echo "Running script..."
 # Send sample job to GPU
 
 ##### ADD INFO HERE ####
-model_name="yacht"
+dataset="imdb"
 
 # Create some folders
-dir_outpath="results/UCI_SWAG/${model_name}_models"
-dir_datapath="results/UCI_SWAG/${model_name}_data"
+dir_outpath="scratch/s184400/SA_results/laplace/${dataset}_first_exp/run_${run}"
+dir_datapath="scratch/s184400/SA_results/Init/${dataset}_dataset/run_${run}"
+
+runs=(0 1 2 3 4)
+run="${runs[$LSB_JOBINDEX - 1]}"
+
 
 # Make the directories if they don't exist
 mkdir -p $dir_outpath
-mkdir -p $dir_datapath
+
+#--train_size 3000 \
+#--test_size 300 \
+#--train_batch_size 32 \
+#--eval_batch_size 32 \
+#--device_batch_size 32 \
+#--train_size 1 \
+#--val_size 1 \
+#--test_size 1 \
+#--num_epochs 1 \
 
 # Run the training
-python3 SWAG/swag_uci.py \
+python3 SentimentAnalysis/ExperimentsLaplace.py \
     --output_path $dir_outpath \
     --data_path $dir_datapath \
-    --dataset $model_name \
-    --num_epochs 20000 \
-    --num_runs 15 \
-    --device "cpu" \
-    --bayes_var False \
+    --experiment "random_ramping" \
+    --dataset_name $dataset \
+    --run_number $run
+
 
 if [ $? -eq 0 ]; then
     echo "Success"
