@@ -38,9 +38,9 @@ class SWAGExperiments:
         self.default_args = Namespace(**self.default_args)
         self.default_args.model_path = args.model_path
         self.default_args.data_path = getattr(args, 'data_path', None)
-        self.default_args_swag = {'n_iterations_between_snapshots': 7,
+        self.default_args_swag = {'n_iterations_between_snapshots': 5,
                                   'module_names': None, 'num_columns': 20, 'num_mc_samples': 50,
-                                  'min_var': 1e-20, 'reduction': 'mean', 'num_classes': 2, 'optim_max_num_steps': 150 ,
+                                  'min_var': 1e-20, 'reduction': 'mean', 'num_classes': 2, 'optim_max_num_steps': 100 ,
                                   'max_num_steps': 2000}
 
         self.partial_constructor = None
