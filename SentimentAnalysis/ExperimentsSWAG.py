@@ -158,12 +158,11 @@ class SWAGExperiments:
                 os.mkdir(path)
 
     def get_num_remaining_modules(self, path, run_number):
-
-        paths = os.listdir(path)
-        if len(paths) == 0:
+        results_path = os.path.join(path, f"run_number_{run_number}.pkl")
+        if not os.path.exists(results_path):
             return self.num_modules
-        if os.path.exists((p := os.path.join(path,f"run_number_{run_number}.pkl"))):
-            results_file = pickle.load(open(p, 'rb'))
+        else:
+            results_file = pickle.load(open(results_path, 'rb'))
             number_of_modules = list(results_file.keys())
             new_modules_to_run = sorted(list(set(self.num_modules) - set(number_of_modules)))
             return new_modules_to_run
@@ -294,6 +293,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    pcl = pickle.load(open(r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\swag\random_ramping\run_0\run_number_0.pkl", 'rb'))
     if args.experiment == 'random_ramping':
         run_random_ramping_experiments(args)
     if args.experiment == 'operator_norm_ramping':

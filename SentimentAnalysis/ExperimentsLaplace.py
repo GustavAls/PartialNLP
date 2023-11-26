@@ -183,11 +183,11 @@ class LaplaceExperiments:
                 os.mkdir(path)
 
     def get_num_remaining_modules(self, path, run_number):
-        paths = os.listdir(path)
-        if len(paths) == 0:
+        results_path = os.path.join(path, f"run_number_{run_number}.pkl")
+        if not os.path.exists(results_path):
             return self.num_modules
-        if os.path.exists((p := os.path.join(path, f"run_number_{run_number}.pkl"))):
-            results_file = pickle.load(open(p, 'rb'))
+        else:
+            results_file = pickle.load(open(results_path, 'rb'))
             number_of_modules = list(results_file.keys())
             new_modules_to_run = sorted(list(set(self.num_modules) - set(number_of_modules)))
             return new_modules_to_run

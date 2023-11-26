@@ -1008,30 +1008,6 @@ class PlotFunctionHolder:
 
         self.show()
 
-    def plot_calibration_la_swa(self, percentages=None,  save_path = None):
-
-        if percentages is None:
-            percentages = ['1', '5', '61', '100']
-        save_path = save_path if save_path is not None else self.save_path
-        data_name = self.find_data_name(self.la_swa_path)
-        num_runs = 15
-        for method, criteria in [('Laplace', 'laplace'), ('SWAG', 'swag')]:
-            fig, ax = plt.subplots(1, 1)
-            for run in percentages:
-                for idx in range(num_runs):
-                    predictions, labels = self.plot_helper_la_swa.get_predictions_and_labels_for_percentage(
-                        percentage=run, idx=0, path_name_criteria=criteria, laplace=True if 'laplace' in criteria else False
-                    )
-                    np.vstack()
-                    plot_calibration(predictions, labels, ax=ax, label=f'{run} pct stoch')
-            set_legends_to_plot(ax)
-            ax.set_title(f'Average Calibration {method}')
-            fig.tight_layout()
-            if save_path is not None:
-                fig.savefig(os.path.join(save_path, f'{criteria}_calibration_{data_name}.pdf'), format ='pdf')
-
-            self.show()
-
     def adjust_yscale(self, ax):
         fits = True
         for line in ax.lines:
@@ -1106,24 +1082,63 @@ class PlotFunctionHolder:
         if save_path is not None:
             fig.savefig(os.path.join(save_path, f'HMC_scaled_{y_label}_{data_name}.pdf'), format='pdf')
         self.show()
+
     def plot_calibration_vi_hmc(self, percentages=None, save_path = None):
 
         if percentages is None:
             percentages = ['1', '5', '61', '100']
         save_path = save_path if save_path is not None else self.save_path
         data_name = self.find_data_name(self.vi_hmc_path)
+        num_runs = 15
         for method, criteria in [('VI', 'vi_run'), ('HMC', 'hmc')]:
             fig, ax = plt.subplots(1, 1)
             for run in percentages:
-                predictions, labels = self.plot_helper_vi_hmc.get_predictions_and_labels_for_percentage(
-                    run, 4, criteria, laplace=True if 'laplace' in criteria else False
-                )
-                plot_calibration(predictions, labels, ax=ax, label=f'{run} pct stoch')
+                for idx in range(num_runs):
+                    predictions, labels = self.plot_helper_vi_hmc.get_predictions_and_labels_for_percentage(
+                        percentage=run, idx=idx, path_name_criteria=criteria, laplace=True if 'laplace' in criteria else False
+                    )
+                    if idx==0:
+                        preds = predictions
+                        labs = labels
+                    else:
+                        np.vstack((preds, predictions))
+                        np.vstack((labs, labels))
+                plot_calibration(preds, labs, ax=ax, label=f'{run} pct')
+            set_legends_to_plot(ax)
+            ax.set_title(f'Average Calibration {method}, {data_name}')
+            fig.tight_layout()
+            if save_path is not None:
+                fig.savefig(os.path.join(save_path, f'{criteria}_calibration_{data_name}.pdf'), format='pdf')
+
+            self.show()
+
+    def plot_calibration_la_swa(self, percentages=None,  save_path = None):
+
+        if percentages is None:
+            percentages = ['1', '5', '61', '100']
+        save_path = save_path if save_path is not None else self.save_path
+        data_name = self.find_data_name(self.la_swa_path)
+        num_runs = 15
+        for method, criteria in [('Laplace', 'laplace'), ('SWAG', 'swag')]:
+            fig, ax = plt.subplots(1, 1)
+            for run in percentages:
+                for idx in range(num_runs):
+                    predictions, labels = self.plot_helper_la_swa.get_predictions_and_labels_for_percentage(
+                        percentage=run, idx=idx, path_name_criteria=criteria, laplace=True if 'laplace' in criteria else False
+                    )
+                    if idx==0:
+                        preds = predictions
+                        labs = labels
+                    else:
+                        np.vstack((preds, predictions))
+                        np.vstack((labs, labels))
+
+                plot_calibration(preds, labs, ax=ax, label=f'{run} pct')
             set_legends_to_plot(ax)
             ax.set_title(f'Average Calibration {method}')
             fig.tight_layout()
             if save_path is not None:
-                fig.savefig(os.path.join(save_path, f'{criteria}_calibration_{data_name}.pdf'), format='pdf')
+                fig.savefig(os.path.join(save_path, f'{criteria}_calibration_{data_name}.pdf'), format ='pdf')
 
             self.show()
 
@@ -1133,15 +1148,23 @@ class PlotFunctionHolder:
             percentages = ['1', '5', '61', '100']
         save_path = save_path if save_path is not None else self.save_path
         data_name = self.find_data_name(self.vi_hmc_path)
+        num_runs = 15
         for method, criteria in [('Additive', 'add'), ('Multiplicative', 'node_run')]:
             fig, ax = plt.subplots(1, 1)
             for run in percentages:
-                predictions, labels = self.plot_helper_vi_hmc.get_predictions_and_labels_for_percentage(
-                    run, 4, criteria, laplace=True if 'laplace' in criteria else False
-                )
-                plot_calibration(predictions, labels, ax=ax, label=f'{run} pct stoch')
+                for idx in range(num_runs):
+                    predictions, labels = self.plot_helper_la_swa.get_predictions_and_labels_for_percentage(
+                        percentage=run, idx=idx, path_name_criteria=criteria, laplace=True if 'laplace' in criteria else False
+                    )
+                    if idx==0:
+                        preds = predictions
+                        labs = labels
+                    else:
+                        np.vstack((preds, predictions))
+                        np.vstack((labs, labels))
+                plot_calibration(preds, labs, ax=ax, label=f'{run} pct')
             set_legends_to_plot(ax)
-            ax.set_title(f'Average Calibration {method}')
+            ax.set_title(f'Average Calibration {method}, {data_name}')
             fig.tight_layout()
             if save_path is not None:
                 fig.savefig(os.path.join(save_path, f'{method}_calibration_{data_name}.pdf'), format='pdf')
@@ -1190,7 +1213,7 @@ class PlotFunctionHolder:
         for method, metric in zip(methods,
                                   [metrics_la, metrics_swa, metrics_vi, metrics_hmc, metrics_add, metrics_mul]):
 
-            dataframe[method] = metric.ravel()
+            dataframe[method] = -metric.ravel()
 
         cormat = dataframe.corr()
         sns.heatmap(cormat, ax = ax)
@@ -1278,8 +1301,8 @@ if __name__ == '__main__':
     path_la_rand = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_Laplace_SWAG_all_metrics_rand'
     path_vi_rand = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_torch_rand'
 
-    # datasets = ['energy', 'yacht']
-    datasets = ['boston', 'energy', 'yacht']
+    datasets = ['energy']
+    # datasets = ['boston', 'energy', 'yacht']
     prediction_folders = [ dataset + "_models" for dataset in datasets]
 
     # NORMAL PLOTTING, WITH CORRECT NLL CALCULATION
@@ -1294,15 +1317,15 @@ if __name__ == '__main__':
         plot_holder = PlotFunctionHolder(la_swa_path=la_swa_path, vi_hmc_path=vi_hmc_path, calculate=True, save_path=save_path,
                                          la_swa_path_rand=la_swa_path_rand, vi_hmc_path_rand=vi_hmc_path_rand,
                                          eval_method='nll')
-        plot_holder.plot_pred_labels_vi_hmc()
-        plot_holder.plot_pred_labels_la_swa()
-        plot_holder.plot_pred_labels_node_based()
+        # plot_holder.plot_pred_labels_vi_hmc()
+        # plot_holder.plot_pred_labels_la_swa()
+        # plot_holder.plot_pred_labels_node_based()
 
         # plot_holder.plot_calibration_la_swa()
         # plot_holder.plot_calibration_nodes()
-        # plot_holder.plot_calibration_vi_hmc()
+        plot_holder.plot_calibration_vi_hmc()
 
-        # plot_holder.write_latex_table()
+        # plot_holder.plot_correlation_matrix()
 
         # plot_holder.plot_partial_percentages_nodes()
         # plot_holder.plot_partial_percentages_vi_hmc()
@@ -1317,84 +1340,3 @@ if __name__ == '__main__':
     breakpoint()
     #
     # breakpoint()
-    # path = r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\boston_models'
-
-    # path = r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\energy_models'
-
-    # plot_la_swag(path_la, path_swag)
-
-    # HMC VI
-    # path_hmc = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_HMC'
-    # path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_VI'
-    # plot_hmc_vi(path_hmc, path_vi)
-
-    ph = PlotHelper(path, 'mse',
-                    calculate=True)
-
-    for method, criteria in [('Laplace', 'laplace'), ('SWAG', 'swag')]:
-        fig, ax = plt.subplots(1, 1)
-        minmax = calculate_max_and_min_for_predictions(ph, run_type=criteria, epsilon=0.1, idx=4,
-                                                       laplace=True if 'laplace' in criteria else False)
-        for run in ['1', '100']:
-            predictions, labels = ph.get_predictions_and_labels_for_percentage(run, 4, criteria,
-                                                                               laplace=True if 'laplace' in criteria else False)
-            plot_scatter(predictions, labels, data_name='energy', minmax=minmax,
-                         method_name=f"{method}, {run} stoch")
-
-    # metrics_mul = ph.run_for_dataset(criteria='hmc')
-    # metrics_add = ph.run_for_dataset(criteria='vi_run')
-    for method, critera in [('VI', 'vi_run'), ('HMC', 'hmc'), ('Multiplicative', 'node_run'),
-                            ('Additive', 'add')]:
-        minmax = calculate_max_and_min_for_predictions(ph, run_type=critera, epsilon=0.1, idx=4)
-        for percentage in ['1', '100']:
-            predictions, labels = ph.get_predictions_and_labels_for_percentage(percentage, 4, critera)
-            plot_scatter(predictions, labels, data_name='energy', minmax=minmax,
-                         method_name=f"{method}, {percentage} stoch")
-    breakpoint()
-    # metrics_mul = metrics_mul[:len(metrics_add)]
-    # # mets = [met for met in metrics if max(met) < 4]
-    # percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100]
-    # plot_partial_percentages(percentages=percentages,
-    #                          res={'VI': np.array(metrics_add), 'HMC': np.array(metrics_mul)},
-    #                          data_name='energy MSE',
-    #                          num_runs=len(metrics_mul))
-
-    # for method, critera in [('VI', 'vi_run'), ('HMC', 'hmc'), ('Multiplicative', 'node_run'),
-    #                         ('Additive', 'add')]:
-    for method, criteria in [('Laplace', 'laplace'), ('SWAG', 'swag')]:
-        fig, ax = plt.subplots(1, 1)
-        for run in ['1', '5', '61', '100']:
-            predictions, labels = ph.get_predictions_and_labels_for_percentage(run, 4, criteria,
-                                                                               laplace=True if 'laplace' in criteria else False)
-            if 'laplace' == criteria:
-                plot_calibration(predictions[0], labels, pred_var=predictions[1], ax=ax, label=f'{run} pct stoch')
-            else:
-                plot_calibration(predictions, labels, ax=ax, label=f'{run} pct stoch')
-        set_legends_to_plot(ax)
-        ax.set_title(f'Average Calibration {method}')
-        plt.show()
-    breakpoint()
-    for run in ['14']:
-        preds, labs = [], []
-        for i in range(ph.__len__('vi_run')):
-            predictions, labels = ph.get_predictions_and_labels_for_percentage(run, i, 'vi_run')
-            plot_calibration(predictions, labels, ax=ax, label=f'run {i} {run} stoch')
-    set_legends_to_plot(ax)
-    plt.show()
-    breakpoint()
-    # predictions, labels = ph.get_predictions_and_labels_for_percentage('8', 0, 'vi_run')
-
-    for run in ['1', '2', '8', '14', '23', '61', '100']:
-        predictions, labels = ph.get_predictions_and_labels_for_percentage(run, 0, 'vi_run')
-        plot_calibration(predictions, labels, ax=ax, label=f'{run} pct stochasticity')
-    set_legends_to_plot(ax)
-
-    plt.show()
-    breakpoint()
-    plot_scatter(predictions, labels, data_name='energy', method_name='vi')
-    breakpoint()
-
-    with open(r'C:\Users\45292\Documents\Master\VI_NODE_TORCH\NLLS\ener_vi_node.pkl', 'wb') as h:
-        pickle.dump({'vi': nlls_vi, 'node': nlls_node}, h, protocol=pickle.HIGHEST_PROTOCOL)
-
-    breakpoint()
