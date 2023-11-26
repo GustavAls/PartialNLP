@@ -99,10 +99,6 @@ class LaplaceExperiments:
             partial_constructor.set_use_only_attn()
         elif self.subclass == 'mlp':
             partial_constructor.set_use_only_mlp()
-        elif self.subclass == 'both':
-            pass
-        else:
-            raise ValueError("self.subclass should be in ['attn', 'mlp']")
 
         return partial_constructor
 
