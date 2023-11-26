@@ -293,7 +293,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    pcl = pickle.load(open(r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\swag\random_ramping\run_0\run_number_0.pkl", 'rb'))
     if args.experiment == 'random_ramping':
         run_random_ramping_experiments(args)
     if args.experiment == 'operator_norm_ramping':
