@@ -205,17 +205,27 @@ class SWAGExperiments:
             self.initialize_sentiment_classifier()
             self.initialize_swag(copy.deepcopy(self.trainer.model))
             self.create_partial_max_operator_norm(number_of_modules)
+            print("Swag initialized")
+            get_mem_nvidia()
 
             optimimum_learning_rate = self.optimize_lr()
+            print("Optimized learning rate")
+            get_mem_nvidia()
 
             train_kwargs = {'learning_rate': optimimum_learning_rate,
                             'max_num_steps': self.default_args_swag['max_num_steps']}
 
             self.partial_constructor.init_new_model_for_optim(copy.deepcopy(self.trainer.model))
+            print("Model with best learning rate initialized")
+            get_mem_nvidia()
 
             self.fit(**train_kwargs)
+            print("Model trained")
+            get_mem_nvidia()
 
             evaluator = utils.evaluate_swag(self.partial_constructor, self.trainer)
+            print("Model evaluated")
+            get_mem_nvidia()
             results[number_of_modules] = evaluator
 
             with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
@@ -278,13 +288,6 @@ def run_max_norm_ramping_only_subclass(args):
     swag_exp.max_norm_ramping_experiment(args.run_number)
 
 
-def get_gpu_memory():
-    command = "nvidia-smi --query-gpu=memory.free --format=csv"
-    memory_free_info = subprocess.check_output(command.split()).decode('ascii').split('\n')[:-1][1:]
-    memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
-    return memory_free_values
-
-
 def get_mem_nvidia():
     import pynvml as nvml
 
@@ -295,8 +298,8 @@ def get_mem_nvidia():
     device_count = nvml.nvmlDeviceGetCount()
 
     for i in range(device_count):
-        handle = nvml.nvmlDeviceGetHandleByIndex(i)
         try:
+            handle = nvml.nvmlDeviceGetHandleByIndex(i)
             info = nvml.nvmlDeviceGetMemoryInfo(handle)
             print(f"Total memory (gb): {bytes_to_gb(info.total)}, Free memory (gb): {bytes_to_gb(info.free)}, Used memory (gb): {bytes_to_gb(info.used)}")
         except:
