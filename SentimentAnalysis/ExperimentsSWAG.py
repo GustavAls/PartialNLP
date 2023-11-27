@@ -76,7 +76,7 @@ class SWAGExperiments:
 
     def initialize_swag(self, model, **kwargs):
 
-        kwargs = kwargs if len(kwargs) > 0 else self.default_args_swag-
+        kwargs = kwargs if len(kwargs) > 0 else self.default_args_swag
         self.partial_constructor = PartialConstructorSwag(model, **kwargs)
         self.use_subclass_part_only()
 
