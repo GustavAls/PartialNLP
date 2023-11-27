@@ -188,6 +188,16 @@ class LaplaceExperiments:
             new_modules_to_run = sorted(list(set(self.num_modules) - set(number_of_modules)))
             return new_modules_to_run
 
+
+    def map_evaluation(self, run_number = 0):
+
+        save_path = self.args.output_path
+        evaluator = utils.evaluate_map(self.model, self.trainer)
+        results = {'results': evaluator}
+
+        with open(os.path.join(save_path, f'run_number_{run_number}_map.pkl'), 'wb') as handle:
+            pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
     def random_ramping_experiment(self, run_number = 0, use_uninformed = False):
 
         print("Running random ramping experiment on ", self.default_args.dataset_name)
@@ -225,6 +235,31 @@ class LaplaceExperiments:
             with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
                 pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+
+def run_map_eval(args):
+    data_path = args.data_path
+    model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
+
+    model_path = os.path.join(data_path, model_ext_path)
+    args.model_path = model_path
+    la_args = {'model_path': model_path,
+               'num_optim_steps': 7,
+               'data_path': data_path,
+               'run_number': args.run_number,
+               'output_path': args.output_path,
+               'train_batch_size': args.train_batch_size,
+               'eval_batch_size': args.eval_batch_size,
+               'dataset_name': args.dataset_name,
+               'subclass': args.subclass,
+               'train_size': args.train_size,
+               'val_size': args.val_size,
+               'test_size': args.test_size
+               }
+
+    # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
+    la_args = Namespace(**la_args)
+    lap_exp = LaplaceExperiments(args=la_args)
+    lap_exp.map_evaluation(args.run_number)
 
 def run_random_ramping_experiments(args):
 
@@ -313,8 +348,11 @@ if __name__ == '__main__':
     parser.add_argument('--val_size', type=int, default=1)
     parser.add_argument('--test_size', type=int, default=1)
     parser.add_argument('--subclass', type = str, default='both')
-
+    parser.add_argument('--map_eval', type = ast.literal_eval, default=False)
     args = parser.parse_args()
+
+    if args.map_eval:
+        run_map_eval(args)
 
     if args.experiment == 'random_ramping':
         run_random_ramping_experiments(args)

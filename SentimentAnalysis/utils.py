@@ -124,3 +124,20 @@ def evaluate_swag(swag: PartialConstructorSwag,trainer: Trainer, eval_dataset = 
     evaluator = Evaluator(predictions, labels)
     evaluator.get_all_metrics()
     return evaluator
+
+
+def evaluate_map(model, trainer: Trainer, eval_dataset = None):
+    eval_dataset = trainer.get_eval_dataloader(eval_dataset=eval_dataset)
+    predictions, labels = [], []
+    model.eval()
+    for step, x in enumerate(eval_dataset):
+        output = model(**x)
+        predictions.append(output)
+        labels.append(x['labels'])
+
+    predictions, labels = (torch.cat(predictions, dim=0).detach().cpu(),
+                           torch.cat(labels, dim=0).detach().cpu())
+
+    evaluator = Evaluator(predictions, labels)
+    evaluator.get_all_metrics()
+    return evaluator
