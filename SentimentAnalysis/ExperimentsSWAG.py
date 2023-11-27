@@ -141,8 +141,6 @@ class SWAGExperiments:
         pbar = tqdm(learning_rates, desc='Optimizing Learning Rates')
         for learning_rate in pbar:
             self.fit(**{'learning_rate': learning_rate, 'max_num_steps': self.default_args_swag['optim_max_num_steps']})
-            print("Nvidia GPU memory", get_gpu_memory())
-            get_mem_nvidia()
             evaluator = utils.evaluate_swag(self.partial_constructor, self.trainer, self.tokenized_val)
             neg_log_likelihoods.append(evaluator.results['nll'])
             self.partial_constructor.init_new_model_for_optim(copy.deepcopy(self.trainer.model))
@@ -180,15 +178,26 @@ class SWAGExperiments:
             self.initialize_sentiment_classifier()
             self.initialize_swag(copy.deepcopy(self.trainer.model))
             self.create_partial_random_ramping_construction(number_of_modules)
+            print("Swag initialized")
+            get_mem_nvidia()
+
             optimimum_learning_rate = self.optimize_lr()
+            print("Optimized learning rate")
+            get_mem_nvidia()
 
             train_kwargs = {'learning_rate': optimimum_learning_rate,
                             'max_num_steps': self.default_args_swag['max_num_steps']}
-
             self.partial_constructor.init_new_model_for_optim(copy.deepcopy(self.trainer.model))
+            print("Model with best learning rate initialized")
+            get_mem_nvidia()
+
             self.fit(**train_kwargs)
+            print("Model trained")
+            get_mem_nvidia()
 
             evaluator = utils.evaluate_swag(self.partial_constructor, self.trainer)
+            print("Model evaluated")
+            get_mem_nvidia()
             results[number_of_modules] = evaluator
 
             with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
