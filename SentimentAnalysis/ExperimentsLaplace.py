@@ -359,17 +359,17 @@ def run_max_norm_ramping_only_subclass(args):
     lap_exp.subclass = args.subclass
     lap_exp.max_norm_ramping_experiment(args.run_number, args.uninformed_prior)
 
-def run_last_layer(args):
-    data_path = args.data_path
-    model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
 
+def run_last_layer(args, output_path = None, data_path = None, run_number = 0):
+    model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
     model_path = os.path.join(data_path, model_ext_path)
     args.model_path = model_path
+
     la_args = {'model_path': model_path,
                'num_optim_steps': 7,
                'data_path': data_path,
-               'run_number': args.run_number,
-               'output_path': args.output_path,
+               'run_number': run_number,
+               'output_path': output_path,
                'train_batch_size': args.train_batch_size,
                'eval_batch_size': args.eval_batch_size,
                'dataset_name': args.dataset_name,
@@ -383,6 +383,14 @@ def run_last_layer(args):
     la_args = Namespace(**la_args)
     lap_exp = LaplaceExperiments(args=la_args)
     lap_exp.last_layer_experiment(args.run_number, args.uninformed_prior)
+
+
+def sequential_last_layer(args):
+    num_runs = 5
+    for run in range(num_runs):
+        data_path = os.path.join(args.data_path, f'run_{run}')
+        output_path = os.path.join(args.output_path, f'run_{run}')
+        run_last_layer(args, output_path, data_path, run)
 
 
 
@@ -411,7 +419,7 @@ if __name__ == '__main__':
         run_map_eval(args)
 
     if args.experiment == 'last_layer':
-        run_last_layer(args)
+        sequential_last_layer(args)
     if args.experiment == 'random_ramping':
         run_random_ramping_experiments(args)
     if args.experiment == 'operator_norm_ramping':
