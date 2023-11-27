@@ -101,7 +101,7 @@ class SWAGExperiments:
     def fit(self, **kwargs):
         learning_rate = kwargs.get('learning_rate') if 'learning_rate' in kwargs else self.default_args.learning_rate
 
-        self.optimizer = torch.optim.SGD(self.partial_constructor.model.parameters(),
+        self.optimizer = torch.optim.SGD(self.partial_constructor.parameters(),
                                          lr=learning_rate, weight_decay=3e-4, momentum=0.9)
 
         self.ensure_prior_calls(**kwargs)
