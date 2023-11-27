@@ -1248,6 +1248,41 @@ class PlotFunctionHolder:
         plt.show()
 
 
+    def get_calibration_predictions(self, method, criteria):
+
+        percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
+        percentages = [str(p) for p in percentages]
+
+        predictions, labels = [], []
+
+        for perc in percentages:
+            for idx in range(15):
+                if 'laplace' in criteria or 'swag' in criteria:
+                    predictions_, labels_ = self.plot_helper_la_swa.get_predictions_and_labels_for_percentage(
+                        percentage=perc, idx=idx, path_name_criteria=criteria,
+                        laplace=True if 'laplace' in criteria else False
+                    )
+                else:
+                    predictions_, labels_ = self.plot_helper_vi_hmc.get_predictions_and_labels_for_percentage(
+                        percentage=perc, idx=idx, path_name_criteria=criteria,
+                        laplace=True if 'laplace' in criteria else False
+                    )
+                predictions.append(predictions)
+                labels.append(labels_)
+
+        return np.concatenate(predictions, 0), np.concatenate(labels, 0)
+
+
+    def write_calibration_latex_table(self, estimator = np.median, save_path = None, bold_direction = 'percentage'):
+
+        metrics_la = uct.get_all_metrics(*self.get_calibration_predictions('Laplace', 'laplace'))
+        metrics_swa = uct.get_all_metrics(*self.get_calibration_predictions('SWAG', 'swag'))
+        metrics_hmc = uct.get_all_metrics(*self.get_calibration_predictions('HMC', 'hmc'))
+        metrics_vi = uct.get_all_metrics(*self.get_calibration_predictions('VI', 'vi_run'))
+        metrics_add = uct.get_all_metrics(*self.get_calibration_predictions('Additive', 'add'))
+        metrics_mul = uct.get_all_metrics(*self.get_calibration_predictions('Multiplicative', 'node_run'))
+
+        breakpoint()
 
     def write_latex_table(self,estimator = np.median,  save_path = None, bold_direction = 'percentage'):
         metrics_la = np.array(self.plot_helper_la_swa.run_for_dataset(criteria='laplace', laplace=True))[:, 1:]
@@ -1296,11 +1331,14 @@ if __name__ == '__main__':
     # path_swag = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_SWAG_MAP_nobayes'
     # plot_la_swag(path_la, path_swag)
 
-    # # PETER PATHS
-    # path_la = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\UCI_Laplace_SWAG_all_metrics\energy_models'
-    #
-    # path_vi =r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\energy_models'
-    #
+    # PETER PATHS
+    path_la = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\UCI_Laplace_SWAG_all_metrics\energy_models'
+
+    path_vi =r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\energy_models'
+
+    plot_holder = PlotFunctionHolder(path_la, path_vi)
+    plot_holder.write_calibration_latex_table()
+
     # plot_holder = PlotFunctionHolder(path_la, path_vi, eval_method='nll', calculate=True,
     #                                  save_path=r'C:\Users\45292\Documents\Master\Figures\UCI\HMC')
     # plot_holder.plot_prior_laplace()

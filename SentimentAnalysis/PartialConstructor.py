@@ -83,6 +83,9 @@ class PartialConstructor:
         setattr(self.model, 'num_partial_layers', counter)
         return None
 
+    def select_last_layer(self):
+        self.module_names = ['model.classifier']
+
     def get_num_stochastic_parameters(self):
         return len(nn.utils.parameters_to_vector(param for param in self.model.parameters() if param.requires_grad))
 
