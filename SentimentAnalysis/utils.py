@@ -180,12 +180,16 @@ def evaluate_loss_with_only_wrong(predictions, labels):
     return predictions[~where], labels[~where]
 if __name__ == '__main__':
 
-    laplace_path = r"C:\Users\45292\Documents\run_0\run_number_0.pkl"
+    laplace_path = r"C:\Users\45292\Documents\Master\SentimentClassification\Laplace\run_0\run_number_0.pkl"
     map_path = r"C:\Users\45292\Documents\run_0\run_number_0_map.pkl"
 
     lap = pickle.load(open(laplace_path, 'rb'))
     map = pickle.load(open(map_path, 'rb'))
     # run_evaluator_again(predictions=map['results'].predictions,labels = map['results'].labels)
-    evaluate_loss(map['results'].predictions, map['results'].labels, use_softmax=True, use_wrong = True)
-    evaluate_loss(lap['results'][3].predictions,lap['results'][3].labels, use_softmax=False, use_wrong = True)
+    print(evaluate_loss(map['results'].predictions, map['results'].labels, use_softmax=True))
+    eval_ = Evaluator(map['results'].predictions, map['results'].labels, has_seen_softmax=False)
+    results = {0 : eval_.get_all_metrics()}
+    for key in lap['results'].keys():
+        eval_ = Evaluator(lap['results'][key].predictions, lap['results'][key].labels, has_seen_softmax=True)
+        results[key] = eval_.get_all_metrics()
     breakpoint()

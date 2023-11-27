@@ -1255,7 +1255,6 @@ class PlotFunctionHolder:
 
         results = np.zeros((9, ))
         for i, perc in enumerate(percentages):
-
             predictions, labels = [], []
             for idx in range(15):
                 if 'laplace' in criteria or 'swag' in criteria:
@@ -1275,6 +1274,7 @@ class PlotFunctionHolder:
             labels = np.concatenate(labels, 0)
             fmu, fstd = predictions.mean(-1), predictions.std(-1)
             results[i] = uct.metrics.miscalibration_area(fmu, fstd, labels)
+            uct.plot_calibration(fmu, fstd, labels)
         return results
 
 
