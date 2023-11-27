@@ -100,7 +100,7 @@ class SWAGExperiments:
     def fit(self, **kwargs):
         learning_rate = kwargs.get('learning_rate') if 'learning_rate' in kwargs else self.default_args.learning_rate
 
-        self.optimizer = torch.optim.SGD(self.partial_constructor.model.parameters(),
+        self.optimizer = torch.optim.SGD(self.partial_constructor.parameters(),
                                          lr=learning_rate, weight_decay=3e-4, momentum=0.9)
 
         self.ensure_prior_calls(**kwargs)
@@ -205,12 +205,14 @@ class SWAGExperiments:
             self.initialize_sentiment_classifier()
             self.initialize_swag(copy.deepcopy(self.trainer.model))
             self.create_partial_max_operator_norm(number_of_modules)
+
             optimimum_learning_rate = self.optimize_lr()
 
             train_kwargs = {'learning_rate': optimimum_learning_rate,
                             'max_num_steps': self.default_args_swag['max_num_steps']}
 
             self.partial_constructor.init_new_model_for_optim(copy.deepcopy(self.trainer.model))
+
             self.fit(**train_kwargs)
 
             evaluator = utils.evaluate_swag(self.partial_constructor, self.trainer)

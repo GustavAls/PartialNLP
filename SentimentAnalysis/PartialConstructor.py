@@ -163,7 +163,8 @@ class PartialConstructorSwag:
         self.is_training = is_training
     def eval(self):
         return self.eval_swa()
-
+    def parameters(self):
+        return (param for param in self.model.parameters() if param.requires_grad)
     def parameter_to_vector(self):
         return nn.utils.parameters_to_vector((param for param in self.model.parameters() if param.requires_grad))
 
