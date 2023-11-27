@@ -683,9 +683,6 @@ class PlotFunctionHolder:
 
         self.show()
 
-
-
-
     def get_criteria_between_datasets_la_swa(self, potential_paths, criteria, laplace = False):
 
         results = {}
