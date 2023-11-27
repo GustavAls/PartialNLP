@@ -221,6 +221,7 @@ class PartialConstructorSwag:
         self.select()
         self._init_parameters()
         self.step_counter = 0
+        self.n_snapshots = 0
         self.train()
         self.deviations = []
 
@@ -240,6 +241,7 @@ class PartialConstructorSwag:
         self.theta_mean = self.theta_mean * old_factor + new_parameter_values * new_factor
         self.squared_theta_mean = self.squared_theta_mean * old_factor + new_parameter_values ** 2 * new_factor
 
+        self.n_snapshots += 1
         if self.num_columns > 0:
             deviation = new_parameter_values - self.theta_mean
             if len(self.deviations) > self.num_columns:
@@ -254,7 +256,7 @@ class PartialConstructorSwag:
         self.swag_eval = True
         self.deviations = torch.cat(self.deviations, dim=-1)
         self.squared_theta_mean = (self.squared_theta_mean - self.theta_mean ** 2).clamp(self.min_var)
-
+        self.model.eval()
         return self.train(False)
 
     def __call__(self,
@@ -272,6 +274,7 @@ class PartialConstructorSwag:
         if self.is_training:
             out = self.model(input_ids, attention_mask, head_mask, inputs_embeds, labels, output_attentions,
                          output_hidden_states, return_dict)
+
             self.step_counter += 1
 
         else:
@@ -303,14 +306,14 @@ class PartialConstructorSwag:
         predictions = torch.zeros((batch_size, self.num_classes, self.num_mc_samples))
 
         softmax = nn.Softmax(dim = 1)
-        for mc_sample in range(self.num_mc_samples):
-            self.sample()
-            out = self.model(**kwargs)
-            predictions[:, :, mc_sample] = out.logits.detach().cpu()
-        predictions = softmax(predictions)
-        predictions = self.reduction(predictions)
+        with torch.no_grad():
+            for mc_sample in range(self.num_mc_samples):
+                self.sample()
+                out = self.model(**kwargs)
+                predictions[:, :, mc_sample] = out.logits.detach().cpu()
+            predictions = softmax(predictions)
+            predictions = self.reduction(predictions)
         return predictions
-
 
 class Extension(nn.Module):
     """

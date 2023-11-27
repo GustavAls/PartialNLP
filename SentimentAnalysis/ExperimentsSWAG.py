@@ -47,6 +47,7 @@ class SWAGExperiments:
 
         self.partial_constructor = None
         self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
+        self.num_modules = [11]
         self.sentiment_classifier = None
         self.train_loader, self.trainer, self.tokenized_val, self.optimizer = (None, None, None, None)
         self.loss_fn = nn.CrossEntropyLoss()
@@ -75,7 +76,7 @@ class SWAGExperiments:
 
     def initialize_swag(self, model, **kwargs):
 
-        kwargs = kwargs if len(kwargs) > 0 else self.default_args_swag
+        kwargs = kwargs if len(kwargs) > 0 else self.default_args_swag-
         self.partial_constructor = PartialConstructorSwag(model, **kwargs)
         self.use_subclass_part_only()
 
