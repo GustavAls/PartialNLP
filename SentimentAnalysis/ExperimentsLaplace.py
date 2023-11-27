@@ -312,7 +312,7 @@ if __name__ == '__main__':
     parser.add_argument('--train_size', type=int, default=1)
     parser.add_argument('--val_size', type=int, default=1)
     parser.add_argument('--test_size', type=int, default=1)
-    parser.add_argument('--subclass', type = str, default='both')
+    parser.add_argument('--subclass', type = str, default='')
 
     args = parser.parse_args()
 
