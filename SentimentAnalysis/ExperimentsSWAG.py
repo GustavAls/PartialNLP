@@ -1,7 +1,7 @@
 import copy
 import os.path
+import subprocess
 import pickle
-
 import torch
 import torch.nn as nn
 from transformers.modeling_outputs import SequenceClassifierOutput
@@ -47,7 +47,6 @@ class SWAGExperiments:
 
         self.partial_constructor = None
         self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
-        self.num_modules = [11]
         self.sentiment_classifier = None
         self.train_loader, self.trainer, self.tokenized_val, self.optimizer = (None, None, None, None)
         self.loss_fn = nn.CrossEntropyLoss()
@@ -142,6 +141,8 @@ class SWAGExperiments:
         pbar = tqdm(learning_rates, desc='Optimizing Learning Rates')
         for learning_rate in pbar:
             self.fit(**{'learning_rate': learning_rate, 'max_num_steps': self.default_args_swag['optim_max_num_steps']})
+            print("Nvidia GPU memory", get_gpu_memory())
+            get_mem_nvidia()
             evaluator = utils.evaluate_swag(self.partial_constructor, self.trainer, self.tokenized_val)
             neg_log_likelihoods.append(evaluator.results['nll'])
             self.partial_constructor.init_new_model_for_optim(copy.deepcopy(self.trainer.model))
@@ -255,6 +256,7 @@ def run_max_norm_ramping_experiments(args):
     swag_exp = SWAGExperiments(args=exp_args)
     swag_exp.max_norm_ramping_experiment(args.run_number)
 
+
 def run_max_norm_ramping_only_subclass(args):
     data_path = args.data_path
     model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
@@ -273,6 +275,32 @@ def run_max_norm_ramping_only_subclass(args):
     swag_exp.num_modules = [2,3] # TODO figure out number of modules in these cases
     swag_exp.max_norm_ramping_experiment(args.run_number)
 
+
+def get_gpu_memory():
+    command = "nvidia-smi --query-gpu=memory.free --format=csv"
+    memory_free_info = subprocess.check_output(command.split()).decode('ascii').split('\n')[:-1][1:]
+    memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
+    return memory_free_values
+
+
+def get_mem_nvidia():
+    import pynvml as nvml
+
+    def bytes_to_gb(bytes):
+        return round(bytes / 1024**3, 4)
+
+    nvml.nvmlInit()
+    device_count = nvml.nvmlDeviceGetCount()
+
+    for i in range(device_count):
+        handle = nvml.nvmlDeviceGetHandleByIndex(i)
+        try:
+            info = nvml.nvmlDeviceGetMemoryInfo(handle)
+            print(f"Total memory (gb): {bytes_to_gb(info.total)}, Free memory (gb): {bytes_to_gb(info.free)}, Used memory (gb): {bytes_to_gb(info.used)}")
+        except:
+            print("Can't get memory info for device", i)
+            continue
+    nvml.nvmlShutdown()
 
 
 if __name__ == '__main__':
