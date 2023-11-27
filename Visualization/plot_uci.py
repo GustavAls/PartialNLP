@@ -389,7 +389,7 @@ def read_hmc_data(path):
     return test_ll, test_mse
 
 
-def read_hmc_vi_combined(wpath):
+def read_hmc_vi_combined(path):
     percentages = []
     test_ll_vi = []
     hmc_percentiles = ['map_results', '1', '2', '5', '8', '14', '23', '37', '61', '100']
@@ -710,7 +710,7 @@ class PlotFunctionHolder:
                              method_name=f"{method}, {percentage} stoch", ax=ax)
                 save_path = self.save_path
                 if save_path is not None:
-                    fig.savefig(os.path.join(save_path, f'Preds_labels_{method}_perc_{percentage}.pdf'), format='pdf')
+                    fig.savefig(os.path.join(save_path, f'Preds_labels_{data_name}_{method}_perc_{percentage}.pdf'), format='pdf')
                     self.show()
 
     def plot_pred_labels_vi_hmc(self, percentages=('1', '100')):
@@ -728,7 +728,7 @@ class PlotFunctionHolder:
                              method_name=f"{method}, {percentage} stoch", ax=ax)
                 save_path = self.save_path
                 if save_path is not None:
-                    fig.savefig(os.path.join(save_path, f'Preds_labels_{method}_perc_{percentage}.pdf'), format='pdf')
+                    fig.savefig(os.path.join(save_path, f'Preds_labels_{data_name}_{method}_perc_{percentage}.pdf'), format='pdf')
                 self.show()
 
     def plot_pred_labels_node_based(self, percentages=('1', '100')):
@@ -746,7 +746,7 @@ class PlotFunctionHolder:
                 plot_scatter(predictions, labels, data_name=data_name, minmax=minmax,
                              method_name=f"{method}, {percentage} stoch", ax=ax)
                 if save_path is not None:
-                    fig.savefig(os.path.join(save_path, f'Preds_labels_{method}_perc_{percentage}.pdf'), format='pdf')
+                    fig.savefig(os.path.join(save_path, f'Preds_labels_{data_name}_{method}_perc_{percentage}.pdf'), format='pdf')
                 self.show()
 
     def set_save_path(self, path):
@@ -1047,6 +1047,7 @@ class PlotFunctionHolder:
             results[method] = (minimum, best_percentage, colors[i])
 
         return results
+
     def plot_hmc_sample_scaling(self, save_path = None):
         save_path = save_path if save_path is not None else self.save_path
         data_name = self.find_data_name(self.vi_hmc_path)
@@ -1084,7 +1085,6 @@ class PlotFunctionHolder:
         self.show()
 
     def plot_calibration_vi_hmc(self, percentages=None, save_path = None):
-
         if percentages is None:
             percentages = ['1', '5', '61', '100']
         save_path = save_path if save_path is not None else self.save_path
@@ -1094,21 +1094,30 @@ class PlotFunctionHolder:
             fig, ax = plt.subplots(1, 1)
             for run in percentages:
                 for idx in range(num_runs):
-                    predictions, labels = self.plot_helper_vi_hmc.get_predictions_and_labels_for_percentage(
-                        percentage=run, idx=idx, path_name_criteria=criteria, laplace=True if 'laplace' in criteria else False
-                    )
-                    if idx==0:
-                        preds = predictions
-                        labs = labels
+                    if num_runs == 1:
+                        # Choose a different run number than 1
+                        run_number = 5
+                        predictions, labels = self.plot_helper_vi_hmc.get_predictions_and_labels_for_percentage(
+                            percentage=run, idx=run_number, path_name_criteria=criteria, laplace=True if 'laplace' in criteria else False
+                        )
                     else:
-                        np.vstack((preds, predictions))
-                        np.vstack((labs, labels))
-                plot_calibration(preds, labs, ax=ax, label=f'{run} pct')
+                        predictions, labels = self.plot_helper_vi_hmc.get_predictions_and_labels_for_percentage(
+                            percentage=run, idx=idx, path_name_criteria=criteria,
+                            laplace=True if 'laplace' in criteria else False
+                        )
+
+                    if idx==0:
+                        preds = copy.deepcopy(predictions)
+                        labs = copy.deepcopy(labels)
+                    else:
+                        preds = np.vstack((preds, predictions))
+                        labs = np.concatenate((labs, labels))
+                plot_calibration(preds, labs.ravel(), ax=ax, label=f'{run} pct')
             set_legends_to_plot(ax)
             ax.set_title(f'Average Calibration {method}, {data_name}')
             fig.tight_layout()
             if save_path is not None:
-                fig.savefig(os.path.join(save_path, f'{criteria}_calibration_{data_name}.pdf'), format='pdf')
+                fig.savefig(os.path.join(save_path, f'{criteria}_calibration_{data_name}_num_runs_{num_runs}.pdf'), format='pdf')
 
             self.show()
 
@@ -1123,22 +1132,31 @@ class PlotFunctionHolder:
             fig, ax = plt.subplots(1, 1)
             for run in percentages:
                 for idx in range(num_runs):
-                    predictions, labels = self.plot_helper_la_swa.get_predictions_and_labels_for_percentage(
-                        percentage=run, idx=idx, path_name_criteria=criteria, laplace=True if 'laplace' in criteria else False
-                    )
-                    if idx==0:
-                        preds = predictions
-                        labs = labels
+                    if num_runs == 1:
+                        # Choose a different run number than 1
+                        run_number = 5
+                        predictions, labels = self.plot_helper_la_swa.get_predictions_and_labels_for_percentage(
+                            percentage=run, idx=run_number, path_name_criteria=criteria,
+                            laplace=True if 'laplace' in criteria else False
+                        )
                     else:
-                        np.vstack((preds, predictions))
-                        np.vstack((labs, labels))
-
+                        predictions, labels = self.plot_helper_la_swa.get_predictions_and_labels_for_percentage(
+                            percentage=run, idx=idx, path_name_criteria=criteria,
+                            laplace=True if 'laplace' in criteria else False
+                        )
+                    if idx == 0:
+                        preds = copy.deepcopy(predictions)
+                        labs = copy.deepcopy(labels)
+                    else:
+                        preds = np.vstack((preds, predictions))
+                        labs = np.concatenate((labs, labels))
                 plot_calibration(preds, labs, ax=ax, label=f'{run} pct')
             set_legends_to_plot(ax)
-            ax.set_title(f'Average Calibration {method}')
+            ax.set_title(f'Average Calibration {method}, {data_name}')
             fig.tight_layout()
             if save_path is not None:
-                fig.savefig(os.path.join(save_path, f'{criteria}_calibration_{data_name}.pdf'), format ='pdf')
+                fig.savefig(os.path.join(save_path, f'{criteria}_calibration_{data_name}_num_runs_{num_runs}.pdf'),
+                            format='pdf')
 
             self.show()
 
@@ -1153,21 +1171,31 @@ class PlotFunctionHolder:
             fig, ax = plt.subplots(1, 1)
             for run in percentages:
                 for idx in range(num_runs):
-                    predictions, labels = self.plot_helper_la_swa.get_predictions_and_labels_for_percentage(
-                        percentage=run, idx=idx, path_name_criteria=criteria, laplace=True if 'laplace' in criteria else False
-                    )
-                    if idx==0:
-                        preds = predictions
-                        labs = labels
+                    if num_runs == 1:
+                        # Choose a different run number than 1
+                        run_number = 5
+                        predictions, labels = self.plot_helper_vi_hmc.get_predictions_and_labels_for_percentage(
+                            percentage=run, idx=run_number, path_name_criteria=criteria,
+                            laplace=True if 'laplace' in criteria else False
+                        )
                     else:
-                        np.vstack((preds, predictions))
-                        np.vstack((labs, labels))
+                        predictions, labels = self.plot_helper_vi_hmc.get_predictions_and_labels_for_percentage(
+                            percentage=run, idx=idx, path_name_criteria=criteria,
+                            laplace=True if 'laplace' in criteria else False
+                        )
+                    if idx == 0:
+                        preds = copy.deepcopy(predictions)
+                        labs = copy.deepcopy(labels)
+                    else:
+                        preds = np.vstack((preds, predictions))
+                        labs = np.concatenate((labs, labels))
                 plot_calibration(preds, labs, ax=ax, label=f'{run} pct')
             set_legends_to_plot(ax)
             ax.set_title(f'Average Calibration {method}, {data_name}')
             fig.tight_layout()
             if save_path is not None:
-                fig.savefig(os.path.join(save_path, f'{method}_calibration_{data_name}.pdf'), format='pdf')
+                fig.savefig(os.path.join(save_path, f'{criteria}_calibration_{data_name}_num_runs_{num_runs}.pdf'),
+                            format='pdf')
 
             self.show()
     @staticmethod
@@ -1301,8 +1329,8 @@ if __name__ == '__main__':
     path_la_rand = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_Laplace_SWAG_all_metrics_rand'
     path_vi_rand = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_torch_rand'
 
-    datasets = ['energy']
-    # datasets = ['boston', 'energy', 'yacht']
+    # datasets = ['energy']
+    datasets = ['boston', 'energy', 'yacht']
     prediction_folders = [ dataset + "_models" for dataset in datasets]
 
     # NORMAL PLOTTING, WITH CORRECT NLL CALCULATION
@@ -1310,22 +1338,21 @@ if __name__ == '__main__':
         la_swa_path = os.path.join(path_la, prediction_folder)
         vi_hmc_path = os.path.join(path_vi, prediction_folder)
 
-        la_swa_path_rand = os.path.join(path_la_rand, prediction_folder)
-        vi_hmc_path_rand = os.path.join(path_vi_rand, prediction_folder)
+        # la_swa_path_rand = os.path.join(path_la_rand, prediction_folder)
+        # vi_hmc_path_rand = os.path.join(path_vi_rand, prediction_folder)
 
         save_path = os.path.join(os.getcwd(), r"Figures\Predictions")
         plot_holder = PlotFunctionHolder(la_swa_path=la_swa_path, vi_hmc_path=vi_hmc_path, calculate=True, save_path=save_path,
-                                         la_swa_path_rand=la_swa_path_rand, vi_hmc_path_rand=vi_hmc_path_rand,
                                          eval_method='nll')
         # plot_holder.plot_pred_labels_vi_hmc()
         # plot_holder.plot_pred_labels_la_swa()
         # plot_holder.plot_pred_labels_node_based()
 
+        # plot_holder.plot_calibration_vi_hmc()
         # plot_holder.plot_calibration_la_swa()
         # plot_holder.plot_calibration_nodes()
-        plot_holder.plot_calibration_vi_hmc()
 
-        # plot_holder.plot_correlation_matrix()
+        plot_holder.plot_correlation_matrix()
 
         # plot_holder.plot_partial_percentages_nodes()
         # plot_holder.plot_partial_percentages_vi_hmc()

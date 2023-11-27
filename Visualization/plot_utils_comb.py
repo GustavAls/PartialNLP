@@ -42,6 +42,7 @@ class PlotHelper:
 
         self.eval_method = eval_method
         self.calculate = calculate
+
     def inverse_transform(self, x):
         if self.scaler is None:
             return x
@@ -54,13 +55,16 @@ class PlotHelper:
     def get_predictions_and_labels_for_percentage(self, percentage, idx = 0, path_name_criteria = "", laplace = False):
 
         paths = self.get_paths(self.path_to_models, criteria=path_name_criteria)
-        path = paths[idx]
+        try:
+            path = paths[idx]
+        except:
+            breakpoint()
 
         pcl = pickle.load(open(path, 'rb'))
         labels = pcl['dataset'].y_test.flatten()
         train, val, test = self.convert_to_proper_format(self.ensure_numpy(pcl[percentage]), laplace=laplace)
         if laplace:
-            samples = np.random.normal(test[0], np.sqrt(test[1]), (test[0].shape[0], int(1e6)))
+            samples = np.random.normal(test[0], np.sqrt(test[1]), (test[0].shape[0], int(1e3)))
             samples = samples - (samples.mean(-1) - test[0].flatten())[:, None]
             test = samples
         return test, labels
