@@ -37,13 +37,15 @@ def save_laplace(save_path, laplace_cfg, **kwargs):
 
 
 class Evaluator:
-    def __init__(self, predictions, labels):
+    def __init__(self, predictions, labels, has_seen_softmax = False):
 
         self.predictions = predictions
         self.labels = labels
 
         self.multi_class = predictions.shape[-1] > 1
         self.nll_metric = CrossEntropyLoss() if self.multi_class else BCELoss
+        if has_seen_softmax:
+            self.nll_metric = evaluate_loss
         self.calibration_class = MulticlassCalibrationError if self.multi_class else BinaryCalibrationError
         self.all_standard_metrics = {'f1 score': f1_score, 'balanced_accuracy_score': balanced_accuracy_score,
                                 'accuracy_score': accuracy_score}
@@ -102,7 +104,7 @@ def evaluate_laplace(la, trainer: Trainer, eval_dataset = None):
     predictions, labels = (torch.cat(predictions, dim = 0).detach().cpu(),
                            torch.cat(labels, dim = 0).detach().cpu())
 
-    evaluator = Evaluator(predictions, labels)
+    evaluator = Evaluator(predictions, labels, has_seen_softmax=True)
     evaluator.get_all_metrics()
     return evaluator
 
@@ -121,7 +123,7 @@ def evaluate_swag(swag: PartialConstructorSwag,trainer: Trainer, eval_dataset = 
     predictions, labels = (torch.cat(predictions, dim = 0).detach().cpu(),
                            torch.cat(labels, dim = 0).detach().cpu())
 
-    evaluator = Evaluator(predictions, labels)
+    evaluator = Evaluator(predictions, labels, has_seen_softmax=True)
     evaluator.get_all_metrics()
     return evaluator
 
@@ -130,10 +132,11 @@ def evaluate_map(model, trainer: Trainer, eval_dataset = None):
     eval_dataset = trainer.get_eval_dataloader(eval_dataset=eval_dataset)
     predictions, labels = [], []
     model.eval()
-    for step, x in enumerate(eval_dataset):
-        output = model(**x)
-        predictions.append(output)
-        labels.append(x['labels'])
+    with torch.no_grad():
+        for step, x in enumerate(eval_dataset):
+            output = model(**x).detach().cpu()
+            predictions.append(output)
+            labels.append(x['labels'].detach().cpu())
 
     predictions, labels = (torch.cat(predictions, dim=0).detach().cpu(),
                            torch.cat(labels, dim=0).detach().cpu())
@@ -141,3 +144,48 @@ def evaluate_map(model, trainer: Trainer, eval_dataset = None):
     evaluator = Evaluator(predictions, labels)
     evaluator.get_all_metrics()
     return evaluator
+
+def evaluate_loss(predictions, labels, use_softmax = False):
+
+    loss = []
+    predictions = predictions.clone().numpy()
+    labels = labels.clone().numpy()
+    labels = to_one_hot(predictions, labels)
+    softmax = lambda x: np.exp(x) / np.sum(np.exp(x))
+    loss_fn = lambda pred, lab: -np.sum(np.log(pred) * lab)
+    for pred, lab in zip(predictions, labels):
+        if use_softmax:
+            pred = softmax(pred)
+        loss.append(loss_fn(pred, lab))
+
+    return np.mean(loss)
+
+def to_one_hot(predictions, labels):
+    labels_new = np.zeros_like(predictions)
+    labels_new[np.arange(len(labels_new)), labels] = 1
+    return labels_new
+
+
+def run_evaluator_again(predictions, labels):
+
+    m = nn.Softmax(dim = 1)
+    predictions = m(predictions)
+    evaluator = Evaluator(predictions, labels)
+    evaluator.get_all_metrics()
+    breakpoint()
+
+def evaluate_loss_with_only_wrong(predictions, labels):
+
+    where = np.argmax(predictions, -1) == labels
+    return predictions[~where], labels[~where]
+if __name__ == '__main__':
+
+    laplace_path = r"C:\Users\45292\Documents\run_0\run_number_0.pkl"
+    map_path = r"C:\Users\45292\Documents\run_0\run_number_0_map.pkl"
+
+    lap = pickle.load(open(laplace_path, 'rb'))
+    map = pickle.load(open(map_path, 'rb'))
+    # run_evaluator_again(predictions=map['results'].predictions,labels = map['results'].labels)
+    evaluate_loss(map['results'].predictions, map['results'].labels, use_softmax=True, use_wrong = True)
+    evaluate_loss(lap['results'][3].predictions,lap['results'][3].labels, use_softmax=False, use_wrong = True)
+    breakpoint()
