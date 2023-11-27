@@ -1248,14 +1248,15 @@ class PlotFunctionHolder:
         plt.show()
 
 
-    def get_calibration_predictions(self, method, criteria):
+    def get_calibration_results(self, method, criteria):
 
         percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
         percentages = [str(p) for p in percentages]
 
-        predictions, labels = [], []
+        results = np.zeros((9, ))
+        for i, perc in enumerate(percentages):
 
-        for perc in percentages:
+            predictions, labels = [], []
             for idx in range(15):
                 if 'laplace' in criteria or 'swag' in criteria:
                     predictions_, labels_ = self.plot_helper_la_swa.get_predictions_and_labels_for_percentage(
@@ -1267,22 +1268,44 @@ class PlotFunctionHolder:
                         percentage=perc, idx=idx, path_name_criteria=criteria,
                         laplace=True if 'laplace' in criteria else False
                     )
-                predictions.append(predictions)
+                predictions.append(predictions_)
                 labels.append(labels_)
 
-        return np.concatenate(predictions, 0), np.concatenate(labels, 0)
+            predictions = np.concatenate(predictions, 0)
+            labels = np.concatenate(labels, 0)
+            fmu, fstd = predictions.mean(-1), predictions.std(-1)
+            results[i] = uct.metrics.miscalibration_area(fmu, fstd, labels)
+        return results
 
 
     def write_calibration_latex_table(self, estimator = np.median, save_path = None, bold_direction = 'percentage'):
 
-        metrics_la = uct.get_all_metrics(*self.get_calibration_predictions('Laplace', 'laplace'))
-        metrics_swa = uct.get_all_metrics(*self.get_calibration_predictions('SWAG', 'swag'))
-        metrics_hmc = uct.get_all_metrics(*self.get_calibration_predictions('HMC', 'hmc'))
-        metrics_vi = uct.get_all_metrics(*self.get_calibration_predictions('VI', 'vi_run'))
-        metrics_add = uct.get_all_metrics(*self.get_calibration_predictions('Additive', 'add'))
-        metrics_mul = uct.get_all_metrics(*self.get_calibration_predictions('Multiplicative', 'node_run'))
+        metrics_la = self.get_calibration_results('Laplace', 'laplace')
+        metrics_swa = self.get_calibration_results('SWAG', 'swag')
+        metrics_hmc = self.get_calibration_results('HMC', 'hmc')
+        metrics_vi = self.get_calibration_results('VI', 'vi_run')
+        metrics_add = self.get_calibration_results('Additive', 'add')
+        metrics_mul = self.get_calibration_results('Multiplicative', 'node_run')
 
-        breakpoint()
+        percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
+        methods = ['Laplace', 'SWAG', 'VI', 'HMC', 'Additive', 'Multiplicative']
+        use_min = True
+        df = pd.DataFrame()
+        for method, metric in zip(methods,
+                                  [metrics_la, metrics_swa, metrics_vi, metrics_hmc, metrics_add, metrics_mul]):
+            df[method] = metric
+
+        if bold_direction == 'method':
+            for column in df.columns:
+                df = self.find_best_and_make_bold(df, column, use_min)
+        df = df.transpose()
+        df = df.rename(columns={i: f"{perc}." for i, perc in zip(df.columns, percentages)})
+        if bold_direction == 'percentage':
+            for column in df.columns:
+                df = self.find_best_and_make_bold(df, column, use_min)
+
+        print(df.to_latex(index=True, float_format="{:.3f}".format))
+
 
     def write_latex_table(self,estimator = np.median,  save_path = None, bold_direction = 'percentage'):
         metrics_la = np.array(self.plot_helper_la_swa.run_for_dataset(criteria='laplace', laplace=True))[:, 1:]
@@ -1338,7 +1361,7 @@ if __name__ == '__main__':
 
     plot_holder = PlotFunctionHolder(path_la, path_vi)
     plot_holder.write_calibration_latex_table()
-
+    breakpoint()
     # plot_holder = PlotFunctionHolder(path_la, path_vi, eval_method='nll', calculate=True,
     #                                  save_path=r'C:\Users\45292\Documents\Master\Figures\UCI\HMC')
     # plot_holder.plot_prior_laplace()
