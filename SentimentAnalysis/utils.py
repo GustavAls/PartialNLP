@@ -358,7 +358,7 @@ if __name__ == '__main__':
 
 
     path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping'
-    path_ = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\random_ramping'
+    path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\random_ramping'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\SWAG\random_ramping'
     map_path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\map'
     fig, ax = plt.subplots(1, 1)
