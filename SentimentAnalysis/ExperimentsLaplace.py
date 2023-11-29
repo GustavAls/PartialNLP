@@ -5,6 +5,7 @@ import pickle
 
 import torch
 from datasets import load_dataset
+import datasets
 import evaluate
 from transformers import (AutoTokenizer,
                           DataCollatorWithPadding,
@@ -31,6 +32,7 @@ import utils
 from SentimentClassifier import construct_laplace, prepare_sentiment_classifier
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF
+from tqdm import tqdm
 
 
 class LaplaceExperiments:
@@ -110,14 +112,13 @@ class LaplaceExperiments:
 
         return partial_constructor
 
-    def fit_laplace(self, prior_precision=1.0):
+    def fit_laplace(self, prior_precision=1.0, train_loader = None):
         la = lp.Laplace(self.model, 'classification',
                         subset_of_weights='all',  # Deprecated
                         hessian_structure='kron',
                         prior_precision=prior_precision)
-
-        la.fit(self.train_loader)
-
+        train_loader = self.train_loader if train_loader is None else train_loader
+        la.fit(train_loader)
         return la
 
     def train_and_predict_new_prior(self, priors, nlls):
@@ -138,7 +139,43 @@ class LaplaceExperiments:
 
         return minimum_prediction
 
-    def optimize_prior_precision(self, num_steps=7, use_uninformed = False):
+    def optimize_prior_precision(self, num_steps=7, dataloader_size = 0.2, use_uninformed = False):
+
+        if use_uninformed:
+            UserWarning("Optimizing called but using uninformed prior")
+            percentage_of_stoch_params = self.num_stoch_params/self.num_params
+            coeff = (self.base_full_prior - self.base_min_prior)
+            prior = self.base_min_prior + coeff * percentage_of_stoch_params
+            la = self.fit_laplace(prior_precision=prior)
+            return la, prior
+
+        from torch.utils.data import DataLoader, Subset
+        if dataloader_size < 1:
+            dataloader_size = int(dataloader_size * len(self.train_loader))
+        elif dataloader_size == 1:
+            dataloader_size = len(self.train_loader)
+
+        random_subset_indices_train = torch.randperm(len(self.train_loader.dataset))[:dataloader_size]
+        random_subset_indices_val = torch.randperm(len(self.tokenized_val))[:int(len(self.tokenized_val) * 0.5)]
+        new_dataloader = utils.get_smaller_dataloader(self.train_loader, random_subset_indices_train)
+        new_tokenized_val = datasets.Dataset.from_dict(self.tokenized_val[random_subset_indices_val])
+
+        # new_dataloader = self.train_loader
+
+        prior_precisions = np.logspace(-2, 4, num=num_steps, endpoint=True)
+        overall_results = []
+        pbar = tqdm(prior_precisions, desc='Training prior precision')
+        for prior in pbar:
+            la = self.fit_laplace(prior, train_loader = new_dataloader)
+            evaluator = utils.evaluate_laplace(la, self.trainer, new_tokenized_val)
+            overall_results.append((evaluator.results['nll'], prior))
+            pbar.set_postfix({'nll': evaluator.results['nll'], 'prior': prior})
+        best_prior = sorted(overall_results)[0][1]
+
+        la = self.fit_laplace(prior_precision=best_prior)
+        return la, best_prior
+
+    def optimize_prior_precision_(self, num_steps=7, use_uninformed = False):
 
         self.best_nll = np.inf
         negative_log_likelihoods = []
@@ -149,7 +186,7 @@ class LaplaceExperiments:
             coeff = (self.base_full_prior - self.base_min_prior)
             prior = self.base_min_prior + coeff * percentage_of_stoch_params
             la = self.fit_laplace(prior_precision=prior)
-            return la
+            return la, prior
 
         la = self.fit_laplace(prior_precision=self.minimum_prior)
         best_la = copy.deepcopy(la)
@@ -216,9 +253,9 @@ class LaplaceExperiments:
         remaining_modules = self.get_num_remaining_modules(save_path, run_number)
         for num_modules in remaining_modules:
             self.create_partial_random_ramping_construction(num_modules)
-            la = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed = use_uninformed)
+            la, prior = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed = use_uninformed)
             evaluator = utils.evaluate_laplace(la, self.trainer)
-            evaluator.results['prior_precision'] = self.best_nll
+            evaluator.results['prior_precision'] = prior
             results['results'][num_modules] = copy.deepcopy(evaluator)
             results['module_selection'][num_modules] = copy.deepcopy(self.module_names)
 
@@ -234,9 +271,9 @@ class LaplaceExperiments:
         remaining_modules = self.get_num_remaining_modules(save_path, run_number)
         for num_modules in remaining_modules:
             self.create_partial_max_norm_ramping(num_modules)
-            la = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed = use_uninformed)
+            la, prior = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed = use_uninformed)
             evaluator = utils.evaluate_laplace(la, self.trainer)
-            evaluator.results['prior_precision'] = self.best_nll
+            evaluator.results['prior_precision'] = prior
             results['results'][num_modules] = copy.deepcopy(evaluator)
             results['module_selection'][num_modules] = copy.deepcopy(self.module_names)
 
@@ -251,9 +288,9 @@ class LaplaceExperiments:
         self.ensure_path_existence(save_path)
 
         self.create_partial_last_layer()
-        la = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed=use_uninformed)
+        la, prior = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed=use_uninformed)
         evaluator = utils.evaluate_laplace(la, self.trainer)
-        evaluator.results['prior_precision'] = self.best_nll
+        evaluator.results['prior_precision'] = prior
         results['results'] = copy.deepcopy(evaluator)
         results['module_selection'] = copy.deepcopy(self.module_names)
 
