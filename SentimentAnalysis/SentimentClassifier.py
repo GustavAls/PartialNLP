@@ -132,12 +132,15 @@ class SentimentClassifier:
 
     def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, lr=5e-05,
                logging_perc = -1, save_strategy = 'epoch', evaluation_strategy='epoch',
-               load_best_model_at_end = False, no_cuda = False, eval_steps=-1, data_path = None, run=0):
+               load_best_model_at_end = False, no_cuda = False, eval_steps=-1, data_path = None, run=0, data_ramping=False):
 
-        train_data, val_data, test_data = self.load_save_dataset(data_path=data_path,
-                                                                 dataset_name=dataset_name,
-                                                                 run=run,
-                                                                 output_path=output_path)
+        if data_ramping:
+            train_data, test_data, val_data = self.load_text_dataset(dataset_name=dataset_name)
+        else:
+            train_data, val_data, test_data = self.load_save_dataset(data_path=data_path,
+                                                                     dataset_name=dataset_name,
+                                                                     run=run,
+                                                                     output_path=output_path)
 
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
@@ -270,6 +273,7 @@ def run_dataramping(args, sentiment_classifier=None, num_steps=10):
                                     load_best_model_at_end=args.load_best_model_at_end,
                                     no_cuda=args.no_cuda,
                                     eval_steps=args.eval_steps,
+                                    data_ramping=True
                                     )
 
 
@@ -464,6 +468,7 @@ if __name__ == "__main__":
     parser.add_argument('--evaluation_strategy', default = 'epoch')
     parser.add_argument('--no_cuda', type=ast.literal_eval, default=False)
     parser.add_argument('--dataramping', type=ast.literal_eval, default=False)
+    parser.add_argument('--load_best_model_at_end', type=ast.literal_eval, default=False)
     parser.add_argument('--run', type=int, default=0)
 
     args = parser.parse_args()
@@ -472,7 +477,7 @@ if __name__ == "__main__":
         args.train_size = int(args.train_size)
 
     if args.dataramping:
-        run_dataramping(args)
+        run_dataramping(args, num_steps=10)
 
     if not any((args.swag, args.laplace)) and not args.dataramping:
         prepare_and_run_sentiment_classifier(args)

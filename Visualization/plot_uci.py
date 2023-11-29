@@ -1089,7 +1089,7 @@ class PlotFunctionHolder:
             percentages = ['1', '5', '61', '100']
         save_path = save_path if save_path is not None else self.save_path
         data_name = self.find_data_name(self.vi_hmc_path)
-        num_runs = 15
+        num_runs = 1
         for method, criteria in [('VI', 'vi_run'), ('HMC', 'hmc')]:
             fig, ax = plt.subplots(1, 1)
             for run in percentages:
@@ -1354,14 +1354,14 @@ if __name__ == '__main__':
     # path_swag = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI_SWAG_MAP_nobayes'
     # plot_la_swag(path_la, path_swag)
 
-    # PETER PATHS
-    path_la = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\UCI_Laplace_SWAG_all_metrics\energy_models'
-
-    path_vi =r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\energy_models'
-
-    plot_holder = PlotFunctionHolder(path_la, path_vi)
-    plot_holder.write_calibration_latex_table()
-    breakpoint()
+    # # PETER PATHS
+    # path_la = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG_all_metrics\UCI_Laplace_SWAG_all_metrics\energy_models'
+    #
+    # path_vi =r'C:\Users\45292\Documents\Master\HMC_VI_TORCH_FIN\UCI_HMC_VI_torch\energy_models'
+    #
+    # plot_holder = PlotFunctionHolder(path_la, path_vi)
+    # plot_holder.write_calibration_latex_table()
+    # breakpoint()
     # plot_holder = PlotFunctionHolder(path_la, path_vi, eval_method='nll', calculate=True,
     #                                  save_path=r'C:\Users\45292\Documents\Master\Figures\UCI\HMC')
     # plot_holder.plot_prior_laplace()
@@ -1402,7 +1402,7 @@ if __name__ == '__main__':
         # la_swa_path_rand = os.path.join(path_la_rand, prediction_folder)
         # vi_hmc_path_rand = os.path.join(path_vi_rand, prediction_folder)
 
-        save_path = os.path.join(os.getcwd(), r"Figures\Predictions")
+        save_path = os.path.join(os.getcwd(), r"Figures\Calibration")
         plot_holder = PlotFunctionHolder(la_swa_path=la_swa_path, vi_hmc_path=vi_hmc_path, calculate=True, save_path=save_path,
                                          eval_method='nll')
         # plot_holder.plot_pred_labels_vi_hmc()
@@ -1413,7 +1413,8 @@ if __name__ == '__main__':
         # plot_holder.plot_calibration_la_swa()
         # plot_holder.plot_calibration_nodes()
 
-        plot_holder.plot_correlation_matrix()
+        # plot_holder.plot_correlation_matrix()
+        plot_holder.write_calibration_latex_table()
 
         # plot_holder.plot_partial_percentages_nodes()
         # plot_holder.plot_partial_percentages_vi_hmc()

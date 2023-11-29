@@ -299,29 +299,32 @@ class LaplaceExperiments:
 
 
 def run_map_eval(args):
-    data_path = args.data_path
-    model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
+    for run in range(1, 5):
+        data_path = args.data_path
+        data_path = os.path.join(data_path, f"run_{run}")
+        output_path = os.path.join(args.output_path, f"run_{run}")
+        model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
 
-    model_path = os.path.join(data_path, model_ext_path)
-    args.model_path = model_path
-    la_args = {'model_path': model_path,
-               'num_optim_steps': 7,
-               'data_path': data_path,
-               'run_number': args.run_number,
-               'output_path': args.output_path,
-               'train_batch_size': args.train_batch_size,
-               'eval_batch_size': args.eval_batch_size,
-               'dataset_name': args.dataset_name,
-               'subclass': args.subclass,
-               'train_size': args.train_size,
-               'val_size': args.val_size,
-               'test_size': args.test_size
-               }
+        model_path = os.path.join(data_path, model_ext_path)
+        args.model_path = model_path
+        la_args = {'model_path': model_path,
+                   'num_optim_steps': 7,
+                   'data_path': data_path,
+                   'run_number': run,
+                   'output_path': output_path,
+                   'train_batch_size': args.train_batch_size,
+                   'eval_batch_size': args.eval_batch_size,
+                   'dataset_name': args.dataset_name,
+                   'subclass': args.subclass,
+                   'train_size': args.train_size,
+                   'val_size': args.val_size,
+                   'test_size': args.test_size
+                   }
 
-    # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
-    la_args = Namespace(**la_args)
-    lap_exp = LaplaceExperiments(args=la_args)
-    lap_exp.map_evaluation(args.run_number)
+        # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
+        la_args = Namespace(**la_args)
+        lap_exp = LaplaceExperiments(args=la_args)
+        lap_exp.map_evaluation(run)
 
 def run_random_ramping_experiments(args):
 
@@ -397,7 +400,9 @@ def run_max_norm_ramping_only_subclass(args):
     lap_exp.max_norm_ramping_experiment(args.run_number, args.uninformed_prior)
 
 
-def run_last_layer(args, output_path = None, data_path = None, run_number = 0):
+def run_last_layer(args, run_number = 0):
+    data_path = os.path.join(args.data_path, f"run_{run_number}")
+    output_path = os.path.join(args.output_path, f"run_{run_number}")
     model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
     model_path = os.path.join(data_path, model_ext_path)
     args.model_path = model_path
@@ -416,7 +421,6 @@ def run_last_layer(args, output_path = None, data_path = None, run_number = 0):
                'test_size': args.test_size
                }
 
-    # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
     la_args = Namespace(**la_args)
     lap_exp = LaplaceExperiments(args=la_args)
     lap_exp.last_layer_experiment(args.run_number, args.uninformed_prior)
@@ -425,9 +429,7 @@ def run_last_layer(args, output_path = None, data_path = None, run_number = 0):
 def sequential_last_layer(args):
     num_runs = 5
     for run in range(num_runs):
-        data_path = os.path.join(args.data_path, f'run_{run}')
-        output_path = os.path.join(args.output_path, f'run_{run}')
-        run_last_layer(args, output_path, data_path, run)
+        run_last_layer(args, run)
 
 
 
