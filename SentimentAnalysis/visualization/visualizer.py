@@ -11,6 +11,8 @@ import matplotlib as mpl
 from PartialNLP.Visualization.plot_utils_comb import PlotHelper
 from sklearn.linear_model import LinearRegression
 import uncertainty_toolbox as uct
+from SentimentAnalysis import utils
+import pandas as pd
 from tensorflow.python.summary.summary_iterator import summary_iterator
 font = {'family': 'serif',
             'size': 15,
@@ -20,7 +22,17 @@ mpl.rc('font', **font)
 mpl.rc('legend', fontsize=15)
 mpl.rc('axes', labelsize=19)
 
-
+font = {'family': 'serif',
+            'size': 15,
+            'serif': 'cmr10'
+            }
+mpl.rc('font', **font)
+mpl.rc('legend', fontsize=15)
+mpl.rc('axes', labelsize=19)
+map_color = 'tab:red'
+stochastic_color = 'tab:green'
+point_err_color = 'tab:blue'
+plt.rcParams['axes.unicode_minus'] = False
 def read_tf_out(path, metrics = ('f1', 'accuracy', 'loss'), use_best = True):
 
     results = {key: [] for key in metrics}
@@ -109,7 +121,94 @@ def get_metrics_from_multiple_runs(path):
 
     return results
 
+
+class RampingExperiments:
+
+    def __init__(self, ramping_exp_path, metric = 'nll'):
+        self.ramping_exp_path = ramping_exp_path
+        self.metric = metric
+    def find_files(self, path = None):
+        path = self.ramping_exp_path if path is None else path
+        files = [os.path.join(path, p) for p in os.listdir(path)]
+        run_numbers_and_paths = []
+        for file in files:
+            if 'run_' in os.path.basename(file) and os.path.isdir(file):
+                run_number = int(os.path.basename(file).split("_")[-1])
+                run_numbers_and_paths.append((run_number, os.path.join(file, f'run_number_{run_number}.pkl')))
+
+        return sorted(run_numbers_and_paths)
+    def get_metrics_from_file(self, file):
+
+        evaluation = utils.read_file(file)
+        results = evaluation['results']
+        modules = list(results.keys())
+        res = {k: [] for k in results[modules[0]].keys()}
+        for module in modules:
+            for k, v in results[module].items():
+                res[k].append(v)
+        res['modules'] = modules
+        return res
+
+    def get_metrics_from_all_files(self, path = None):
+
+        run_number_and_paths = self.find_files(path)
+        results = {}
+        for run_number, path in run_number_and_paths:
+            results[run_number] = self.get_metrics_from_file(path)
+
+        return results
+
+    def get_specific_results(self, results, key):
+
+        df = pd.DataFrame()
+        module_holder, results_holder = [], []
+
+        for run, v in results.items():
+            modules = v['modules']
+            module_holder+=modules
+            results_holder+= v[key]
+
+        df[key] = results_holder
+        df['modules'] = module_holder
+        return df
+
+
+    def plot_result(self, df,key, ax = None):
+        if ax is None:
+            fig, ax = plt.subplots(1,1)
+
+        errorbar_func = lambda x: np.percentile(x, [25, 75])
+        sns.pointplot(errorbar=errorbar_func,
+                      data=df, x="modules", y=key,
+                      join=False,
+                      capsize=.30,
+                      markers="d",
+                      scale=1.0,
+                      err_kws={'linewidth': 0.7}, estimator=np.median,
+                      color=point_err_color,
+                      label=key,
+                      ax=ax)
+
+        plt.show()
+
+    def get_and_plot(self):
+        results = self.get_metrics_from_all_files(self.ramping_exp_path)
+        key = self.metric
+        df = self.get_specific_results(results, key)
+        self.plot_result(df, key)
+
+
+
+
+
 if __name__ == '__main__':
+
+
+    path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping'
+
+    plotter = RampingExperiments(path)
+    plotter.get_and_plot()
+    breakpoint()
 
     path = r'C:\Users\45292\Documents\Master\SentimentClassification\datasize_ramping\imdb_train_size'
 

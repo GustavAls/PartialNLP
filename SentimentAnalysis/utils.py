@@ -4,7 +4,7 @@ import os
 import pickle
 
 import torch
-from datasets import load_dataset
+from datasets import load_dataset, Dataset
 import evaluate
 from transformers import (AutoTokenizer,
                           DataCollatorWithPadding,
@@ -23,14 +23,30 @@ import importlib
 # from  import laplace_partial as lp
 # from laplace_lora.laplace_partial.utils import ModuleNameSubnetMask
 import laplace_partial as lp
-from PartialConstructor import PartialConstructor, PartialConstructorSwag, Truncater, Extension
+from SentimentAnalysis.PartialConstructor import PartialConstructor, PartialConstructorSwag, Truncater, Extension
 import torch.nn as nn
 from Laplace.laplace import Laplace
-from torch.utils.data import Dataset, DataLoader
 import uncertainty_toolbox as uct
 from torch.nn import BCELoss, CrossEntropyLoss
 from sklearn.metrics import f1_score, balanced_accuracy_score, accuracy_score
 from torchmetrics.classification import BinaryCalibrationError, MulticlassCalibrationError
+import seaborn as sns
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+import pandas as pd
+
+font = {'family': 'serif',
+            'size': 15,
+            'serif': 'cmr10'
+            }
+mpl.rc('font', **font)
+mpl.rc('legend', fontsize=15)
+mpl.rc('axes', labelsize=19)
+map_color = 'tab:red'
+stochastic_color = 'tab:green'
+point_err_color = 'tab:blue'
+plt.rcParams['axes.unicode_minus'] = False
+
 
 def save_laplace(save_path, laplace_cfg, **kwargs):
     pass
@@ -166,6 +182,9 @@ def to_one_hot(predictions, labels):
     return labels_new
 
 
+def read_file(path):
+    pcl = pickle.load(open(path, 'rb'))
+    return pcl
 def run_evaluator_again(predictions, labels):
 
     m = nn.Softmax(dim = 1)
@@ -174,11 +193,191 @@ def run_evaluator_again(predictions, labels):
     evaluator.get_all_metrics()
     breakpoint()
 
+
+
+class RampingExperiments:
+
+    def __init__(self, ramping_exp_path, metric = 'nll'):
+        self.ramping_exp_path = ramping_exp_path
+        self.metric = metric
+        self.color = point_err_color
+
+    def find_files(self, path = None):
+        path = self.ramping_exp_path if path is None else path
+        files = [os.path.join(path, p) for p in os.listdir(path)]
+        run_numbers_and_paths = []
+        for file in files:
+            if 'run_' in os.path.basename(file) and os.path.isdir(file):
+                run_number = int(os.path.basename(file).split("_")[-1])
+                run_numbers_and_paths.append((run_number, os.path.join(file, f'run_number_{run_number}.pkl')))
+
+        return sorted(run_numbers_and_paths)
+    def get_metrics_from_file(self, file, has_seen_softmax = True):
+
+        evaluation = read_file(file)
+        if 'results' in evaluation:
+            results = evaluation['results']
+        else:
+            results = evaluation
+        modules = list(results.keys())
+        res = {k: [] for k in results[modules[0]].results.keys()}
+        print(file, modules)
+        for module in modules:
+            if has_seen_softmax:
+                eval_ = Evaluator(results[module].predictions, results[module].labels,
+                                             has_seen_softmax=has_seen_softmax)
+                results_recalculated = eval_.get_all_metrics()
+            else:
+                results_recalculated = results[module].results
+
+            for k, v in results_recalculated.items():
+                res[k].append(v)
+        res['modules'] = modules
+        return res
+
+    def get_metrics_from_all_files(self, path = None, has_seen_softmax = True):
+
+        run_number_and_paths = self.find_files(path)
+        results = {}
+        for run_number, path in run_number_and_paths:
+            results[run_number] = self.get_metrics_from_file(path, has_seen_softmax=has_seen_softmax)
+
+        return results
+
+    def get_specific_results(self, results, key, map_path = None):
+
+        df = pd.DataFrame()
+        module_holder, results_holder = [], []
+
+        for run, v in results.items():
+            modules = v['modules']
+            module_holder+=modules
+            results_holder+= v[key]
+
+        if map_path is not None:
+            map_results = self.include_map(map_path)
+            results_holder += map_results[key]
+            module_holder += [0]*len(map_results[key])
+
+        df[key] = results_holder
+        df['modules'] = module_holder
+        return df
+
+
+    def plot_result(self, df,key, ax = None):
+        if ax is None:
+            fig, ax = plt.subplots(1,1)
+            show_ = True
+        else:
+            show_ = False
+
+        def errorbar_normal(x):
+            mean = np.mean(x)
+            sd = np.std(x)
+            return mean - 1.96 * sd, mean + 1.96 * sd
+        # errorbar_func = lambda x: np.mean(
+        sns.pointplot(errorbar=errorbar_normal,
+                      data=df, x="modules", y=key,
+                      join=False,
+                      capsize=.30,
+                      markers="d",
+                      scale=1.0,
+                      err_kws={'linewidth': 0.7}, estimator=np.mean,
+                      color=self.color,
+                      label=key.split("_")[0] + " " + " ".join(self.experiment_name.split("_")),
+                      ax=ax)
+
+        if show_ :
+            plt.show()
+
+
+    def get_and_plot(self, path = None, map_path = None, has_seen_softmax = True, ax = None):
+        if path is None:
+            path = self.ramping_exp_path
+
+        self.experiment_name = os.path.basename(path)
+        results = self.get_metrics_from_all_files(path, has_seen_softmax = has_seen_softmax)
+        key = self.metric
+
+        df = self.get_specific_results(results, key, map_path)
+        df = df[df['modules'] <= 11]
+        self.plot_result(df, key, ax = ax)
+
+    def include_map(self, path):
+
+        map_paths = [os.path.join(path, p) for p in os.listdir(path)]
+        res_ = {}
+        for pa in map_paths:
+            results = read_file(pa)
+            results = results['results']
+            for k, v in results.results.items():
+                if k not in res_:
+                    res_[k] = []
+                res_[k].append(v)
+
+        return res_
+
+
+
 def evaluate_loss_with_only_wrong(predictions, labels):
 
     where = np.argmax(predictions, -1) == labels
     return predictions[~where], labels[~where]
+
+class SmallerDataloaderForOptimizing:
+    def __init__(self, other_dataloader, indices):
+        self.other_dataloader = other_dataloader
+        self.full_dataloader = iter(other_dataloader)
+        self.indices = sorted(indices)
+        self.current_index = -1
+        self.dataset = Dataset.from_dict(self.other_dataloader.dataset[indices])
+
+    def __next__(self):
+        if len(self.indices) > self.current_index+1:
+            current_idx = self.current_index
+            while self.indices[current_idx] != self.indices[self.current_index + 1]:
+                _ = next(self.full_dataloader)
+                current_idx += 1
+            batch = next(self.full_dataloader)
+            self.current_index += 1
+            return batch
+        else:
+            self.full_dataloader = iter(self.other_dataloader)
+            raise StopIteration
+
+    def __iter__(self):
+        self.current_index = -1
+        return self
+
+def get_smaller_dataloader(dataloader, indices):
+    dataloader = SmallerDataloaderForOptimizing(dataloader, indices)
+    return dataloader
+
 if __name__ == '__main__':
+
+
+
+    path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping'
+    path_ = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\random_ramping'
+    # path = r'C:\Users\45292\Documents\Master\SentimentClassification\SWAG\random_ramping'
+    map_path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\map'
+    fig, ax = plt.subplots(1, 1)
+    plotter = RampingExperiments(path, 'accuracy_score')
+    plotter.get_and_plot(path = path, has_seen_softmax = True, ax = ax, map_path=map_path)
+    plotter.color = 'tab:orange'
+    # plotter.get_and_plot(path = path_, has_seen_softmax=True, ax = ax, map_path=map_path)
+    plt.gcf().subplots_adjust(left=0.16)
+    ylims = ax.get_ylim()
+    diff = (ylims[1] - ylims[0]) * 0.3 + ylims[1]
+
+    ax.set_ylim((ylims[0], diff))
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
+              ncol=1, fancybox=True, shadow=True)
+
+    plt.show()
+    breakpoint()
+
+
 
     laplace_path = r"C:\Users\45292\Documents\Master\SentimentClassification\Laplace\run_0\run_number_0.pkl"
     map_path = r"C:\Users\45292\Documents\run_0\run_number_0_map.pkl"
