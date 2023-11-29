@@ -468,6 +468,7 @@ if __name__ == "__main__":
     parser.add_argument('--evaluation_strategy', default = 'epoch')
     parser.add_argument('--no_cuda', type=ast.literal_eval, default=False)
     parser.add_argument('--dataramping', type=ast.literal_eval, default=False)
+    parser.add_argument('--load_best_model_at_end', type=ast.literal_eval, default=False)
     parser.add_argument('--run', type=int, default=0)
 
     args = parser.parse_args()
