@@ -52,7 +52,7 @@ class LaplaceExperiments:
         self.module_names = None
         # self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
         # Memory consideration
-        self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17]
+        self.num_modules = [1, 2, 3, 4, 5, 8, 11]
         default_args = Namespace(**self.default_args)
         self.default_args = default_args
         default_args.model_path = args.model_path
