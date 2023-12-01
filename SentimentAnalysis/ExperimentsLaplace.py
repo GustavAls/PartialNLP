@@ -251,6 +251,8 @@ class LaplaceExperiments:
         save_path = self.args.output_path
         self.ensure_path_existence(save_path)
         remaining_modules = self.get_num_remaining_modules(save_path, run_number)
+        if len(remaining_modules) < len(self.num_modules):
+            results = pickle.load(open(os.path.join(save_path, f"run_number_{run_number}.pkl"), 'rb'))
         for num_modules in remaining_modules:
             self.create_partial_random_ramping_construction(num_modules)
             la, prior = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed = use_uninformed)
@@ -269,6 +271,8 @@ class LaplaceExperiments:
         save_path = self.args.output_path
         self.ensure_path_existence(save_path)
         remaining_modules = self.get_num_remaining_modules(save_path, run_number)
+        if len(remaining_modules) < len(self.num_modules):
+            results = pickle.load(open(os.path.join(save_path, f"run_number_{run_number}.pkl"), 'rb'))
         for num_modules in remaining_modules:
             self.create_partial_max_norm_ramping(num_modules)
             la, prior = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed = use_uninformed)

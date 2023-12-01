@@ -172,6 +172,8 @@ class SWAGExperiments:
         save_path = self.default_args.output_path
         self.ensure_path_existence(save_path)
         remaining_modules = self.get_num_remaining_modules(save_path, run_number)
+        if len(remaining_modules) < len(self.num_modules):
+            results = pickle.load(open(os.path.join(save_path, f"run_number_{run_number}.pkl"), 'rb'))
         for number_of_modules in remaining_modules:
             print("Training with number of stochastic modules equal to", number_of_modules)
             self.initialize_sentiment_classifier()
@@ -208,6 +210,8 @@ class SWAGExperiments:
         save_path = self.default_args.output_path
         self.ensure_path_existence(save_path)
         remaining_modules = self.get_num_remaining_modules(save_path, run_number)
+        if len(remaining_modules) < len(self.num_modules):
+            results = pickle.load(open(os.path.join(save_path, f"run_number_{run_number}.pkl"), 'rb'))
         for number_of_modules in remaining_modules:
             print("Training with number of stochastic modules equal to", number_of_modules)
             self.initialize_sentiment_classifier()
