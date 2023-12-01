@@ -165,7 +165,7 @@ class LaplaceExperiments:
 
         # new_dataloader = self.train_loader
 
-        prior_precisions = np.logspace(1, 4, num=num_steps, endpoint=True)
+        prior_precisions = np.logspace(-1, 3, num=num_steps, endpoint=True)
         overall_results = []
         pbar = tqdm(prior_precisions, desc='Training prior precision')
         for prior in pbar:
