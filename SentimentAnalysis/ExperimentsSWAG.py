@@ -244,7 +244,6 @@ class SWAGExperiments:
                 pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-
 def run_random_ramping_experiments(args):
     data_path = args.data_path
     model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]

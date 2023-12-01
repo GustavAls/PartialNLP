@@ -54,7 +54,10 @@ class LaplaceExperiments:
         self.module_names = None
         # self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
         # Memory consideration
-        self.num_modules = [1, 2, 3, 4, 5, 8, 11]
+        if args.subclass == 'attn':
+            self.num_modules = [1, 2, 3, 4, 5, 8, 11, 13, 17]
+        else:
+            self.num_modules = [1, 2, 3, 4, 5, 8, 11]
         default_args = Namespace(**self.default_args)
         self.default_args = default_args
         default_args.model_path = args.model_path
@@ -229,7 +232,8 @@ class LaplaceExperiments:
             return self.num_modules
         else:
             results_file = pickle.load(open(results_path, 'rb'))
-            number_of_modules = list(results_file.keys())
+            results_key = next(iter(results_file.keys()))
+            number_of_modules = list(results_file[results_key].keys())
             new_modules_to_run = sorted(list(set(self.num_modules) - set(number_of_modules)))
             return new_modules_to_run
 
