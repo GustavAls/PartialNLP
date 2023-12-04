@@ -135,9 +135,9 @@ class SentimentClassifier:
                load_best_model_at_end = False, no_cuda = False, eval_steps=-1, data_path = None, run=0):
 
         train_data, val_data, test_data = self.load_save_dataset(data_path=data_path,
-                                                                     dataset_name=dataset_name,
-                                                                     run=run,
-                                                                     output_path=output_path)
+                                                                 dataset_name=dataset_name,
+                                                                 run=run,
+                                                                 output_path=output_path)
 
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
