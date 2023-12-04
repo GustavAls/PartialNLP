@@ -132,12 +132,9 @@ class SentimentClassifier:
 
     def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, lr=5e-05,
                logging_perc = -1, save_strategy = 'epoch', evaluation_strategy='epoch',
-               load_best_model_at_end = False, no_cuda = False, eval_steps=-1, data_path = None, run=0, data_ramping=False):
+               load_best_model_at_end = False, no_cuda = False, eval_steps=-1, data_path = None, run=0):
 
-        if data_ramping:
-            train_data, test_data, val_data = self.load_text_dataset(dataset_name=dataset_name)
-        else:
-            train_data, val_data, test_data = self.load_save_dataset(data_path=data_path,
+        train_data, val_data, test_data = self.load_save_dataset(data_path=data_path,
                                                                      dataset_name=dataset_name,
                                                                      run=run,
                                                                      output_path=output_path)
@@ -273,7 +270,7 @@ def run_dataramping(args, sentiment_classifier=None, num_steps=10):
                                     load_best_model_at_end=args.load_best_model_at_end,
                                     no_cuda=args.no_cuda,
                                     eval_steps=args.eval_steps,
-                                    data_ramping=True
+                                    run=args.run
                                     )
 
 
