@@ -393,12 +393,20 @@ def run_max_norm_ramping_only_subclass(args):
 
     model_path = os.path.join(data_path, model_ext_path)
     args.model_path = model_path
-    la_args = {'model_path': model_path,
-               'dataset_name': args.dataset_name,
-               'num_optim_steps': 7,
-               'data_path': data_path,
-               'run_number': args.run_number,
-               'output_path': args.output_path}
+    la_args = {
+        'model_path': model_path,
+        'num_optim_steps': 7,
+        'data_path': data_path,
+        'run_number': args.run_number,
+        'output_path': args.output_path,
+        'train_batch_size': args.train_batch_size,
+        'eval_batch_size': args.eval_batch_size,
+        'dataset_name': args.dataset_name,
+        'subclass': args.subclass,
+        'train_size': args.train_size,
+        'val_size': args.val_size,
+        'test_size': args.test_size
+    }
 
     # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
     la_args = Namespace(**la_args)
