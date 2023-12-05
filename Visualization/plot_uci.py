@@ -1217,7 +1217,7 @@ class PlotFunctionHolder:
         df[column] = new_values
         return df
 
-    def plot_correlation_matrix(self, estimator = np.median, save_path = None):
+    def plot_correlation_matrix(self):
         metrics_la = np.array(self.plot_helper_la_swa.run_for_dataset(criteria='laplace', laplace=True))[:, 1:]
         metrics_swa = np.array(self.plot_helper_la_swa.run_for_dataset(criteria='swag', laplace=False))[:, 1:]
         metrics_vi = np.array(self.plot_helper_vi_hmc.run_for_dataset(criteria='vi_run'))[:, 1:]
@@ -1232,9 +1232,9 @@ class PlotFunctionHolder:
         dataframe = pd.DataFrame()
         dataframe['runs'] = runs.ravel()
         dataframe['runs'] = dataframe['runs'].astype('category')
-        dataframe['percentiles'] = percentiles.ravel()
+        dataframe['Perc.'] = percentiles.ravel()
 
-        methods = ['Laplace', 'SWAG', 'VI', 'HMC', 'Additive', 'Multiplicative']
+        methods = ['LA', 'SWAG', 'VI', 'HMC', 'Add.', 'Mult.']
 
         fig, ax = plt.subplots(1,1)
 
@@ -1244,7 +1244,21 @@ class PlotFunctionHolder:
             dataframe[method] = -metric.ravel()
 
         cormat = dataframe.corr()
-        sns.heatmap(cormat, ax = ax)
+        # sns.color_palette("tab10", reverse=True, as_cmap=True)
+        sns.heatmap(cormat, cmap="tab10_r",ax=ax, annot=True, fmt='.3f', annot_kws={"size": 14},
+                    linewidths=.5, vmin=-1, vmax=1, cbar=False)
+        data_name = self.find_data_name(self.la_swa_path)
+
+        ax.set_title(f'Correlation Matrix, {data_name}')
+        # ax.xticks(rotation=45)
+        # ax.set_yticklabels(ax.get_yticklabels(), rotation=90, ha='right')
+        # ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
+        # plt.yticks(rotation=90)
+        ax.tick_params(axis='y', labelrotation=1)
+
+        if self.save_path is not None:
+            fig.savefig(os.path.join(self.save_path, f'correlationmatrix_{data_name}.pdf'),
+                        format='pdf')
         plt.show()
 
 
@@ -1252,7 +1266,7 @@ class PlotFunctionHolder:
 
         percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
         percentages = [str(p) for p in percentages]
-
+        fig, ax = plt.subplots(1, 1)
         results = np.zeros((9, ))
         for i, perc in enumerate(percentages):
             predictions, labels = [], []
@@ -1274,16 +1288,16 @@ class PlotFunctionHolder:
             labels = np.concatenate(labels, 0)
             fmu, fstd = predictions.mean(-1), predictions.std(-1)
             results[i] = uct.metrics.miscalibration_area(fmu, fstd, labels)
-            uct.plot_calibration(fmu, fstd, labels)
+            # uct.plot_calibration(fmu, fstd, labels, ax=ax)
         return results
 
 
     def write_calibration_latex_table(self, estimator = np.median, save_path = None, bold_direction = 'percentage'):
 
+        metrics_vi = self.get_calibration_results('VI', 'vi_run')
         metrics_la = self.get_calibration_results('Laplace', 'laplace')
         metrics_swa = self.get_calibration_results('SWAG', 'swag')
         metrics_hmc = self.get_calibration_results('HMC', 'hmc')
-        metrics_vi = self.get_calibration_results('VI', 'vi_run')
         metrics_add = self.get_calibration_results('Additive', 'add')
         metrics_mul = self.get_calibration_results('Multiplicative', 'node_run')
 
@@ -1308,9 +1322,9 @@ class PlotFunctionHolder:
 
 
     def write_latex_table(self,estimator = np.median,  save_path = None, bold_direction = 'percentage'):
+        metrics_vi = np.array(self.plot_helper_vi_hmc.run_for_dataset(criteria='vi_run'))[:, 1:]
         metrics_la = np.array(self.plot_helper_la_swa.run_for_dataset(criteria='laplace', laplace=True))[:, 1:]
         metrics_swa = np.array(self.plot_helper_la_swa.run_for_dataset(criteria='swag', laplace=False))[:, 1:]
-        metrics_vi = np.array(self.plot_helper_vi_hmc.run_for_dataset(criteria='vi_run'))[:, 1:]
         metrics_hmc = np.array(self.plot_helper_vi_hmc.run_for_dataset(criteria='hmc'))[:, 1:]
         metrics_add = np.array(self.plot_helper_vi_hmc.run_for_dataset(criteria='add'))[:,1:]
         metrics_mul = np.array(self.plot_helper_vi_hmc.run_for_dataset(criteria='node_run'))[:, 1:]
@@ -1390,7 +1404,7 @@ if __name__ == '__main__':
     path_la_rand = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_Laplace_SWAG_all_metrics_rand'
     path_vi_rand = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_torch_rand'
 
-    # datasets = ['energy']
+    # datasets = ['yacht']
     datasets = ['boston', 'energy', 'yacht']
     prediction_folders = [ dataset + "_models" for dataset in datasets]
 
@@ -1399,12 +1413,12 @@ if __name__ == '__main__':
         la_swa_path = os.path.join(path_la, prediction_folder)
         vi_hmc_path = os.path.join(path_vi, prediction_folder)
 
-        # la_swa_path_rand = os.path.join(path_la_rand, prediction_folder)
-        # vi_hmc_path_rand = os.path.join(path_vi_rand, prediction_folder)
+        la_swa_path_rand = os.path.join(path_la_rand, prediction_folder)
+        vi_hmc_path_rand = os.path.join(path_vi_rand, prediction_folder)
 
-        save_path = os.path.join(os.getcwd(), r"Figures\Calibration")
+        save_path = os.path.join(os.getcwd(), r"Figures\Correlation")
         plot_holder = PlotFunctionHolder(la_swa_path=la_swa_path, vi_hmc_path=vi_hmc_path, calculate=True, save_path=save_path,
-                                         eval_method='nll')
+                                         la_swa_path_rand=la_swa_path_rand, vi_hmc_path_rand=vi_hmc_path_rand, eval_method='nll')
         # plot_holder.plot_pred_labels_vi_hmc()
         # plot_holder.plot_pred_labels_la_swa()
         # plot_holder.plot_pred_labels_node_based()
@@ -1413,18 +1427,24 @@ if __name__ == '__main__':
         # plot_holder.plot_calibration_la_swa()
         # plot_holder.plot_calibration_nodes()
 
-        # plot_holder.plot_correlation_matrix()
-        plot_holder.write_calibration_latex_table()
+        plot_holder.plot_correlation_matrix()
+        # plot_holder.write_calibration_latex_table()
 
         # plot_holder.plot_partial_percentages_nodes()
         # plot_holder.plot_partial_percentages_vi_hmc()
         # plot_holder.plot_partial_percentages_rand_vs_max(criteria='node_run')
         # plot_holder.plot_partial_percentages_rand_vs_max(criteria='add')
+
+        # plot_holder.plot_partial_percentages_rand_vs_max(criteria='node_run', map=False)
+        # plot_holder.plot_partial_percentages_rand_vs_max(criteria='add', map=False)
+        # plot_holder.plot_partial_percentages_rand_vs_max(criteria='laplace', map=False)
+        # plot_holder.plot_partial_percentages_rand_vs_max(criteria='hmc', map=False)
+        # plot_holder.plot_partial_percentages_rand_vs_max(criteria='swag', map=False)
+        # plot_holder.plot_partial_percentages_rand_vs_max(criteria='vi_run', map=False)
+
         # if 'yacht' in prediction_folder:
-            # plot_holder.plot_partial_percentages_rand_vs_max(criteria='node_run', map=False)
-            # plot_holder.plot_partial_percentages_rand_vs_max(criteria='add', map=False)
             # plot_holder.plot_partial_percentages_nodes(map=False)
-        #     plot_holder.plot_partial_percentages_la_swa(map=False)
+            # plot_holder.plot_partial_percentages_la_swa(map=False)
 
     breakpoint()
     #
