@@ -45,7 +45,12 @@ class SWAGExperiments:
                                   'max_num_steps': 2000}
 
         self.partial_constructor = None
-        self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
+        # Done for random
+        # self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
+        if self.subclass == "attn":
+            self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17]
+        else:
+            self.num_modules = [1, 2, 3, 4, 5, 8, 11]
         self.sentiment_classifier = None
         self.train_loader, self.trainer, self.tokenized_val, self.optimizer = (None, None, None, None)
         self.loss_fn = nn.CrossEntropyLoss()
