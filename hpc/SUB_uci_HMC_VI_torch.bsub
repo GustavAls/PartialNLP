@@ -6,7 +6,7 @@
 ### -- set the job Name --
 #BSUB -J hmc_vi_energy_rand[1-15]
 ### -- ask for number of cores (default: 1) --
-#BSUB -n 1
+#BSUB -n 4
 #BSUB -R "span[hosts=1]"
 ### -- Select the resources: 1 gpu in exclusive process mode --
 ### CHANGE HERE FOR GPU/CPU
