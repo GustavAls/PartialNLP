@@ -55,19 +55,28 @@ class SentimentClassifier:
             self.train_size = int(len(data['train']) * self.train_size)
 
         if self.train_size == 1.0:
+            val_frac = 1/10 if dataset_name == "sst2" else 1/5
             train_data_length = len(data['train']['label'])
-            validation_data_indices = set(list(np.random.choice(range(train_data_length), int(train_data_length/5))))
+            validation_data_indices = set(list(np.random.choice(range(train_data_length), int(val_frac * train_data_length))))
             training_data_indices = set(range(train_data_length))-validation_data_indices
             train_data = data['train'].select(list(training_data_indices))
             val_data = data['train'].select(list(validation_data_indices))
-            test_data = data["test"] if self.test_size == 1 else \
-                data["test"].shuffle(seed=42).select([i for i in list(range(int(self.test_size)))])
+            if dataset_name == "imdb":
+                test_data = data["test"] if self.test_size == 1 else \
+                    data["test"].shuffle(seed=42).select([i for i in list(range(int(self.test_size)))])
+            elif dataset_name == "sst2":
+                test_data = data["validation"] if self.test_size == 1 else \
+                    data["validation"].shuffle(seed=42).select([i for i in list(range(int(self.test_size)))])
 
         else:
             train_data = data["train"].shuffle(seed=42).select([i for i in list(range(int(self.train_size)))])
             val_data = data["train"].shuffle(seed=42).select([i for i in list(range(int(self.val_size)))])
-            test_data = data["test"] if self.test_size == 1 else \
-                data["test"].shuffle(seed=42).select([i for i in list(range(int(self.test_size)))])
+            if dataset_name == "imdb":
+                test_data = data["test"] if self.test_size == 1 else \
+                    data["test"].shuffle(seed=42).select([i for i in list(range(int(self.test_size)))])
+            elif dataset_name == "sst2":
+                test_data = data["validation"] if self.test_size == 1 else \
+                    data["validation"].shuffle(seed=42).select([i for i in list(range(int(self.test_size)))])
         del data
         return train_data, test_data, val_data
 
@@ -90,12 +99,11 @@ class SentimentClassifier:
 
     def to_dataframe(self, dataset):
         dataframe = pd.DataFrame()
-        dataframe['text'] = dataset['text']
+        dataframe['text'] = dataset['text'] if self.dataset_name == "imdb" else dataset['sentence']
         dataframe['label'] = dataset['label']
         return dataframe
 
     def data_to_csv(self, train, val, test, output_path):
-
         dataframe_train = self.to_dataframe(train)
         dataframe_train.to_csv(os.path.join(output_path, f'train_data.csv'))
         dataframe_val = self.to_dataframe(val)
@@ -108,7 +116,7 @@ class SentimentClassifier:
         split_names = ["train", "val", "test"]
         if data_path is None:
             train_data, test_data, val_data = self.load_text_dataset(dataset_name=dataset_name)
-            self.data_to_csv(train_data, val_data, test_data, output_path, run)
+            self.data_to_csv(train_data, val_data, test_data, output_path)
         else:
             for split in split_names:
                 data_csv_path = os.path.join(data_path, f'{split}_data.csv')
@@ -129,10 +137,10 @@ class SentimentClassifier:
 
         return train_data, val_data, test_data
 
-
     def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, lr=5e-05,
                logging_perc = -1, save_strategy = 'epoch', evaluation_strategy='epoch',
-               load_best_model_at_end = False, no_cuda = False, eval_steps=-1, data_path = None, run=0):
+               load_best_model_at_end = False, no_cuda = False, eval_steps=-1, data_path = None, run=0, save_total_limit=1,
+               metric_for_best_model='loss'):
 
         train_data, val_data, test_data = self.load_save_dataset(data_path=data_path,
                                                                  dataset_name=dataset_name,
@@ -158,6 +166,8 @@ class SentimentClassifier:
                                           evaluation_strategy=evaluation_strategy,
                                           save_strategy=save_strategy,
                                           load_best_model_at_end=load_best_model_at_end,
+                                          save_total_limit=save_total_limit,
+                                          metric_for_best_model=metric_for_best_model,
                                           weight_decay=0.01,
                                           eval_steps=eval_steps,
                                           logging_steps=logging_perc,
@@ -290,6 +300,7 @@ def prepare_and_run_sentiment_classifier(args, sentiment_classifier=None):
                                 save_strategy = args.save_strategy,
                                 evaluation_strategy = args.evaluation_strategy,
                                 load_best_model_at_end = True,
+
                                 no_cuda = args.no_cuda,
                                 eval_steps=args.eval_steps,
                                 run=args.run)
@@ -455,8 +466,6 @@ if __name__ == "__main__":
     parser.add_argument("--test_size", type=float, default=1) # 1 gives full dataset
     parser.add_argument("--device_batch_size", type=int, default=4)
     parser.add_argument("--learning_rate", type=float, default=5e-05)
-    parser.add_argument('--laplace', type=ast.literal_eval, default=False)
-    parser.add_argument('--swag', type=ast.literal_eval, default=False)
     parser.add_argument('--swag_cfg', default=None)
     parser.add_argument('--la_cfg', default=None)
     parser.add_argument('--logging_perc',type = float, default = -1) # -1 for default from transformers
@@ -466,6 +475,8 @@ if __name__ == "__main__":
     parser.add_argument('--no_cuda', type=ast.literal_eval, default=False)
     parser.add_argument('--dataramping', type=ast.literal_eval, default=False)
     parser.add_argument('--load_best_model_at_end', type=ast.literal_eval, default=False)
+    parser.add_argument('--save_total_limit', type=int, default=1)
+    parser.add_argument('--metric_for_best_model', type=str, default='loss')
     parser.add_argument('--run', type=int, default=0)
 
     args = parser.parse_args()
@@ -475,27 +486,26 @@ if __name__ == "__main__":
 
     if args.dataramping:
         run_dataramping(args, num_steps=10)
-
-    if not any((args.swag, args.laplace)) and not args.dataramping:
+    else:
         prepare_and_run_sentiment_classifier(args)
 
-    elif args.swag:
-        cfg = Namespace(**yaml.safe_load(open(
-            'swag_cfg.yaml' if args.swag_cfg is None else args.swag_cfg, 'r')
-        ))
-        if not args.train:
-            raise NotImplementedError("Swag model not yet implemented with evaluation protocol")
-
-        sentiment_classifier = prepare_sentiment_classifier(args)
-        sentiment_classifier = construct_swag(sentiment_classifier, cfg)
-        prepare_and_run_sentiment_classifier(args, sentiment_classifier)
-        save_object_(sentiment_classifier.model, args.output_path, 'swag', args.swag_cfg)
-
-    elif args.laplace:
-        cfg = Namespace(**yaml.safe_load(open(
-            'laplace_cfg.yaml' if args.la_cfg is None else args.la_cfg, 'r')
-        ))
-        sentiment_classifier = prepare_sentiment_classifier(args)
-        la = construct_laplace(sentiment_classifier, cfg, args)
-
-        save_object_(la, args.output_path, 'laplace', args.la_cfg)
+    # elif args.swag:
+    #     cfg = Namespace(**yaml.safe_load(open(
+    #         'swag_cfg.yaml' if args.swag_cfg is None else args.swag_cfg, 'r')
+    #     ))
+    #     if not args.train:
+    #         raise NotImplementedError("Swag model not yet implemented with evaluation protocol")
+    #
+    #     sentiment_classifier = prepare_sentiment_classifier(args)
+    #     sentiment_classifier = construct_swag(sentiment_classifier, cfg)
+    #     prepare_and_run_sentiment_classifier(args, sentiment_classifier)
+    #     save_object_(sentiment_classifier.model, args.output_path, 'swag', args.swag_cfg)
+    #
+    # elif args.laplace:
+    #     cfg = Namespace(**yaml.safe_load(open(
+    #         'laplace_cfg.yaml' if args.la_cfg is None else args.la_cfg, 'r')
+    #     ))
+    #     sentiment_classifier = prepare_sentiment_classifier(args)
+    #     la = construct_laplace(sentiment_classifier, cfg, args)
+    #
+    #     save_object_(la, args.output_path, 'laplace', args.la_cfg)
