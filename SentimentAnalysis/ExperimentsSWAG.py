@@ -273,7 +273,10 @@ def run_max_norm_ramping_experiments(args):
                 'dataset_name': args.dataset_name,
                 'data_path': data_path,
                 'output_path': args.output_path,
-                'batch_size': args.batch_size}
+                'batch_size': args.batch_size,
+                'train_size': args.train_size,
+                'val_size': args.val_size,
+                'test_size': args.test_size}
 
     exp_args = Namespace(**exp_args)
     swag_exp = SWAGExperiments(args=exp_args)
@@ -290,12 +293,14 @@ def run_max_norm_ramping_only_subclass(args):
                 'dataset_name': args.dataset_name,
                 'data_path': data_path,
                 'output_path': args.output_path,
-                'batch_size': args.batch_size}
+                'batch_size': args.batch_size,
+                'train_size': args.train_size,
+                'val_size': args.val_size,
+                'test_size': args.test_size}
 
     exp_args = Namespace(**exp_args)
     swag_exp = SWAGExperiments(args=exp_args)
-    swag_exp.subclass =args.subclass
-    swag_exp.num_modules = [2,3] # TODO figure out number of modules in these cases
+    swag_exp.subclass = args.subclass
     swag_exp.max_norm_ramping_experiment(args.run_number)
 
 

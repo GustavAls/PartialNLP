@@ -411,7 +411,6 @@ def run_max_norm_ramping_only_subclass(args):
     # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
     la_args = Namespace(**la_args)
     lap_exp = LaplaceExperiments(args = la_args)
-    lap_exp.number_of_modules = [] # TODO fix correct here
     lap_exp.subclass = args.subclass
     lap_exp.max_norm_ramping_experiment(args.run_number, args.uninformed_prior)
 
