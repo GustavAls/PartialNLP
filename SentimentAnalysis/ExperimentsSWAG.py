@@ -47,7 +47,7 @@ class SWAGExperiments:
         self.partial_constructor = None
         # Done for random
         # self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
-        if self.subclass == "attn":
+        if args.subclass == "attn":
             self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17]
         else:
             self.num_modules = [1, 2, 3, 4, 5, 8, 11]
