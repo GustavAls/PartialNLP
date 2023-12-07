@@ -261,6 +261,7 @@ def run_random_ramping_experiments(args):
                 'output_path': args.output_path,
                 'batch_size': args.batch_size,
                 'train_size': args.train_size,
+                'subclass': args.subclass,
                 'val_size': args.val_size,
                 'test_size': args.test_size}
 
@@ -280,6 +281,7 @@ def run_max_norm_ramping_experiments(args):
                 'output_path': args.output_path,
                 'batch_size': args.batch_size,
                 'train_size': args.train_size,
+                'subclass': args.subclass,
                 'val_size': args.val_size,
                 'test_size': args.test_size}
 
@@ -300,6 +302,7 @@ def run_max_norm_ramping_only_subclass(args):
                 'output_path': args.output_path,
                 'batch_size': args.batch_size,
                 'train_size': args.train_size,
+                'subclass': args.subclass,
                 'val_size': args.val_size,
                 'test_size': args.test_size}
 
