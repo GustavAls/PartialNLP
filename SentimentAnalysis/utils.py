@@ -209,7 +209,12 @@ class RampingExperiments:
         for file in files:
             if 'run_' in os.path.basename(file) and os.path.isdir(file):
                 run_number = int(os.path.basename(file).split("_")[-1])
-                run_numbers_and_paths.append((run_number, os.path.join(file, f'run_number_{run_number}.pkl')))
+                pp = os.path.join(file, f'run_number_{run_number}.pkl')
+                if not os.path.exists(pp):
+                    pp = os.path.join(file, f'run_number_{0}.pkl')
+                    if not os.path.exists(pp):
+                        raise ValueError("Could not find path")
+                run_numbers_and_paths.append((run_number,pp))
 
         return sorted(run_numbers_and_paths)
     def get_metrics_from_file(self, file, has_seen_softmax = True):
@@ -219,6 +224,17 @@ class RampingExperiments:
             results = evaluation['results']
         else:
             results = evaluation
+        if not isinstance(results, dict):
+            if has_seen_softmax:
+                eval_ = Evaluator(results.predictions, results.labels,
+                                             has_seen_softmax=has_seen_softmax)
+
+                results_recalculated = eval_.get_all_metrics()
+            else:
+                results_recalculated = results.results
+            results_recalculated['modules'] = 1
+            res = {k: [v] for k, v in results_recalculated.items() if not isinstance(v, (list, tuple))}
+            return res
         modules = list(results.keys())
         res = {k: [] for k in results[modules[0]].results.keys()}
         print(file, modules)
@@ -300,7 +316,7 @@ class RampingExperiments:
         key = self.metric
 
         df = self.get_specific_results(results, key, map_path)
-        df = df[df['modules'] <= 11]
+        # df = df[df['modules'] <= 11]
         self.plot_result(df, key, ax = ax)
 
     def include_map(self, path):
@@ -361,8 +377,9 @@ if __name__ == '__main__':
     path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\random_ramping'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\SWAG\random_ramping'
     map_path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\map'
+    path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\last_layer_prior'
     fig, ax = plt.subplots(1, 1)
-    plotter = RampingExperiments(path, 'accuracy_score')
+    plotter = RampingExperiments(path, 'ECE')
     plotter.get_and_plot(path = path, has_seen_softmax = True, ax = ax, map_path=map_path)
     plotter.color = 'tab:orange'
     # plotter.get_and_plot(path = path_, has_seen_softmax=True, ax = ax, map_path=map_path)
@@ -375,7 +392,6 @@ if __name__ == '__main__':
               ncol=1, fancybox=True, shadow=True)
 
     plt.show()
-    breakpoint()
 
 
 

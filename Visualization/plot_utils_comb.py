@@ -241,7 +241,7 @@ class PlotHelper:
         return metric
     def run_for_key(self, pcl, key):
         laplace = getattr(self, 'laplace', False)
-        dataset = pcl['dataset']
+
         if not self.calculate and self.eval_method != 'all':
 
             if self.eval_method not in pcl[key]:
@@ -251,7 +251,7 @@ class PlotHelper:
                     return pcl[key]['elpd_spurious_sqrt']
 
             return pcl[key][self.eval_method]
-
+        dataset = pcl['dataset']
         y_train, y_val, y_test = self.get_labels(dataset)
 
         preds_train, preds_val, preds_test = self.convert_to_proper_format(self.ensure_numpy(pcl[key]), laplace)
@@ -318,6 +318,10 @@ class PlotHelper:
             all_keys = ['map_results', '1', '2', '5', '8', '14', '23', '37', '61', '100']
         else:
             all_keys = ['1', '2', '5', '8', '14', '23', '37', '61', '100']
+
+        if all(isinstance(key, int) for key in pcl.keys()):
+            all_keys = [1,2,3]
+
         nlls = []
         for key in all_keys:
             nlls.append(self.run_for_key(pcl, key))
@@ -332,11 +336,10 @@ class PlotHelper:
         nlls = []
         pbar = tqdm(paths, desc='Running through files')
         for path in pbar:
-            try:
-                pcl = pickle.load(open(path, 'rb'))
-                nlls.append(self.run_for_all_keys(pcl, map=map))
-            except:
-                continue
+
+            pcl = pickle.load(open(path, 'rb'))
+            nlls.append(self.run_for_all_keys(pcl, map=map))
+
         return nlls
 
     def get_paths(self, path, criteria=None):

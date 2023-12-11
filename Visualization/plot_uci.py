@@ -96,10 +96,13 @@ def plot_errorbar_percentages(df, errorbar_func, estimator=None, ax=None, y='Lap
                   label=y.split('_')[0],
                   ax=ax)
 
-    try:
-        nll_array = np.array(df[y]).reshape((-1, 10))
-    except:
-        nll_array = np.array(df[y]).reshape((-1, 9))
+    if df[y].shape[0] == 45:
+        nll_array = np.array(df[y]).reshape((15, 3))
+    else:
+        try:
+            nll_array = np.array(df[y]).reshape((-1, 10))
+        except:
+            nll_array = np.array(df[y]).reshape((-1, 9))
 
     estimated = estimator(nll_array, axis=0)
     map_val = estimated[0]
@@ -163,10 +166,14 @@ def plot_estimator(df, errorbar_func, estimator=None, ax=None, data_name=None, s
     ax.set_title(label=title, pad=0)
     # Set labels and legend
     ax.set_xlabel("Percentages")
-    try:
-        nll_array = np.array(df[key]).reshape((-1, 10))
-    except:
-        nll_array = np.array(df[key]).reshape((-1, 9))
+
+    if df[key].shape[0] == 45:
+        nll_array = np.array(df[key]).reshape((15, 3))
+    else:
+        try:
+            nll_array = np.array(df[key]).reshape((-1, 10))
+        except:
+            nll_array = np.array(df[key]).reshape((-1, 9))
 
     estimated = estimator(nll_array, axis=0)
     map_val = estimated[0]
@@ -176,6 +183,8 @@ def plot_estimator(df, errorbar_func, estimator=None, ax=None, data_name=None, s
     fully_stochastic_val = estimated[-1]
     ax.axhline(y=fully_stochastic_val, linestyle='--', linewidth=1, alpha=0.7,
                color=stochastic_color, label='100% Stochastic' if not color_scheme_1 else '_nolegend_')
+    ax.axhline(y=0.43,linestyle='--', linewidth=1, alpha=0.7,
+               color=stochastic_color, label='Regular Laplace 1 pct')
     if show:
         plt.show(block=False)
 
@@ -924,6 +933,39 @@ class PlotFunctionHolder:
 
         self.calculate_new_y_bounds(ax)
 
+    def plot_partial_percentages_kron(self, save_path = None):
+        metrics_la = self.plot_helper_la_swa.run_for_dataset(criteria='laplace', laplace=True, map=False)
+        num_modules = [1,2,3]
+
+        ylabel = self.eval_methods_to_names[self.plot_helper_la_swa.eval_method]
+        fig1, ax1 = plt.subplots(1, 1)
+        fig2, ax2 = plt.subplots(1, 1)
+        data_name = data_name = self.find_data_name(self.la_swa_path) + " " + self.get_eval_method_name(
+            self.plot_helper_la_swa.eval_method
+        )
+        plot_partial_percentages(percentages=num_modules,
+                                 res={'Laplace': np.array(metrics_la)},
+                                 data_name=data_name,
+                                 num_runs=len(metrics_la),
+                                 ax=[ax1, ax2], show=False, map=False,
+                                 is_ll=True if self.plot_helper_vi_hmc.eval_method in ['nll', 'nll_glm'] else False)
+
+        ax1.set_ylabel(ylabel)
+        ax2.set_ylabel(ylabel)
+        ax1.legend()
+        ax2.legend()
+        save_path = save_path if save_path is not None else self.save_path
+
+        if save_path is not None:
+            fig1.savefig(
+                os.path.join(save_path, f'la_swa_{ylabel}_{data_name}_{"no map" if not False else str()}_median.pdf'),
+                format='pdf')
+            fig2.savefig(
+                os.path.join(save_path, f'la_swa_{ylabel}_{data_name}_{"no map" if not False else str()}_mean.pdf'),
+                format='pdf')
+
+        self.show()
+
     def plot_partial_percentages_la_swa(self, save_path = None, map=True):
         metrics_la = self.plot_helper_la_swa.run_for_dataset(criteria='laplace', laplace=True, map=map)
         metrics_swa = self.plot_helper_la_swa.run_for_dataset(criteria='swag', laplace=False, map=map)
@@ -1384,7 +1426,14 @@ if __name__ == '__main__':
     # change_datasets(path_la)
 
     # GUSTAV PATHS
-    path_la = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_Laplace_SWAG_all_metrics'
+    path_la = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG\KFAC\yacht'
+    save_path = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG\KFAC\Figures\Yacht'
+    plot_holder = PlotFunctionHolder(la_swa_path=path_la, calculate=False,
+                                     save_path=save_path,
+                                     eval_method='nll_glm')
+    plot_holder.plot_partial_percentages_kron()
+
+
     path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_torch'
 
     path_la_rand = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_Laplace_SWAG_all_metrics_rand'

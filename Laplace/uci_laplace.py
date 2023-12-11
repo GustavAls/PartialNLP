@@ -8,7 +8,7 @@ import torch.distributions
 import tqdm
 from SWAG.swag_uci import train_swag
 from SWAG.swag_temp import *
-from MAP_baseline.MapNN import MapNN, MapNNRamping
+from MAP_baseline.MapNN import MapNN, MapNNRamping, MAPNNLike
 from torch.utils.data import Dataset, DataLoader
 import pickle
 from torch.distributions import Normal
@@ -208,6 +208,23 @@ def find_best_prior(ml_model, subnetwork_indices, train_dataloader, val_loader, 
 
     return prior_precision_sweep[np.argmin(results)]
 
+def find_best_prior_kron(ml_model, train_dataloader, val_loader, y_scale, y_loc, sigma_noise = 0):
+    prior_precision_sweep = np.logspace(-3, 5, num=20, endpoint=True)
+    batch, label = next(iter(val_loader))
+    results = []
+    for prior in tqdm(prior_precision_sweep):
+        la = Laplace(copy.deepcopy(ml_model), 'regression',
+                     subset_of_weights='all',
+                     hessian_structure='kron',
+                     prior_precision=torch.tensor([float(prior)]))
+
+        la.fit(train_dataloader)
+        f_mu, f_var = la(batch)
+        f_var = f_var.detach().squeeze().sqrt()
+        results.append(calculate_nll(f_mu.flatten(),
+                                     label.flatten(), torch.sqrt(f_var**2 + sigma_noise**2), y_scale, y_loc))
+
+    return prior_precision_sweep[np.argmin(results)]
 
 def compute_metrics(train, val, test, dataset, test_mu=None):
     tp = PredictiveHelper("")
@@ -333,6 +350,118 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages, save_name
                 pickle.dump(laplace_result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
+def get_ignore_modules(self):
+    ignore_modules = []
+    for module in self.modules():
+        if len([child for child in module.children()]) > 0:
+            continue
+        if not getattr(module, 'partial', False):
+            ignore_modules.append(module)
+
+    return ignore_modules
+
+
+def change_mle_model_for_KFAC(mle_model):
+
+    test_tensor = torch.randn(size = (1, mle_model.linear1.in_features))
+    model = MAPNNLike(mle_model.linear1.in_features, 50, mle_model.output_size)
+    nn.utils.vector_to_parameters(nn.utils.parameters_to_vector(mle_model.parameters()), model.parameters())
+    # mle_model.non_linearity = nn.ReLU()
+    assert model(test_tensor) == mle_model(test_tensor)
+    return model
+
+def run_kfac(mle_model, train_dataloader,dataset, save_name):
+
+    layers = ['layer_one', 'layer_two', 'out']
+    layer_seq = np.random.permutation(layers)
+    num_params = count_parameters(mle_model)
+
+    y_scale = torch.from_numpy(dataset.scl_Y.scale_)
+    y_loc = torch.from_numpy(dataset.scl_Y.mean_)
+    # Base case needed, for when find_best_prior does not converge
+    best_prior = 1.0
+    ph = PredictiveHelper("")
+    def set_kfac_module_params(model, layers, full_grad = False):
+
+        module_indices_kron, module_indices_jacobian = [], []
+        counter = 0
+        for name, module in model.named_modules():
+            if isinstance(module, nn.Linear):
+                for _ in module.parameters():
+                    if name in layers:
+                        module_indices_kron.append(counter)
+                        module_indices_jacobian.append(counter)
+                    counter += 1
+
+        setattr(model, 'module_indices_kron', module_indices_kron)
+        setattr(model, 'module_indices_jacobian', module_indices_jacobian)
+        setattr(model, 'do_not_extend', True)
+        return model
+
+
+    laplace_result_dict = {}
+    ml_model = change_mle_model_for_KFAC(mle_model)
+    layers = []
+    for layer in layer_seq:
+        layers.append(layer)
+        model = copy.deepcopy(ml_model)
+        model = set_kfac_module_params(model, layers, full_grad=True)
+        sigma_noise = calculate_std(model, train_dataloader, alpha=3, beta=1, beta_prior=False)
+
+        best_prior = find_best_prior_kron(model, train_dataloader,
+                                     DataLoader(UCIDataloader(dataset.X_val, dataset.y_val, ),
+                                                batch_size=dataset.X_val.shape[0]),
+                                     y_scale=y_scale, y_loc=y_loc, sigma_noise=sigma_noise)
+
+        # Define and fit subnetwork LA using the specified subnetwork indices
+        la = Laplace(model, 'regression',
+                     subset_of_weights='all',
+                     hessian_structure='kron',
+                     prior_precision=torch.tensor([float(best_prior)]))
+
+        print('Best prior was', best_prior)
+        la.fit(train_dataloader)
+
+
+        train_preds_mu, train_preds_var = la(torch.from_numpy(dataset.X_train).to(torch.float32))
+        val_preds_mu, val_preds_var = la(torch.from_numpy(dataset.X_val).to(torch.float32))
+        test_preds_mu, test_preds_var = la(torch.from_numpy(dataset.X_test).to(torch.float32))
+
+        test_preds_sigma = test_preds_var.squeeze().sqrt()
+        pred_std_test = torch.sqrt(test_preds_sigma ** 2 + sigma_noise ** 2)
+
+        n_train, n_val, n_test = train_preds_mu.shape[0], val_preds_mu.shape[0], test_preds_mu.shape[0]
+        predictive_train = np.random.normal(train_preds_mu.detach().numpy().reshape((n_train, 1)),
+                                            np.sqrt(train_preds_var.detach().numpy().reshape((n_train, 1))),
+                                            size=(n_train, 200))
+        predictive_val = np.random.normal(val_preds_mu.detach().numpy().reshape((n_val, 1)),
+                                          np.sqrt(val_preds_var.detach().numpy().reshape((n_val, 1))),
+                                          size=(n_val, 200))
+        predictive_test = np.random.normal(test_preds_mu.detach().numpy().reshape((n_test, 1)),
+                                           np.sqrt(test_preds_var.detach().numpy().reshape((n_test, 1))),
+                                           size=(n_test, 200))
+
+        nll_glm, elpd, elpd_sqrt = compute_metrics(predictive_train, predictive_val, predictive_test, dataset,
+                                                   test_preds_mu.detach().numpy().reshape((n_test, 1)))
+
+        print('nll glm', nll_glm, 'elpd', elpd, 'elpd spourious sqrt', elpd_sqrt)
+        laplace_result_dict[len(layers)] = {'predictive_train': train_preds_mu.detach().numpy().reshape((n_train, 1)),
+                                       'predictive_val': val_preds_mu.detach().numpy().reshape((n_val, 1)),
+                                       'predictive_test': test_preds_mu.detach().numpy().reshape((n_test, 1)),
+                                       'predictive_var_train': train_preds_var.detach().numpy().reshape((n_train, 1)),
+                                       'predictive_var_val': val_preds_var.detach().numpy().reshape((n_val, 1)),
+                                       'predictive_var_test': test_preds_var.detach().numpy().reshape((n_test, 1)),
+                                       'glm_nll': nll_glm,
+                                       'elpd': elpd,
+                                       'elpd_spurious_sqrt': elpd_sqrt,
+                                       'prior_precision': best_prior}
+
+        with open(save_name, 'wb') as handle:
+            pickle.dump(laplace_result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+
+
 def multiple_runs(data_path,
                   dataset_class,
                   num_runs,
@@ -345,6 +474,7 @@ def multiple_runs(data_path,
                   dataset_path,
                   load_map=True,
                   random_mask = False,
+                  kron = False,
                   **kwargs):
     """Run the Laplace approximation for different subnetworks.
         Args:
@@ -395,8 +525,12 @@ def multiple_runs(data_path,
             mle_model.load_state_dict(torch.load(map_run_path))
 
         if fit_laplace:
-            save_name = os.path.join(output_path, f'results_laplace_run_{run}.pkl')
-            run_percentiles(mle_model, train_dataloader, dataset, percentages, save_name, random_mask)
+            if kron:
+                save_name = os.path.join(output_path, f'results_laplace_kron_run_{run}.pkl')
+                run_kfac(mle_model, train_dataloader, dataset, save_name)
+            else:
+                save_name = os.path.join(output_path, f'results_laplace_run_{run}.pkl')
+                run_percentiles(mle_model, train_dataloader, dataset, percentages, save_name, random_mask)
 
         if fit_swag:
 
@@ -446,6 +580,7 @@ if __name__ == "__main__":
     parser.add_argument('--fit_laplace', type=ast.literal_eval, default=True)
     parser.add_argument('--prior_precision', type=float, default=0.25)
     parser.add_argument('--random_mask', type = ast.literal_eval, default=False)
+    parser.add_argument('--kron', type = ast.literal_eval, default=False)
 
 
     # TODO: Save dataset such that it can be loaded in uci_hmc.py
@@ -471,9 +606,10 @@ if __name__ == "__main__":
                                     args.output_path, **loss_arguments)
         with open(os.path.join(args.output_path, f'results_ramping_{args.dataset}.pkl'), 'wb') as handle:
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
     else:
         multiple_runs(args.data_path, dataset_class, args.num_runs, args.device, args.num_epochs,
                       args.output_path, args.fit_swag, args.fit_laplace, args.map_path, args.dataset_path,
-                      args.load_map,args.random_mask, **loss_arguments)
+                      args.load_map,args.random_mask, args.kron, **loss_arguments)
 
     print("Laplace experiments finished!")
