@@ -98,7 +98,6 @@ class PartialConstructor:
 
     def select_all_modules(self):
         self.module_names = [name for name, module in self.named_modules()]
-        setattr(self.model, 'batched_modules', 0)
 
     def select_predifined_modules(self, module_names):
         self.module_names = module_names
