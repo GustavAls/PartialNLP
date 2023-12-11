@@ -610,7 +610,8 @@ if __name__ == '__main__':
     parser.add_argument('--test_size', type=int, default=1)
     parser.add_argument('--subclass', type = str, default='both')
     parser.add_argument('--map_eval', type = ast.literal_eval, default=False)
-    parser.add_argument('--num_batched_modules', type = int, default=0)
+    parser.add_argument('--num_batched_modules', type = int, default=0, help='Number of batches, not number of modules in '
+                                                                             'each batch')
     args = parser.parse_args()
 
     if args.map_eval:
