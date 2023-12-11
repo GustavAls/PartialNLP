@@ -45,7 +45,12 @@ class SWAGExperiments:
                                   'max_num_steps': 2000}
 
         self.partial_constructor = None
-        self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
+        # Done for random
+        # self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
+        if args.subclass == "attn":
+            self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17]
+        else:
+            self.num_modules = [1, 2, 3, 4, 5, 8, 11]
         self.sentiment_classifier = None
         self.train_loader, self.trainer, self.tokenized_val, self.optimizer = (None, None, None, None)
         self.loss_fn = nn.CrossEntropyLoss()
@@ -172,6 +177,8 @@ class SWAGExperiments:
         save_path = self.default_args.output_path
         self.ensure_path_existence(save_path)
         remaining_modules = self.get_num_remaining_modules(save_path, run_number)
+        if len(remaining_modules) < len(self.num_modules):
+            results = pickle.load(open(os.path.join(save_path, f"run_number_{run_number}.pkl"), 'rb'))
         for number_of_modules in remaining_modules:
             print("Training with number of stochastic modules equal to", number_of_modules)
             self.initialize_sentiment_classifier()
@@ -208,6 +215,8 @@ class SWAGExperiments:
         save_path = self.default_args.output_path
         self.ensure_path_existence(save_path)
         remaining_modules = self.get_num_remaining_modules(save_path, run_number)
+        if len(remaining_modules) < len(self.num_modules):
+            results = pickle.load(open(os.path.join(save_path, f"run_number_{run_number}.pkl"), 'rb'))
         for number_of_modules in remaining_modules:
             print("Training with number of stochastic modules equal to", number_of_modules)
             self.initialize_sentiment_classifier()
@@ -240,7 +249,6 @@ class SWAGExperiments:
                 pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-
 def run_random_ramping_experiments(args):
     data_path = args.data_path
     model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
@@ -253,6 +261,7 @@ def run_random_ramping_experiments(args):
                 'output_path': args.output_path,
                 'batch_size': args.batch_size,
                 'train_size': args.train_size,
+                'subclass': args.subclass,
                 'val_size': args.val_size,
                 'test_size': args.test_size}
 
@@ -270,7 +279,11 @@ def run_max_norm_ramping_experiments(args):
                 'dataset_name': args.dataset_name,
                 'data_path': data_path,
                 'output_path': args.output_path,
-                'batch_size': args.batch_size}
+                'batch_size': args.batch_size,
+                'train_size': args.train_size,
+                'subclass': args.subclass,
+                'val_size': args.val_size,
+                'test_size': args.test_size}
 
     exp_args = Namespace(**exp_args)
     swag_exp = SWAGExperiments(args=exp_args)
@@ -287,12 +300,15 @@ def run_max_norm_ramping_only_subclass(args):
                 'dataset_name': args.dataset_name,
                 'data_path': data_path,
                 'output_path': args.output_path,
-                'batch_size': args.batch_size}
+                'batch_size': args.batch_size,
+                'train_size': args.train_size,
+                'subclass': args.subclass,
+                'val_size': args.val_size,
+                'test_size': args.test_size}
 
     exp_args = Namespace(**exp_args)
     swag_exp = SWAGExperiments(args=exp_args)
-    swag_exp.subclass =args.subclass
-    swag_exp.num_modules = [2,3] # TODO figure out number of modules in these cases
+    swag_exp.subclass = args.subclass
     swag_exp.max_norm_ramping_experiment(args.run_number)
 
 

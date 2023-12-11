@@ -54,7 +54,10 @@ class LaplaceExperiments:
         self.module_names = None
         # self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
         # Memory consideration
-        self.num_modules = [1,2, 3, 4, 5, 8, 11, 17]
+        if args.subclass == 'attn':
+            self.num_modules = [1, 2, 3, 4, 5, 8, 11, 13, 17]
+        else:
+            self.num_modules = [1, 2, 3, 4, 5, 8, 11]
         default_args = Namespace(**self.default_args)
         self.default_args = default_args
         default_args.model_path = args.model_path
@@ -73,7 +76,7 @@ class LaplaceExperiments:
             data_path=args.data_path,
             run=args.run_number)
 
-
+        self.subclass = None
         if not isinstance(self.sentiment_classifier.model, Extension):
             self.model = Extension(self.sentiment_classifier.model)
         else:
@@ -82,25 +85,6 @@ class LaplaceExperiments:
     def create_partial_random_ramping_construction(self, num_params):
         partial_constructor = self.use_subclass_part_only(PartialConstructor(self.model))
         partial_constructor.select_random_percentile(num_params)
-        partial_constructor.select()
-        partial_constructor.select_subnetwork_indices_for_kfac(percentile=0.1)
-        self.num_stoch_params = partial_constructor.get_num_stochastic_parameters()
-        self.num_params = partial_constructor.get_num_params()
-        self.module_names = partial_constructor.module_names
-
-    def create_partial_sublayer_full_model(self, percentile = 0.1):
-        partial_constructor = self.use_subclass_part_only(PartialConstructor(self.model))
-        partial_constructor.select_all_modules()
-        partial_constructor.select_sublayer_kfac(percentile=percentile)
-        partial_constructor.select()
-        self.num_stoch_params = partial_constructor.get_num_stochastic_parameters()
-        self.num_params = partial_constructor.get_num_params()
-        self.module_names = partial_constructor.module_names
-
-    def create_partial_sublayer_specific_modules(self, module_names, percentile = 0.1):
-        partial_constructor = PartialConstructor(self.model)
-        partial_constructor.select_predifined_modules(module_names)
-        partial_constructor.select_sublayer_kfac(percentile=percentile)
         partial_constructor.select()
         self.num_stoch_params = partial_constructor.get_num_stochastic_parameters()
         self.num_params = partial_constructor.get_num_params()
@@ -248,7 +232,8 @@ class LaplaceExperiments:
             return self.num_modules
         else:
             results_file = pickle.load(open(results_path, 'rb'))
-            number_of_modules = list(results_file.keys())
+            results_key = next(iter(results_file.keys()))
+            number_of_modules = list(results_file[results_key].keys())
             new_modules_to_run = sorted(list(set(self.num_modules) - set(number_of_modules)))
             return new_modules_to_run
 
@@ -270,6 +255,8 @@ class LaplaceExperiments:
         save_path = self.args.output_path
         self.ensure_path_existence(save_path)
         remaining_modules = self.get_num_remaining_modules(save_path, run_number)
+        if len(remaining_modules) < len(self.num_modules):
+            results = pickle.load(open(os.path.join(save_path, f"run_number_{run_number}.pkl"), 'rb'))
         for num_modules in remaining_modules:
             self.create_partial_random_ramping_construction(num_modules)
             la, prior = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed = use_uninformed)
@@ -288,6 +275,8 @@ class LaplaceExperiments:
         save_path = self.args.output_path
         self.ensure_path_existence(save_path)
         remaining_modules = self.get_num_remaining_modules(save_path, run_number)
+        if len(remaining_modules) < len(self.num_modules):
+            results = pickle.load(open(os.path.join(save_path, f"run_number_{run_number}.pkl"), 'rb'))
         for num_modules in remaining_modules:
             self.create_partial_max_norm_ramping(num_modules)
             la, prior = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed = use_uninformed)
@@ -296,39 +285,6 @@ class LaplaceExperiments:
             results['results'][num_modules] = copy.deepcopy(evaluator)
             results['module_selection'][num_modules] = copy.deepcopy(self.module_names)
 
-            with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
-                pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-    def run_sublayer_ramping_experiment(self, run_number, use_uninformed = True):
-        print("Running sublayer ramping experiment on ", self.default_args.dataset_name)
-        results = {'results': {}, 'percentile': {}}
-        save_path = self.args.output_path
-        self.ensure_path_existence(save_path)
-        self.percentiles = np.arange(1, 7)/10
-        for percentile in self.percentiles:
-            self.create_partial_sublayer_full_model(percentile=percentile)
-            la, prior = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed=use_uninformed)
-            evaluator = utils.evaluate_laplace(la, self.trainer)
-            evaluator.results['prior_precision'] = prior
-            results['results'][str(percentile)] = copy.deepcopy(evaluator)
-            with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
-                pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-
-    def run_sublayer_ramping_predifined_modules(self, run_number, modules, use_uninformed = False):
-
-        print("Running sublayer ramping experiment on ", self.default_args.dataset_name)
-        save_path = self.args.output_path
-        self.ensure_path_existence(save_path)
-        self.percentiles = np.arange(1, 7) / 10
-        results = {'results': {}, 'percentile': {}}
-
-        for percentile in self.percentiles:
-            self.create_partial_sublayer_specific_modules(module_names=modules, percentile=percentile)
-            la, prior = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed=use_uninformed)
-            evaluator = utils.evaluate_laplace(la, self.trainer)
-            evaluator.results['prior_precision'] = prior
-            results['results'][str(percentile)] = copy.deepcopy(evaluator)
             with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
                 pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -437,17 +393,24 @@ def run_max_norm_ramping_only_subclass(args):
 
     model_path = os.path.join(data_path, model_ext_path)
     args.model_path = model_path
-    la_args = {'model_path': model_path,
-               'dataset_name': args.dataset_name,
-               'num_optim_steps': 7,
-               'data_path': data_path,
-               'run_number': args.run_number,
-               'output_path': args.output_path}
+    la_args = {
+        'model_path': model_path,
+        'num_optim_steps': 7,
+        'data_path': data_path,
+        'run_number': args.run_number,
+        'output_path': args.output_path,
+        'train_batch_size': args.train_batch_size,
+        'eval_batch_size': args.eval_batch_size,
+        'dataset_name': args.dataset_name,
+        'subclass': args.subclass,
+        'train_size': args.train_size,
+        'val_size': args.val_size,
+        'test_size': args.test_size
+    }
 
     # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
     la_args = Namespace(**la_args)
     lap_exp = LaplaceExperiments(args = la_args)
-    lap_exp.number_of_modules = [] # TODO fix correct here
     lap_exp.subclass = args.subclass
     lap_exp.max_norm_ramping_experiment(args.run_number, args.uninformed_prior)
 
@@ -478,65 +441,6 @@ def run_last_layer(args, run_number = 0):
     lap_exp.last_layer_experiment(args.run_number, args.uninformed_prior)
 
 
-
-def run_sublayer_ramping_predifined_modules(args):
-    data_path = args.data_path
-    model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
-
-    if not os.path.exists(args.module_names_path):
-        raise ValueError("For sublayer experiment with predifined modules, you need to specificy a path to"
-                         "a pickle containing the desired modules for each of the runs")
-
-    module_names = pickle.load(open(args.module_names_path, 'rb'))
-    module_names = module_names[args.run_number]
-
-    model_path = os.path.join(data_path, model_ext_path)
-    args.model_path = model_path
-    la_args = {'model_path': model_path,
-               'num_optim_steps': 7,
-               'data_path': data_path,
-               'run_number': args.run_number,
-               'output_path': args.output_path,
-               'train_batch_size': args.train_batch_size,
-               'eval_batch_size': args.eval_batch_size,
-               'dataset_name': args.dataset_name,
-               'subclass': args.subclass,
-               'train_size': args.train_size,
-               'val_size': args.val_size,
-               'test_size': args.test_size
-               }
-
-    # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
-    la_args = Namespace(**la_args)
-    lap_exp = LaplaceExperiments(args=la_args)
-    lap_exp.run_sublayer_ramping_predifined_modules(args.run_number,module_names, args.uninformed_prior)
-
-def run_sublayer_ramping_full(args):
-
-    data_path = args.data_path
-    model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
-
-    model_path = os.path.join(data_path, model_ext_path)
-    args.model_path = model_path
-    la_args = {'model_path': model_path,
-               'num_optim_steps': 7,
-               'data_path': data_path,
-               'run_number': args.run_number,
-               'output_path': args.output_path,
-               'train_batch_size' : args.train_batch_size,
-               'eval_batch_size' : args.eval_batch_size,
-               'dataset_name': args.dataset_name,
-               'subclass': args.subclass,
-               'train_size': args.train_size,
-               'val_size': args.val_size,
-               'test_size': args.test_size
-               }
-
-    # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
-    la_args = Namespace(**la_args)
-    lap_exp = LaplaceExperiments(args = la_args)
-    lap_exp.run_sublayer_ramping_experiment(args.run_number, args.uninformed_prior)
-
 def sequential_last_layer(args):
     num_runs = 5
     for run in range(num_runs):
@@ -563,7 +467,6 @@ if __name__ == '__main__':
     parser.add_argument('--test_size', type=int, default=1)
     parser.add_argument('--subclass', type = str, default='both')
     parser.add_argument('--map_eval', type = ast.literal_eval, default=False)
-    parser.add_argument('--module_names_path', type = str, default='')
     args = parser.parse_args()
 
     if args.map_eval:
@@ -578,9 +481,6 @@ if __name__ == '__main__':
     if args.experiment == 'operator_norm_ramping_subclass':
         if args.subclass:
             run_max_norm_ramping_only_subclass(args)
-    if args.experiment == 'sublayer_full':
-        run_sublayer_ramping_full(args)
-    if args.experiment == 'sublayer_predifined':
-        run_sublayer_ramping_predifined_modules(args)
+
 
 
