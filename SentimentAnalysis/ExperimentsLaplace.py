@@ -142,7 +142,36 @@ class LaplaceExperiments:
 
         return minimum_prediction
 
-    def optimize_prior_precision(self, num_steps=7, dataloader_size = 0.2, use_uninformed = False):
+    def optimize_prior_precision(self, num_steps = 7, use_uninformed = False):
+        if use_uninformed:
+            UserWarning("Optimizing called but using uninformed prior")
+            percentage_of_stoch_params = self.num_stoch_params/self.num_params
+            coeff = (self.base_full_prior - self.base_min_prior)
+            prior = self.base_min_prior + coeff * percentage_of_stoch_params
+            la = self.fit_laplace(prior_precision=prior)
+            return la, prior
+
+        random_subset_indices_val = torch.randperm(len(self.tokenized_val))[:int(len(self.tokenized_val) * 0.5)]
+        new_tokenized_val = datasets.Dataset.from_dict(self.tokenized_val[random_subset_indices_val])
+
+        la = self.fit_laplace(train_loader=self.train_loader)
+        prior_precisions = np.logspace(-1, 3, num=num_steps, endpoint=True)
+        pbar = tqdm(prior_precisions, desc='Training prior precision')
+        overall_results = []
+
+        for prior in pbar:
+            la.prior_precision = torch.ones_like(la.prior_precision)*prior
+            evaluator = utils.evaluate_laplace(la, self.trainer, new_tokenized_val)
+            overall_results.append((evaluator.results['nll'], prior))
+            pbar.set_postfix({'nll': evaluator.results['nll'], 'prior': prior})
+
+        best_prior = sorted(overall_results)[0][1]
+        la.prior_precision = torch.ones_like(la.prior_precision)*best_prior
+
+        return la, best_prior
+
+
+    def optimize_prior_precision_v2(self, num_steps=7, dataloader_size = 0.2, use_uninformed = False):
 
         if use_uninformed:
             UserWarning("Optimizing called but using uninformed prior")
@@ -259,7 +288,7 @@ class LaplaceExperiments:
             results = pickle.load(open(os.path.join(save_path, f"run_number_{run_number}.pkl"), 'rb'))
         for num_modules in remaining_modules:
             self.create_partial_random_ramping_construction(num_modules)
-            la, prior = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed = use_uninformed)
+            la, prior = self.optimize_prior_precision(num_steps=self.args.num_optim_steps, use_uninformed = use_uninformed)
             evaluator = utils.evaluate_laplace(la, self.trainer)
             evaluator.results['prior_precision'] = prior
             results['results'][num_modules] = copy.deepcopy(evaluator)
@@ -279,7 +308,7 @@ class LaplaceExperiments:
             results = pickle.load(open(os.path.join(save_path, f"run_number_{run_number}.pkl"), 'rb'))
         for num_modules in remaining_modules:
             self.create_partial_max_norm_ramping(num_modules)
-            la, prior = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed = use_uninformed)
+            la, prior = self.optimize_prior_precision(num_steps=self.args.num_optim_steps, use_uninformed = use_uninformed)
             evaluator = utils.evaluate_laplace(la, self.trainer)
             evaluator.results['prior_precision'] = prior
             results['results'][num_modules] = copy.deepcopy(evaluator)
@@ -296,7 +325,7 @@ class LaplaceExperiments:
         self.ensure_path_existence(save_path)
 
         self.create_partial_last_layer()
-        la, prior = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed=use_uninformed)
+        la, prior = self.optimize_prior_precision(num_steps=self.args.num_optim_steps, use_uninformed=use_uninformed)
         evaluator = utils.evaluate_laplace(la, self.trainer)
         evaluator.results['prior_precision'] = prior
         results['results'] = copy.deepcopy(evaluator)
