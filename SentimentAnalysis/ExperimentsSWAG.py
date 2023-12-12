@@ -52,7 +52,6 @@ class SWAGExperiments:
         else:
             self.num_modules = [1, 2, 3, 4, 5, 8, 11]
 
-        self.num_modules = [38]
         self.sentiment_classifier = None
         self.train_loader, self.trainer, self.tokenized_val, self.optimizer = (None, None, None, None)
         self.loss_fn = nn.CrossEntropyLoss()
