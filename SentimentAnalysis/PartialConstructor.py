@@ -68,6 +68,105 @@ class PartialConstructor:
         argsorted = np.argsort(norms)
         self.module_names = [names[i] for i in argsorted[::-1][:num_params]]
 
+
+    def select_subnetwork_indices_module_wise(self, quantile = 1):
+
+        for name, module in self.model.named_modules():
+            if module.partial:
+                parameter_vector = nn.utils.parameters_to_vector(module.parameters()).clone().detach()
+                quant = torch.quantile(parameter_vector, torch.tensor(quantile))
+                subnetwork_indices = torch.zeros_like(parameter_vector)
+                subnetwork_indices[parameter_vector > quant] = 1
+                subnetwork_indices = subnetwork_indices.unsqueeze(0).bool()
+                setattr(module, 'subnetwork_indices', subnetwork_indices)
+
+
+    def select_subnetwork_indices_for_kfac(self, percentile = 0.1):
+        for name, module in self.model.named_modules():
+            if module.partial:
+                self.set_mask_for_kfac(module, percentile)
+
+    def find_maximum_input_and_output_neurons(self, weight, percentile = 0.1):
+
+        infty_norm = torch.linalg.norm(weight,ord = torch.inf,  dim = 0)
+        highest_in = torch.argsort(infty_norm, descending=True)
+        highest_in = highest_in[:int(percentile*len(highest_in))]
+        highest_out = torch.argsort(torch.linalg.norm(weight[:, highest_in], ord = torch.inf, dim = 1), descending=True)
+        highest_out = highest_out[:int(percentile*len(highest_out))]
+
+        return highest_in, highest_out
+
+    def select_all_modules(self):
+        self.module_names = [name for name, module in self.named_modules()]
+
+    def select_predifined_modules(self, module_names):
+        self.module_names = module_names
+
+    def select_sublayer_kfac(self,percentile = 0.1):
+        for name, module in self.named_modules():
+            if name in self.module_names:
+                self.set_mask_for_sublayer_kfac(module, percentile)
+
+    def set_mask_for_sublayer_kfac(self, module, percentile):
+
+        param_indices, subnetwork_indices = [], []
+
+        for name, param in module.named_parameters():
+            if name == 'weight':
+                data = param.data.clone()
+                highest_in, highest_out = self.find_maximum_input_and_output_neurons(data)
+                param_indices.append([highest_in, highest_out])
+
+                subnet_ind_in = torch.zeros_like(data)
+                subnet_ind_out = torch.zeros_like(data)
+                subnet_ind_in[:,highest_in] = 1
+                subnet_ind_out[highest_out,:] = 1
+                subnet_ind = subnet_ind_out * subnet_ind_in
+                subnetwork_indices.append(subnet_ind.bool().flatten())
+
+            elif name == 'bias':
+                indices = torch.argsort(torch.abs(param))[:int(percentile * len(param))]
+                param_indices.append(indices)
+                subnet_ind = torch.zeros_like(param).bool()
+                subnet_ind[indices] = True
+                subnetwork_indices.append(subnet_ind)
+
+        subnetwork_indices = torch.cat(subnetwork_indices, 0).unsqueeze(0)
+        setattr(module, 'subnetwork_indices', subnetwork_indices)
+        setattr(module, 'param_indices', param_indices)
+        setattr(module, 'subsample_fisher_A_B', True)
+
+    def set_mask_for_kfac(self, module, percentile = 0.1):
+
+        if not isinstance(module, nn.Linear):
+            raise ValueError("Module should be a nn.Linear")
+        param_indices = []
+        subnetwork_indices = []
+        for name, param in module.named_parameters():
+            if name == 'weight':
+                data = param.data.clone()
+                euclidian_norm = torch.linalg.norm(data, dim = 1)
+                highest = torch.argsort(euclidian_norm, descending=True)
+                num_to_be_chosen = int(len(euclidian_norm)*percentile)
+                param_indices.append(highest[:num_to_be_chosen])
+                subnet_ind = torch.zeros_like(data)
+                subnet_ind[highest[:num_to_be_chosen]] = 1
+                subnetwork_indices.append(subnet_ind.bool().flatten())
+            elif name == 'bias':
+                indices = torch.argsort(torch.abs(param))[:int(percentile * len(param))]
+                param_indices.append(indices)
+                subnet_ind = torch.zeros_like(param).bool()
+                subnet_ind[indices] = True
+                subnetwork_indices.append(subnet_ind)
+
+        subnetwork_indices = torch.cat(subnetwork_indices, 0).unsqueeze(0)
+        setattr(module, 'subnetwork_indices', subnetwork_indices)
+        setattr(module, 'param_indices', param_indices)
+        setattr(module, 'subsample_fisher_A_B', True)
+
+    def get_params_from_module(self, module):
+        pass
+
     def select(self):
         counter = 0
         for name, module in self.model.named_modules():

@@ -107,3 +107,26 @@ class MapNN(nn.Module):
         output = self.non_linearity(output)
         output = self.out(output)
         return output
+
+
+class MAPNNLike(nn.Module):
+
+    def __init__(self, input_size, width, output_size):
+        super(MAPNNLike, self).__init__()
+        self.input_size = input_size
+        self.output_size = output_size
+
+        self.layer_one = nn.Linear(in_features=self.input_size, out_features=width)
+        self.layer_two = nn.Linear(in_features=width, out_features=width)
+        self.out = nn.Linear(in_features=width, out_features=self.output_size)
+
+        self.activation1 = nn.LeakyReLU()
+        self.activation2 = nn.LeakyReLU()
+
+    def forward(self, x):
+        out = self.layer_one(x)
+        out = self.activation1(out)
+        out = self.layer_two(out)
+        out = self.activation2(out)
+        out = self.out(out)
+        return out

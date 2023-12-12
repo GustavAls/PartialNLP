@@ -209,7 +209,12 @@ class RampingExperiments:
         for file in files:
             if 'run_' in os.path.basename(file) and os.path.isdir(file):
                 run_number = int(os.path.basename(file).split("_")[-1])
-                run_numbers_and_paths.append((run_number, os.path.join(file, f'run_number_{run_number}.pkl')))
+                pp = os.path.join(file, f'run_number_{run_number}.pkl')
+                if not os.path.exists(pp):
+                    pp = os.path.join(file, f'run_number_{0}.pkl')
+                    if not os.path.exists(pp):
+                        raise ValueError("Could not find path")
+                run_numbers_and_paths.append((run_number,pp))
 
         return sorted(run_numbers_and_paths)
     def get_metrics_from_file(self, file, has_seen_softmax = True):
@@ -219,6 +224,17 @@ class RampingExperiments:
             results = evaluation['results']
         else:
             results = evaluation
+        if not isinstance(results, dict):
+            if has_seen_softmax:
+                eval_ = Evaluator(results.predictions, results.labels,
+                                             has_seen_softmax=has_seen_softmax)
+
+                results_recalculated = eval_.get_all_metrics()
+            else:
+                results_recalculated = results.results
+            results_recalculated['modules'] = 1
+            res = {k: [v] for k, v in results_recalculated.items() if not isinstance(v, (list, tuple))}
+            return res
         modules = list(results.keys())
         res = {k: [] for k in results[modules[0]].results.keys()}
         print(file, modules)
@@ -300,7 +316,7 @@ class RampingExperiments:
         key = self.metric
 
         df = self.get_specific_results(results, key, map_path)
-        df = df[df['modules'] <= num_modules]
+        # df = df[df['modules'] <= 11]
         self.plot_result(df, key, ax = ax)
 
     def include_map(self, path):
