@@ -61,9 +61,11 @@ class SentimentClassifier:
             training_data_indices = set(range(train_data_length))-validation_data_indices
             train_data = data['train'].select(list(training_data_indices))
             val_data = data['train'].select(list(validation_data_indices))
+
             if dataset_name == "imdb":
                 test_data = data["test"] if self.test_size == 1 else \
                     data["test"].shuffle(seed=42).select([i for i in list(range(int(self.test_size)))])
+
             elif dataset_name == "sst2":
                 test_data = data["validation"] if self.test_size == 1 else \
                     data["validation"].shuffle(seed=42).select([i for i in list(range(int(self.test_size)))])
@@ -71,12 +73,16 @@ class SentimentClassifier:
         else:
             train_data = data["train"].shuffle(seed=42).select([i for i in list(range(int(self.train_size)))])
             val_data = data["train"].shuffle(seed=42).select([i for i in list(range(int(self.val_size)))])
+
             if dataset_name == "imdb":
                 test_data = data["test"] if self.test_size == 1 else \
                     data["test"].shuffle(seed=42).select([i for i in list(range(int(self.test_size)))])
+
             elif dataset_name == "sst2":
                 test_data = data["validation"] if self.test_size == 1 else \
                     data["validation"].shuffle(seed=42).select([i for i in list(range(int(self.test_size)))])
+            print("Training class split: " + str(sum(train_data['label'])/len(train_data['label'])))
+            print("Test class split: " + str(sum(test_data['label'])/len(test_data['label'])))
         del data
         return train_data, test_data, val_data
 
@@ -131,10 +137,12 @@ class SentimentClassifier:
             if 0 < self.train_size <= 1:
                 self.train_size = int(len(train_data) * self.train_size)
 
-            train_data = train_data if self.train_size == 1 else train_data.select([i for i in list(range(int(self.train_size)))])
-            val_data = val_data if self.val_size == 1 else val_data.select([i for i in list(range(int(self.val_size)))])
-            test_data = test_data if self.test_size == 1 else test_data.select([i for i in list(range(int(self.test_size)))])
+            train_data = train_data if self.train_size == 1 else train_data.shuffle(seed=42).select([i for i in list(range(int(self.train_size)))])
+            val_data = val_data if self.val_size == 1 else val_data.shuffle(seed=42).select([i for i in list(range(int(self.val_size)))])
+            test_data = test_data if self.test_size == 1 else test_data.shuffle(seed=42).select([i for i in list(range(int(self.test_size)))])
 
+            print("Training class split: " + str(sum(train_data['label'])/len(train_data['label'])))
+            print("Test class split: " + str(sum(test_data['label'])/len(test_data['label'])))
         return train_data, val_data, test_data
 
     def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, lr=5e-05,
@@ -278,6 +286,7 @@ def run_dataramping(args, sentiment_classifier=None, num_steps=10):
                                     save_strategy=args.save_strategy,
                                     evaluation_strategy=args.evaluation_strategy,
                                     load_best_model_at_end=args.load_best_model_at_end,
+                                    save_total_limit=args.save_total_limit,
                                     no_cuda=args.no_cuda,
                                     eval_steps=args.eval_steps,
                                     run=args.run
@@ -300,7 +309,6 @@ def prepare_and_run_sentiment_classifier(args, sentiment_classifier=None):
                                 save_strategy = args.save_strategy,
                                 evaluation_strategy = args.evaluation_strategy,
                                 load_best_model_at_end = True,
-
                                 no_cuda = args.no_cuda,
                                 eval_steps=args.eval_steps,
                                 run=args.run)
