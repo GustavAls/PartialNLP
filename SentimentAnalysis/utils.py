@@ -369,16 +369,38 @@ def get_smaller_dataloader(dataloader, indices):
     dataloader = SmallerDataloaderForOptimizing(dataloader, indices)
     return dataloader
 
+def get_best_chosen_modules(pcl, num_modules):
+    return pcl['module_selection'][num_modules]
+
+def read_pcl(path_to_pcl, num_modules):
+    pcl = pickle.load(open(path_to_pcl, 'rb'))
+    modules = get_best_chosen_modules(pcl, num_modules)
+    return modules
+
+def read_write_all(path_to_runs, save_path, num_modules):
+
+    files = os.listdir(path_to_runs)
+    module_names = {}
+    for file in files:
+        name = file.split(".")[0]
+        if 'run' in name:
+            run_number = int(name.split("_")[1])
+            module_names[run_number] = read_pcl(os.path.join(path_to_runs, file))
+
+    with open(os.path.join(save_path, f'module_names_{num_modules}_modules.pkl'), 'wb') as handle:
+        pickle.dump(module_names, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
 if __name__ == '__main__':
 
-    # path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping'
+    path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\random_ramping'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\SWAG\random_ramping'
-    # map_path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\map'
+    map_path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\map'
 
     # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\laplace\random_ramping_prior"
-    path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag\operator_norm_ramping_subclass"
-    map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map"
+    # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag\operator_norm_ramping_subclass"
+    # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map"
 
     fig, ax = plt.subplots(1, 1)
     plotter = RampingExperiments(path, 'nll')
