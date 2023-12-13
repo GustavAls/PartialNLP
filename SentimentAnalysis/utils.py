@@ -307,7 +307,7 @@ class RampingExperiments:
             plt.show()
 
 
-    def get_and_plot(self, path = None, map_path = None, has_seen_softmax = True, ax = None):
+    def get_and_plot(self, path = None, map_path = None, has_seen_softmax = True, ax = None, num_modules = 11):
         if path is None:
             path = self.ramping_exp_path
 
@@ -371,16 +371,18 @@ def get_smaller_dataloader(dataloader, indices):
 
 if __name__ == '__main__':
 
-
-
-    path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping'
-    path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\random_ramping'
+    # path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping'
+    # path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\random_ramping'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\SWAG\random_ramping'
-    map_path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\map'
-    path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\last_layer_prior'
+    # map_path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\map'
+
+    # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\laplace\random_ramping_prior"
+    path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag\operator_norm_ramping_subclass"
+    map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map"
+
     fig, ax = plt.subplots(1, 1)
-    plotter = RampingExperiments(path, 'ECE')
-    plotter.get_and_plot(path = path, has_seen_softmax = True, ax = ax, map_path=map_path)
+    plotter = RampingExperiments(path, 'nll')
+    plotter.get_and_plot(path = path, has_seen_softmax = True, ax = ax, map_path=map_path, num_modules=11)
     plotter.color = 'tab:orange'
     # plotter.get_and_plot(path = path_, has_seen_softmax=True, ax = ax, map_path=map_path)
     plt.gcf().subplots_adjust(left=0.16)
@@ -392,6 +394,7 @@ if __name__ == '__main__':
               ncol=1, fancybox=True, shadow=True)
 
     plt.show()
+    breakpoint()
 
 
 
