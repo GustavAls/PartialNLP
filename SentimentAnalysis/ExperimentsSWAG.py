@@ -91,6 +91,8 @@ class SWAGExperiments:
         self.partial_constructor.select_random_percentile(num_params)
         self.partial_constructor.select()
 
+
+
     def ensure_prior_calls(self, **kwargs):
 
         if self.optimizer is None:
