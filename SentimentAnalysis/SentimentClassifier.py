@@ -87,10 +87,7 @@ class SentimentClassifier:
         return train_data, test_data, val_data
 
     def tokenize(self, examples):
-        if self.dataset_name == 'imdb':
-            return self._tokenizer(examples["text"], truncation=True)
-        elif self.dataset_name == 'sst2':
-            return self._tokenizer(examples["sentence"], truncation=True)
+        return self._tokenizer(examples["text"], truncation=True)
 
     @staticmethod
     def compute_metrics(eval_pred):
@@ -155,6 +152,7 @@ class SentimentClassifier:
                                                                  run=run,
                                                                  output_path=output_path)
 
+        text_key = train_data.keys()[0]
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
 
@@ -309,7 +307,7 @@ def prepare_and_run_sentiment_classifier(args, sentiment_classifier=None):
                                 save_strategy = args.save_strategy,
                                 evaluation_strategy = args.evaluation_strategy,
                                 load_best_model_at_end = True,
-                                no_cuda = args.no_cuda,
+                                no_cuda=args.no_cuda,
                                 eval_steps=args.eval_steps,
                                 run=args.run)
 
