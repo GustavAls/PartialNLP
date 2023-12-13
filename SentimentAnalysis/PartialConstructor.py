@@ -69,6 +69,15 @@ class PartialConstructor:
         self.module_names = [names[i] for i in argsorted[::-1][:num_params]]
 
 
+    def select_min_operator_norm(self, num_params):
+        names, norms = [], []
+        for name, module in self.named_modules():
+            names.append(name)
+            norms.append(torch.linalg.matrix_norm(module.weight.data, ord=2).item())
+
+        argsorted = np.argsort(norms)
+
+        self.module_names = [names[i] for i in argsorted[:num_params]]
     def select_subnetwork_indices_module_wise(self, quantile = 1):
 
         for name, module in self.model.named_modules():
@@ -311,6 +320,16 @@ class PartialConstructorSwag:
 
         argsorted = np.argsort(norms)
         self.module_names = [names[i] for i in argsorted[::-1][:num_params]]
+
+    def select_min_operator_norm(self, num_params):
+        names, norms = [], []
+        for name, module in self.named_modules():
+            names.append(name)
+            norms.append(torch.linalg.matrix_norm(module.weight.data, ord=2).item())
+
+        argsorted = np.argsort(norms)
+
+        self.module_names = [names[i] for i in argsorted[:num_params]]
 
     def select_max_l1_norm(self, percentile = 0.1):
 

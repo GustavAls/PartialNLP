@@ -395,7 +395,7 @@ def read_write_all(path_to_runs, save_path, num_modules):
 
 if __name__ == '__main__':
 
-    path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping'
+    path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_subclass_prior'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\random_ramping'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\SWAG\random_ramping'
     map_path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\map'

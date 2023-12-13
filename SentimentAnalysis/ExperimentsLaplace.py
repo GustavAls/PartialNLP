@@ -118,9 +118,12 @@ class LaplaceExperiments:
         self.num_params = partial_constructor.get_num_params()
         self.module_names = partial_constructor.module_names
 
-    def create_partial_max_norm_ramping(self, num_params):
+    def create_partial_max_norm_ramping(self, num_params, use_minimum = False):
         partial_constructor = self.use_subclass_part_only(PartialConstructor(self.model))
-        partial_constructor.select_max_operator_norm(num_params)
+        if use_minimum:
+            partial_constructor.select_min_operator_norm(num_params)
+        else:
+            partial_constructor.select_max_operator_norm(num_params)
         partial_constructor.select()
         self.num_stoch_params = partial_constructor.get_num_stochastic_parameters()
         self.num_params = partial_constructor.get_num_params()
@@ -328,7 +331,7 @@ class LaplaceExperiments:
             with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
                 pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-    def max_norm_ramping_experiment(self, run_number = 0, use_uninformed = False):
+    def max_norm_ramping_experiment(self, run_number = 0, use_uninformed = False, use_minimum = False):
 
         print("Running random ramping experiment on ", self.default_args.dataset_name)
         results = {'results': {}, 'module_selection': {}}
@@ -338,7 +341,7 @@ class LaplaceExperiments:
         if len(remaining_modules) < len(self.num_modules):
             results = pickle.load(open(os.path.join(save_path, f"run_number_{run_number}.pkl"), 'rb'))
         for num_modules in remaining_modules:
-            self.create_partial_max_norm_ramping(num_modules)
+            self.create_partial_max_norm_ramping(num_modules, use_minimum)
             la, prior = self.optimize_prior_precision(num_steps=self.args.num_optim_steps, use_uninformed = use_uninformed)
             evaluator = utils.evaluate_laplace(la, self.trainer)
             evaluator.results['prior_precision'] = prior
@@ -482,7 +485,7 @@ def run_max_norm_ramping_experiments(args):
     # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
     la_args = Namespace(**la_args)
     lap_exp = LaplaceExperiments(args = la_args)
-    lap_exp.max_norm_ramping_experiment(args.run_number, args.uninformed_prior)
+    lap_exp.max_norm_ramping_experiment(args.run_number, args.uninformed_prior, args.minimum_norm)
 
 def run_max_norm_ramping_only_subclass(args):
     data_path = args.data_path
@@ -510,7 +513,7 @@ def run_max_norm_ramping_only_subclass(args):
     la_args = Namespace(**la_args)
     lap_exp = LaplaceExperiments(args = la_args)
     lap_exp.subclass = args.subclass
-    lap_exp.max_norm_ramping_experiment(args.run_number, args.uninformed_prior)
+    lap_exp.max_norm_ramping_experiment(args.run_number, args.uninformed_prior, args.minimum_norm)
 
 
 def run_last_layer(args, run_number = 0):
@@ -628,6 +631,7 @@ if __name__ == '__main__':
     parser.add_argument('--map_eval', type = ast.literal_eval, default=False)
     parser.add_argument('--num_batched_modules', type = int, default=0, help='Number of batches, not number of modules in '
                                                                              'each batch')
+    parser.add_argument('--minimum_norm', type = ast.literal_eval, default=False)
     args = parser.parse_args()
 
     if args.map_eval:
@@ -639,6 +643,7 @@ if __name__ == '__main__':
         run_random_ramping_experiments(args)
     if args.experiment == 'operator_norm_ramping':
         run_max_norm_ramping_experiments(args)
+
     if args.experiment == 'operator_norm_ramping_subclass':
         if args.subclass:
             run_max_norm_ramping_only_subclass(args)
