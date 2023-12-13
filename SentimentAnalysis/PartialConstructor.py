@@ -229,7 +229,7 @@ def identity_reduction(predictions):
 
 class PartialConstructorSwag:
     def __init__(self, model, n_iterations_between_snapshots=100, module_names=None, num_columns=0, num_mc_samples=50,
-                 min_var=1e-20, reduction='mean', num_classes=2, **kwargs):
+                 min_var=1e-20, reduction='mean', num_classes=2,use_sublayer = False, **kwargs):
 
         self.model = model
         self.device = next(model.parameters()).device
@@ -260,6 +260,9 @@ class PartialConstructorSwag:
         self.step_counter = 0
         self.use_only_mlp = False
         self.use_only_attn = False
+        self.use_sublayer = use_sublayer
+        self.param_mask = None
+        self.original_values = None
 
     def train(self, is_training = True):
         self.is_training = is_training
@@ -309,13 +312,35 @@ class PartialConstructorSwag:
         argsorted = np.argsort(norms)
         self.module_names = [names[i] for i in argsorted[::-1][:num_params]]
 
+    def select_max_l1_norm(self, percentile = 0.1):
+
+        if self.module_names is None or len(self.module_names) == 0:
+            raise ValueError("Must select module names before calling this function")
+
+        self.use_sublayer = True
+        param_mask = [], original_values = []
+        for param in self.model.parameters():
+            if param.requires_grad:
+                vector_ = param.view(-1).clone().detach().cpu().numpy()
+                percentile = np.percentile(vector_, q = 100-percentile)
+                vector_ = vector_ > percentile
+                param_mask.append(torch.from_numpy(vector_))
+                original_values.append(param.view(-1).detach().clone())
+        param_mask = torch.cat(param_mask, dim = 0).to(self.device)
+        self.param_mask = param_mask
+        self.original_values = torch.cat(original_values, dim = 0).to(self.device)
+
+    def select_all_modules(self):
+        self.module_names = [n for n, m in self.named_modules()]
+
     def _init_parameters(self):
 
         if not self.has_called_select:
             raise ValueError("You must call select() before parameter initialisation")
 
-        parameters_to_learn = self.parameter_to_vector()
+        parameters_to_learn = self.parameter_to_vector() if not self.use_sublayer else self.param_mask
         self.n_parameters = len(parameters_to_learn)
+
         self.theta_mean = torch.zeros_like(parameters_to_learn).to(self.device)
         self.squared_theta_mean = torch.zeros_like(parameters_to_learn).to(self.device)
 
@@ -328,13 +353,17 @@ class PartialConstructorSwag:
         self.train()
         self.deviations = []
 
-    def select(self):
+    def select(self, percentile = 10):
         for name, module in self.model.named_modules():
             if name in self.module_names:
                 module.requires_grad_(True)
             else:
                 module.requires_grad_(False)
         self.has_called_select = True
+
+        if self.use_sublayer:
+            self.select_max_l1_norm(percentile=percentile)
+
         self._init_parameters()
 
     def snapshot(self):
@@ -352,6 +381,14 @@ class PartialConstructorSwag:
 
             self.deviations.append(deviation.reshape(-1, 1))
 
+    def apply_sublayer_mask(self, param_vect):
+        if self.use_sublayer:
+            if self.param_mask is not None:
+                return param_vect[self.param_mask]
+            else:
+                raise ValueError("You must generate a param mask before applying the mask")
+        return param_vect
+
     def scheduler(self):
         return (self.step_counter+1) % self.number_of_iterations_bs == 0
 
@@ -361,6 +398,12 @@ class PartialConstructorSwag:
         self.squared_theta_mean = (self.squared_theta_mean - self.theta_mean ** 2).clamp(self.min_var)
         self.model.eval()
         return self.train(False)
+
+    def reset_params_with_mask(self):
+        if self.use_sublayer:
+            vect = self.parameter_to_vector()
+            vect[~self.param_mask] = self.original_values[~self.param_mask]
+            self.vector_to_parameters(vect)
 
     def __call__(self,
                 input_ids=None,
