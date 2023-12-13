@@ -3,7 +3,7 @@
 ### –- specify queue --
 #BSUB -q gpua100
 ### -- set the job Name --
-#BSUB -J swag_rand[1-5]
+#BSUB -J swag_rand[1-10]%5
 ### -- ask for number of cores (default: 1) --
 #BSUB -n 4
 #BSUB -R "span[hosts=1]"
@@ -58,6 +58,7 @@ dir_datapath="scratch/s184400/SA_results/Init/${dataset}_dataset/run_${run}"
 # Make the directories if they don't exist
 mkdir -p $dir_outpath
 
+    #--subclass "attn" \
 
 # Run the training
 python3 SentimentAnalysis/ExperimentsSWAG.py \
