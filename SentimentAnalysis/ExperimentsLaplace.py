@@ -286,6 +286,17 @@ class LaplaceExperiments:
             new_modules_to_run = sorted(list(set(self.num_modules) - set(number_of_modules)))
             return new_modules_to_run
 
+    def get_num_remaining_percentiles(self, path, run_number):
+        results_path = os.path.join(path, f"run_number_{run_number}.pkl")
+        if not os.path.exists(results_path):
+            return self.percentiles
+        else:
+            results_file = pickle.load(open(results_path, 'rb'))
+            results_key = next(iter(results_file.keys()))
+            num_percentiles = list(results_file[results_key].keys())
+            new_percentiles_to_run = sorted(list(set(self.percentiles) - set(num_percentiles)))
+            return new_percentiles_to_run
+
 
     def map_evaluation(self, run_number = 0):
 
@@ -342,7 +353,12 @@ class LaplaceExperiments:
         results = {'results': {}, 'percentile': {}}
         save_path = self.args.output_path
         self.ensure_path_existence(save_path)
-        self.percentiles = np.arange(1, 7) / 10
+        # This is the percentiles subsampled in input and output dimensions of each module, which means
+        # that the total number of parameters sampled scales quadratically with self.percentiles
+        self.percentiles = np.linspace(1, 30, 6)
+        remaining_percentiles = self.get_num_remaining_percentiles(save_path, run_number)
+        if len(remaining_percentiles) < len(self.percentiles):
+            results = pickle.load(open(os.path.join(save_path, f"run_number_{run_number}.pkl"), 'rb'))
         for percentile in self.percentiles:
             self.create_partial_sublayer_full_model(percentile=percentile)
             la, prior = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed=use_uninformed)
