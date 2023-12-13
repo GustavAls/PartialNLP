@@ -386,7 +386,9 @@ def read_write_all(path_to_runs, save_path, num_modules):
         name = file.split(".")[0]
         if 'run' in name:
             run_number = int(name.split("_")[1])
-            module_names[run_number] = read_pcl(os.path.join(path_to_runs, file))
+            path = os.path.join(path_to_runs, file)
+            path = os.path.join(path, f"run_number_{run_number}.pkl")
+            module_names[run_number] = read_pcl(path, num_modules)
 
     with open(os.path.join(save_path, f'module_names_{num_modules}_modules.pkl'), 'wb') as handle:
         pickle.dump(module_names, handle, protocol=pickle.HIGHEST_PROTOCOL)
