@@ -307,7 +307,7 @@ class RampingExperiments:
             plt.show()
 
 
-    def get_and_plot(self, path = None, map_path = None, has_seen_softmax = True, ax = None, num_modules = 11):
+    def get_and_plot(self, path = None, map_path = None, has_seen_softmax = True, ax = None, num_runs=None):
         if path is None:
             path = self.ramping_exp_path
 
@@ -316,7 +316,8 @@ class RampingExperiments:
         key = self.metric
 
         df = self.get_specific_results(results, key, map_path)
-        # df = df[df['modules'] <= 11]
+        if num_runs is not None:
+            df = df[df['modules'] <= num_runs]
         self.plot_result(df, key, ax = ax)
 
     def include_map(self, path):
@@ -377,23 +378,23 @@ if __name__ == '__main__':
     # map_path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\map'
 
     # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\laplace\random_ramping_prior"
-    path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag\operator_norm_ramping_subclass"
+
+    path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag\imdb\operator_norm_ramping"
     map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map"
 
-    fig, ax = plt.subplots(1, 1)
-    plotter = RampingExperiments(path, 'nll')
-    plotter.get_and_plot(path = path, has_seen_softmax = True, ax = ax, map_path=map_path, num_modules=11)
-    plotter.color = 'tab:orange'
-    # plotter.get_and_plot(path = path_, has_seen_softmax=True, ax = ax, map_path=map_path)
-    plt.gcf().subplots_adjust(left=0.16)
-    ylims = ax.get_ylim()
-    diff = (ylims[1] - ylims[0]) * 0.3 + ylims[1]
+    for metric in ['nll', 'ECE', 'MCE', 'accuracy_score']:
+        fig, ax = plt.subplots(1, 1)
+        plotter = RampingExperiments(path, metric=metric)
+        plotter.get_and_plot(path=path, has_seen_softmax=True, ax=ax, map_path=map_path, num_runs=4)
+        plotter.color = 'tab:orange'
+        plt.gcf().subplots_adjust(left=0.16)
+        ylims = ax.get_ylim()
+        diff = (ylims[1] - ylims[0]) * 0.3 + ylims[1]
+        ax.set_ylim((ylims[0], diff))
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
+                  ncol=1, fancybox=True, shadow=True)
 
-    ax.set_ylim((ylims[0], diff))
-    ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
-              ncol=1, fancybox=True, shadow=True)
-
-    plt.show()
+        plt.show()
     breakpoint()
 
 
