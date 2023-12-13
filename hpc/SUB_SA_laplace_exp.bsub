@@ -3,7 +3,7 @@
 ### –- specify queue --
 #BSUB -q gpuv100
 ### -- set the job Name --
-#BSUB -J laplace_rand_prior[1-5]
+#BSUB -J laplace_sub_full[1-5]
 ### -- ask for number of cores (default: 1) --
 #BSUB -n 4
 #BSUB -R "span[hosts=1]"
@@ -45,13 +45,13 @@ echo "Running script..."
 
 ##### ADD INFO HERE ####
 dataset="imdb"
-experiment="random_ramping"
+experiment="sublayer_full"
 
 runs=(0 1 2 3 4)
 run="${runs[$LSB_JOBINDEX - 1]}"
 
 # Create some folders
-dir_outpath="scratch/s184400/SA_results/laplace/${dataset}/${experiment}_prior/run_${run}"
+dir_outpath="scratch/s184400/SA_results/laplace/${dataset}/${experiment}_mlp/run_${run}"
 dir_datapath="scratch/s184400/SA_results/Init/${dataset}_dataset/run_${run}"
 
 
@@ -59,6 +59,10 @@ dir_datapath="scratch/s184400/SA_results/Init/${dataset}_dataset/run_${run}"
 mkdir -p $dir_outpath
 
    # --subclass "attn" \
+   # --minimum_norm True \
+
+   # --num_batched_modules 10 \
+
 # Run the training
 python3 SentimentAnalysis/ExperimentsLaplace.py \
     --output_path $dir_outpath \
@@ -66,9 +70,11 @@ python3 SentimentAnalysis/ExperimentsLaplace.py \
     --experiment $experiment \
     --dataset_name $dataset \
     --run_number $run \
-    --uninformed_prior True \
+    --uninformed_prior False \
     --train_batch_size 16 \
     --eval_batch_size 1 \
+    --num_batched_modules 7 \
+
 
 
 if [ $? -eq 0 ]; then
