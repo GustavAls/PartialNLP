@@ -152,7 +152,6 @@ class SentimentClassifier:
                                                                  run=run,
                                                                  output_path=output_path)
 
-        text_key = train_data.keys()[0]
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
         tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
 
