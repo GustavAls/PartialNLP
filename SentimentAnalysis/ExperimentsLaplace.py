@@ -451,7 +451,8 @@ def run_random_ramping_experiments(args):
                'subclass': args.subclass,
                'train_size': args.train_size,
                'val_size': args.val_size,
-               'test_size': args.test_size
+               'test_size': args.test_size,
+               'num_batched_modules': args.num_batched_modules
                }
 
     # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
