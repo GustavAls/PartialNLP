@@ -39,9 +39,9 @@ class SWAGExperiments:
         self.default_args = Namespace(**self.default_args)
         self.default_args.model_path = args.model_path
         self.default_args.data_path = getattr(args, 'data_path', None)
-        self.default_args_swag = {'n_iterations_between_snapshots': 5,
+        self.default_args_swag = {'n_iterations_between_snapshots': 1,
                                   'module_names': None, 'num_columns': 20, 'num_mc_samples': 50,
-                                  'min_var': 1e-20, 'reduction': 'mean', 'num_classes': 2, 'optim_max_num_steps': 100 ,
+                                  'min_var': 1e-20, 'reduction': 'mean', 'num_classes': 2, 'optim_max_num_steps': 2 ,
                                   'max_num_steps': 2000}
 
         self.partial_constructor = None
@@ -92,7 +92,9 @@ class SWAGExperiments:
         self.partial_constructor.select_random_percentile(num_params)
         self.partial_constructor.select()
 
-
+    def create_partial_sublayer_ramping(self, percentile):
+        self.partial_constructor.select_all_modules()
+        self.partial_constructor.select(percentile = percentile)
 
     def ensure_prior_calls(self, **kwargs):
 
@@ -122,7 +124,7 @@ class SWAGExperiments:
                 out = self.partial_constructor(**x)
                 out.loss.backward()
                 self.optimizer.step()
-
+                self.partial_constructor.reset_params_with_mask()
                 if self.partial_constructor.scheduler():
                     self.partial_constructor.snapshot()
                     pbar.update(1)
@@ -196,6 +198,48 @@ class SWAGExperiments:
 
             train_kwargs = {'learning_rate': optimimum_learning_rate,
                             'max_num_steps': self.default_args_swag['max_num_steps']}
+            self.partial_constructor.init_new_model_for_optim(copy.deepcopy(self.trainer.model))
+            print("Model with best learning rate initialized")
+            get_mem_nvidia()
+
+            self.fit(**train_kwargs)
+            print("Model trained")
+            get_mem_nvidia()
+
+            evaluator = utils.evaluate_swag(self.partial_constructor, self.trainer)
+            print("Model evaluated")
+            get_mem_nvidia()
+            results[number_of_modules] = evaluator
+
+            with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
+                pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def sublayer_experiment_full(self, run_number = 0):
+        results = {}
+        save_path = self.default_args.output_path
+        self.ensure_path_existence(save_path)
+        self.num_modules = list(np.linspace(1, 60, num=6, endpoint=True))
+        remaining_modules = self.get_num_remaining_modules(save_path, run_number)
+
+        if len(remaining_modules) < len(self.num_modules):
+            results = pickle.load(open(os.path.join(save_path, f"run_number_{run_number}.pkl"), 'rb'))
+
+        for number_of_modules in remaining_modules:
+            print("Training with number of stochastic modules equal to", number_of_modules)
+            self.initialize_sentiment_classifier()
+            self.default_args_swag['use_sublayer'] = True
+            self.initialize_swag(copy.deepcopy(self.trainer.model))
+            self.create_partial_sublayer_ramping(number_of_modules) # hereditary naming of things here
+            print("Swag initialized")
+            get_mem_nvidia()
+
+            optimimum_learning_rate = self.optimize_lr()
+            print("Optimized learning rate")
+            get_mem_nvidia()
+
+            train_kwargs = {'learning_rate': optimimum_learning_rate,
+                            'max_num_steps': self.default_args_swag['max_num_steps']}
+
             self.partial_constructor.init_new_model_for_optim(copy.deepcopy(self.trainer.model))
             print("Model with best learning rate initialized")
             get_mem_nvidia()
@@ -314,25 +358,48 @@ def run_max_norm_ramping_only_subclass(args):
     swag_exp.subclass = args.subclass
     swag_exp.max_norm_ramping_experiment(args.run_number)
 
+def run_sublayer_experiment(args):
+    data_path = args.data_path
+    model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
+
+    model_path = os.path.join(data_path, model_ext_path)
+    args.model_path = model_path
+    exp_args = {'model_path': model_path,
+                'dataset_name': args.dataset_name,
+                'data_path': data_path,
+                'output_path': args.output_path,
+                'batch_size': args.batch_size,
+                'train_size': args.train_size,
+                'subclass': args.subclass,
+                'val_size': args.val_size,
+                'test_size': args.test_size}
+
+    exp_args = Namespace(**exp_args)
+    swag_exp = SWAGExperiments(args=exp_args)
+    swag_exp.subclass = args.subclass
+    swag_exp.sublayer_experiment_full(args.run_number)
+
+
 
 def get_mem_nvidia():
-    import pynvml as nvml
+    if torch.cuda.is_available():
+        import pynvml as nvml
 
-    def bytes_to_gb(bytes):
-        return round(bytes / 1024**3, 4)
+        def bytes_to_gb(bytes):
+            return round(bytes / 1024**3, 4)
 
-    nvml.nvmlInit()
-    device_count = nvml.nvmlDeviceGetCount()
+        nvml.nvmlInit()
+        device_count = nvml.nvmlDeviceGetCount()
 
-    for i in range(device_count):
-        try:
-            handle = nvml.nvmlDeviceGetHandleByIndex(i)
-            info = nvml.nvmlDeviceGetMemoryInfo(handle)
-            print(f"Total memory (gb): {bytes_to_gb(info.total)}, Free memory (gb): {bytes_to_gb(info.free)}, Used memory (gb): {bytes_to_gb(info.used)}")
-        except:
-            print("Can't get memory info for device", i)
-            continue
-    nvml.nvmlShutdown()
+        for i in range(device_count):
+            try:
+                handle = nvml.nvmlDeviceGetHandleByIndex(i)
+                info = nvml.nvmlDeviceGetMemoryInfo(handle)
+                print(f"Total memory (gb): {bytes_to_gb(info.total)}, Free memory (gb): {bytes_to_gb(info.free)}, Used memory (gb): {bytes_to_gb(info.used)}")
+            except:
+                print("Can't get memory info for device", i)
+                continue
+        nvml.nvmlShutdown()
 
 
 if __name__ == '__main__':
@@ -361,4 +428,5 @@ if __name__ == '__main__':
     if args.experiment == 'operator_norm_ramping_subclass':
         if args.subclass:
             run_max_norm_ramping_only_subclass(args)
-
+    if args.experiment == 'sublayer':
+        run_sublayer_experiment(args)

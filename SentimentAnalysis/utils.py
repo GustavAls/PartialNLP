@@ -35,6 +35,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import pandas as pd
 
+
 font = {'family': 'serif',
             'size': 15,
             'serif': 'cmr10'
@@ -195,6 +196,151 @@ def run_evaluator_again(predictions, labels):
 
 
 
+class MultipleRampingExperiments:
+
+    def __init__(self, ramping_exp_paths,
+                 ramping_exp_names = None,
+                 map_path = None,
+                 metric = 'nll',
+                 sublayer_ramping = False,
+                 method = 'la'):
+        self.ramping_exp_paths = ramping_exp_paths
+        self.ramping_exp_names = ramping_exp_names
+        self.ramping_exp_names = self.get_names_from_paths()
+        self.map_path = map_path
+        self.metric = metric
+        self.sublayer_ramping = sublayer_ramping
+        self.dataset_name = self.get_dataset_name(self.ramping_exp_paths[0])
+
+        if method in  ['la', 'laplace', 'Laplace']:
+            self.method_name = 'Laplace'
+        elif method in ['sw', 'swa', 'swag', 'SWAG']:
+            self.method_name = 'SWAG'
+        else:
+            self.method_name = method
+
+        self.ramping_experiments = {
+            path: RampingExperiments(path, metric=metric) for path in self.ramping_exp_paths
+        }
+        self.path_to_names = {path: name for path, name in zip(self.ramping_exp_paths, self.ramping_exp_names)}
+
+        self.exp_number_to_colors = ['tab:blue', 'tab:red', 'tab:orange']
+        self.metric_to_label_metric = {
+            'accuracy_score': 'Accuracy',
+            'nll': 'NLL',
+            'balanced_accuracy_score': 'Balanced Accuracy',
+            'f1': 'F1 score',
+            'ECE': 'ECE', 'MCE': 'MCE', 'RMSCE': 'RMSCE'
+        }
+
+    def get_dataset_name(self, path):
+        if 'imdb' in path.lower():
+            return 'IMDb'
+
+        elif 'sst' in path.lower():
+            return 'SST2'
+
+        else:
+            return ""
+
+    def get_dfs(self):
+
+        dfs = {}
+        for key, val in self.ramping_experiments.items():
+            dfs[key] = val.get_df(map_path=self.map_path, has_seen_softmax=True)
+
+        return dfs
+
+    def plot_all(self, fig = None, ax = None):
+        if ax is None:
+            fig, ax = plt.subplots(1,1)
+
+        dataframes = self.get_dfs()
+        def errorbar_normal(x):
+            mean = np.mean(x)
+            sd = np.std(x)
+            return mean - 1.96 * sd, mean + 1.96 * sd
+
+        # errorbar_func = lambda x: np.mean(
+        error_bar_percentile = lambda x: np.percentile(x, [25, 75])
+        for idx, key in enumerate(self.ramping_experiments.keys()):
+            df = dataframes[key]
+            name = self.path_to_names[key]
+            color = self.exp_number_to_colors[idx]
+
+            sns.pointplot(errorbar=error_bar_percentile,
+                          data=df, x="modules", y=self.metric,
+                          join=False,
+                          capsize=.30,
+                          markers="d",
+                          scale=1.0,
+                          err_kws={'linewidth': 0.7}, estimator=np.median,
+                          color=color,
+                          label= self.metric_to_label_metric[self.metric] + " " + name,
+                          ax=ax)
+
+
+        self.set_proper_axis_labels(ax)
+        ax.set_title(self.method_name + " " + self.dataset_name + " "  + self.metric_to_label_metric[self.metric])
+        self.set_bounds(ax)
+        return fig, ax
+
+    def set_bounds(self, ax):
+        plt.gcf().subplots_adjust(left=0.16)
+        ylims = ax.get_ylim()
+        additional_top = (ylims[1] - ylims[0]) * 0.3 + ylims[1]
+        ax.set_ylim((ylims[0], additional_top))
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
+                  ncol=1, fancybox=True, shadow=True)
+        return ax
+
+    def set_proper_axis_labels(self, ax):
+        ticks = ax.get_xmajorticklabels()
+        numbers = [float(t._text) for t in ticks]
+
+        if self.sublayer_ramping:
+            def percentile_to_actual_percentile(percentile):
+                num_params_mlp =lambda x: 11 * 768/100 * x * 3072/100 * x
+                num_params_attn = lambda x: 27 * 768/100 * x * 768 / 100 * x
+
+                percentage_of_params = ((num_params_attn(percentile) + num_params_mlp(percentile))
+                                        /(num_params_mlp(100)+ num_params_attn(100)))*100
+                return percentage_of_params
+
+            numbers = [str(percentile_to_actual_percentile(number)) for number in numbers]
+            x_label = 'Percentages'
+
+        else:
+            numbers = [str(int(number)) for number in numbers]
+            x_label = "Num. stoch. modules "
+
+        y_label = self.metric_to_label_metric[self.metric]
+        for number, tick in zip(numbers, ticks):
+            tick.set_text(number)
+
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
+        return ax
+
+    def get_names_from_paths(self):
+
+        if self.ramping_exp_names is not None:
+            return self.ramping_exp_names
+
+        names = []
+        for path in self.ramping_exp_paths:
+            if 'run' not in path:
+                name = os.path.basename(path).split("_")
+                if 'prior' in name[-1].lower():
+                    name = name[:-1]
+                names.append(name)
+
+        return names
+
+
+
+
+
 class RampingExperiments:
 
     def __init__(self, ramping_exp_path, metric = 'nll'):
@@ -266,7 +412,7 @@ class RampingExperiments:
         module_holder, results_holder = [], []
 
         for run, v in results.items():
-            modules = v['modules']
+            modules = [float(mod) for mod in v['modules']]
             module_holder+=modules
             results_holder+= v[key]
 
@@ -292,13 +438,14 @@ class RampingExperiments:
             sd = np.std(x)
             return mean - 1.96 * sd, mean + 1.96 * sd
         # errorbar_func = lambda x: np.mean(
-        sns.pointplot(errorbar=errorbar_normal,
+        error_bar_percentile = lambda x: np.percentile(x, [25, 75])
+        sns.pointplot(errorbar=error_bar_percentile,
                       data=df, x="modules", y=key,
                       join=False,
                       capsize=.30,
                       markers="d",
                       scale=1.0,
-                      err_kws={'linewidth': 0.7}, estimator=np.mean,
+                      err_kws={'linewidth': 0.7}, estimator=np.median,
                       color=self.color,
                       label=key.split("_")[0] + " " + " ".join(self.experiment_name.split("_")),
                       ax=ax)
@@ -319,6 +466,16 @@ class RampingExperiments:
         # df = df[df['modules'] <= 11]
         self.plot_result(df, key, ax = ax)
 
+    def get_df(self, path = None, map_path = None, has_seen_softmax = True):
+        if path is None:
+            path = self.ramping_exp_path
+
+        results = self.get_metrics_from_all_files(path, has_seen_softmax=has_seen_softmax)
+        key = self.metric
+
+        df = self.get_specific_results(results, key, map_path)
+        return df
+
     def include_map(self, path):
 
         map_paths = [os.path.join(path, p) for p in os.listdir(path)]
@@ -332,6 +489,7 @@ class RampingExperiments:
                 res_[k].append(v)
 
         return res_
+
 
 
 
@@ -395,7 +553,7 @@ def read_write_all(path_to_runs, save_path, num_modules):
 
 if __name__ == '__main__':
 
-    path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_subclass_prior'
+    path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_prior'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\random_ramping'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\SWAG\random_ramping'
     map_path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\map'
@@ -404,6 +562,18 @@ if __name__ == '__main__':
     # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag\operator_norm_ramping_subclass"
     # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map"
 
+
+    exp_paths = [r"C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_subclass_attn_min",
+                r"C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_subclass_prior"]
+
+    names = ['Min operator norm attn', 'Max operator norm attn']
+
+    plotter = MultipleRampingExperiments(exp_paths, names, map_path=map_path)
+    fig, ax = plt.subplots(1,1)
+    plotter.plot_all(fig, ax)
+    fig.tight_layout()
+    plt.show()
+    breakpoint()
     fig, ax = plt.subplots(1, 1)
     plotter = RampingExperiments(path, 'nll')
     plotter.get_and_plot(path = path, has_seen_softmax = True, ax = ax, map_path=map_path, num_modules=11)
