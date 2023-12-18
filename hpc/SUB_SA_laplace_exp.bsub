@@ -3,7 +3,7 @@
 ### –- specify queue --
 #BSUB -q gpuv100
 ### -- set the job Name --
-#BSUB -J laplace_rand_prior[1-5]
+#BSUB -J laplace_rand[1-5]
 ### -- ask for number of cores (default: 1) --
 #BSUB -n 4
 #BSUB -R "span[hosts=1]"
@@ -44,7 +44,7 @@ echo "Running script..."
 # Send sample job to GPU
 
 ##### ADD INFO HERE ####
-dataset="imdb"
+dataset="sst2"
 experiment="random_ramping"
 
 runs=(0 1 2 3 4)
@@ -59,6 +59,10 @@ dir_datapath="scratch/s184400/SA_results/Init/${dataset}_dataset/run_${run}"
 mkdir -p $dir_outpath
 
    # --subclass "attn" \
+   # --minimum_norm True \
+
+   # --num_batched_modules 5 \
+
 # Run the training
 python3 SentimentAnalysis/ExperimentsLaplace.py \
     --output_path $dir_outpath \
@@ -66,9 +70,10 @@ python3 SentimentAnalysis/ExperimentsLaplace.py \
     --experiment $experiment \
     --dataset_name $dataset \
     --run_number $run \
-    --uninformed_prior True \
+    --uninformed_prior False \
     --train_batch_size 16 \
     --eval_batch_size 1 \
+
 
 
 if [ $? -eq 0 ]; then

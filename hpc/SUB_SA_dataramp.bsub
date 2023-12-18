@@ -3,16 +3,17 @@
 ### –- specify queue --
 #BSUB -q gpuv100
 ### -- set the job Name --
-#BSUB -J data_ramp[1-5]
+#BSUB -J data_ramp_sst2[1-5]
 ### -- ask for number of cores (default: 1) --
 #BSUB -n 4
 #BSUB -R "span[hosts=1]"
 ### -- Select the resources: 1 gpu in exclusive process mode --
 #BSUB -gpu "num=1:mode=exclusive_process"
 ### -- set walltime limit: hh:mm --  maximum 24 hours for GPU-queues right now
-#BSUB -W 8:00
+#BSUB -W 12:00
 # request 10GB of system-memory
 #BSUB -R "rusage[mem=6GB]"
+#BSUB -R "select[gpu16gb]"
 ### -- set the email address --
 # please uncomment the following line and put in your e-mail address,
 # if you want to receive e-mail notifications on a non-default address
@@ -43,7 +44,7 @@ echo "Running script..."
 # Send sample job to GPU
 
 ##### ADD INFO HERE ####
-dataset="imdb"
+dataset="sst2"
 
 runs=(0 1 2 3 4)
 run="${runs[$LSB_JOBINDEX - 1]}"
@@ -64,14 +65,19 @@ python3 SentimentAnalysis/SentimentClassifier.py \
     --train_batch_size 32 \
     --eval_batch_size 32 \
     --device_batch_size 32 \
+    --run $run \
     --num_epochs 1 \
     --dataset_name $dataset \
     --learning_rate 5e-05 \
     --no_cuda False \
-    --save_strategy "no" \
+    --save_strategy "epoch" \
     --evaluation_strategy "epoch" \
+    --test_size 1 \
+    --val_size 10 \
+    --save_total_limit 1 \
+    --load_best_model_at_end True \
+    --metric_for_best_model "loss" \
     --dataramping True \
-    --run $run \
 
 
 if [ $? -eq 0 ]; then

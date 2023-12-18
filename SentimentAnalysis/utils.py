@@ -454,7 +454,7 @@ class RampingExperiments:
             plt.show()
 
 
-    def get_and_plot(self, path = None, map_path = None, has_seen_softmax = True, ax = None, num_modules = 11):
+    def get_and_plot(self, path = None, map_path = None, has_seen_softmax = True, ax = None, num_runs=None):
         if path is None:
             path = self.ramping_exp_path
 
@@ -463,7 +463,8 @@ class RampingExperiments:
         key = self.metric
 
         df = self.get_specific_results(results, key, map_path)
-        # df = df[df['modules'] <= 11]
+        if num_runs is not None:
+            df = df[df['modules'] <= num_runs]
         self.plot_result(df, key, ax = ax)
 
     def get_df(self, path = None, map_path = None, has_seen_softmax = True):
@@ -587,7 +588,7 @@ if __name__ == '__main__':
     ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
               ncol=1, fancybox=True, shadow=True)
 
-    plt.show()
+        plt.show()
     breakpoint()
 
 

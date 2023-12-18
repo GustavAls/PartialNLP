@@ -40,7 +40,7 @@ class LaplaceExperiments:
         self.default_args = {'output_path': args.output_path,
                              'train_batch_size': args.train_batch_size, 'eval_batch_size': args.eval_batch_size,
                              'train_device_batch_size': args.train_batch_size, 'eval_device_batch_size': args.eval_batch_size,
-                             'device': 'cuda', 'num_epochs': 1.0, 'dataset_name': 'imdb',
+                             'device': 'cuda', 'num_epochs': 1.0, 'dataset_name': args.dataset_name,
                              'train': True, 'train_size': args.train_size, 'val_size': args.val_size,
                              'test_size': args.test_size, 'learning_rate': 5e-05,
                              'laplace': True, 'save_strategy': 'no',
@@ -358,11 +358,11 @@ class LaplaceExperiments:
         self.ensure_path_existence(save_path)
         # This is the percentiles subsampled in input and output dimensions of each module, which means
         # that the total number of parameters sampled scales quadratically with self.percentiles
-        self.percentiles = np.linspace(1, 30, 6)
+        self.percentiles = np.linspace(1, 30, 6, endpoint=True)
         remaining_percentiles = self.get_num_remaining_percentiles(save_path, run_number)
         if len(remaining_percentiles) < len(self.percentiles):
             results = pickle.load(open(os.path.join(save_path, f"run_number_{run_number}.pkl"), 'rb'))
-        for percentile in self.percentiles:
+        for percentile in remaining_percentiles:
             self.create_partial_sublayer_full_model(percentile=percentile)
             la, prior = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed=use_uninformed)
             evaluator = utils.evaluate_laplace(la, self.trainer)
@@ -425,7 +425,8 @@ def run_map_eval(args):
                    'subclass': args.subclass,
                    'train_size': args.train_size,
                    'val_size': args.val_size,
-                   'test_size': args.test_size
+                   'test_size': args.test_size,
+                   'num_batched_modules': args.num_batched_modules
                    }
 
         # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
@@ -451,7 +452,8 @@ def run_random_ramping_experiments(args):
                'subclass': args.subclass,
                'train_size': args.train_size,
                'val_size': args.val_size,
-               'test_size': args.test_size
+               'test_size': args.test_size,
+               'num_batched_modules': args.num_batched_modules
                }
 
     # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
