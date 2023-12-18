@@ -40,7 +40,7 @@ class LaplaceExperiments:
         self.default_args = {'output_path': args.output_path,
                              'train_batch_size': args.train_batch_size, 'eval_batch_size': args.eval_batch_size,
                              'train_device_batch_size': args.train_batch_size, 'eval_device_batch_size': args.eval_batch_size,
-                             'device': 'cuda', 'num_epochs': 1.0, 'dataset_name': 'imdb',
+                             'device': 'cuda', 'num_epochs': 1.0, 'dataset_name': args.dataset_name,
                              'train': True, 'train_size': args.train_size, 'val_size': args.val_size,
                              'test_size': args.test_size, 'learning_rate': 5e-05,
                              'laplace': True, 'save_strategy': 'no',
@@ -425,7 +425,8 @@ def run_map_eval(args):
                    'subclass': args.subclass,
                    'train_size': args.train_size,
                    'val_size': args.val_size,
-                   'test_size': args.test_size
+                   'test_size': args.test_size,
+                   'num_batched_modules': args.num_batched_modules
                    }
 
         # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
