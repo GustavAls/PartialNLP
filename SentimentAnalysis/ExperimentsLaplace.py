@@ -358,7 +358,7 @@ class LaplaceExperiments:
         self.ensure_path_existence(save_path)
         # This is the percentiles subsampled in input and output dimensions of each module, which means
         # that the total number of parameters sampled scales quadratically with self.percentiles
-        self.percentiles = np.linspace(1, 30, 6)
+        self.percentiles = np.linspace(1, 30, 6, endpoint=True)
         remaining_percentiles = self.get_num_remaining_percentiles(save_path, run_number)
         if len(remaining_percentiles) < len(self.percentiles):
             results = pickle.load(open(os.path.join(save_path, f"run_number_{run_number}.pkl"), 'rb'))
