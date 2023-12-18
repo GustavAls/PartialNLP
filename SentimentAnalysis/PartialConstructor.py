@@ -349,6 +349,15 @@ class PartialConstructorSwag:
         self.param_mask = param_mask
         self.original_values = torch.cat(original_values, dim = 0).to(self.device)
 
+
+    def select_max_l1_norm_(self, percentile):
+
+        param_vect = nn.utils.parameters_to_vector(self.parameters()).detach().cpu().numpy()
+        min_value = np.percentile(param_vect, 100 - percentile)
+        mask = param_vect > min_value
+        self.param_mask = torch.from_numpy(mask).bool()
+        self.original_values = nn.utils.parameters_to_vector(self.parameters()).detach().clone()
+
     def select_all_modules(self):
         self.module_names = [n for n, m in self.named_modules()]
 
@@ -363,6 +372,11 @@ class PartialConstructorSwag:
         self.theta_mean = torch.zeros_like(parameters_to_learn).to(self.device)
         self.squared_theta_mean = torch.zeros_like(parameters_to_learn).to(self.device)
 
+        if self.use_sublayer:
+            self.theta_mean = self.theta_mean[self.param_mask]
+            self.squared_theta_mean = self.squared_theta_mean[self.param_mask]
+
+
     def init_new_model_for_optim(self, model):
         self.model = model
         self.select()
@@ -371,6 +385,7 @@ class PartialConstructorSwag:
         self.n_snapshots = 0
         self.train()
         self.deviations = []
+
 
     def select(self, percentile = 10):
         for name, module in self.model.named_modules():
@@ -381,24 +396,27 @@ class PartialConstructorSwag:
         self.has_called_select = True
 
         if self.use_sublayer:
-            self.select_max_l1_norm(percentile=percentile)
+            self.select_max_l1_norm_(percentile=percentile)
 
         self._init_parameters()
 
     def snapshot(self):
 
-        new_parameter_values = self.parameter_to_vector()
+        new_parameter_values = self.parameter_to_vector().detach().clone()
+        new_parameter_values = self.apply_sublayer_mask(new_parameter_values)
         old_factor, new_factor = self.n_snapshots / (self.n_snapshots + 1), 1 / (self.n_snapshots + 1)
+
         self.theta_mean = self.theta_mean * old_factor + new_parameter_values * new_factor
         self.squared_theta_mean = self.squared_theta_mean * old_factor + new_parameter_values ** 2 * new_factor
 
-        self.n_snapshots += 1
         if self.num_columns > 0:
             deviation = new_parameter_values - self.theta_mean
             if len(self.deviations) > self.num_columns:
                 self.deviations.pop(0)
 
             self.deviations.append(deviation.reshape(-1, 1))
+
+        self.n_snapshots += 1
 
     def apply_sublayer_mask(self, param_vect):
         if self.use_sublayer:
@@ -463,7 +481,13 @@ class PartialConstructorSwag:
         else:
             theta = self.theta_mean + self.squared_theta_mean * z1
 
-        self.vector_to_parameters(theta)
+        if self.use_sublayer:
+            theta_true = torch.zeros_like(self.original_values)
+            theta_true[self.param_mask] = theta
+            theta_true[~self.param_mask] = self.original_values[~self.param_mask]
+            self.vector_to_parameters(theta_true)
+        else:
+            self.vector_to_parameters(theta)
 
     def predict_mc(self, **kwargs):
 
