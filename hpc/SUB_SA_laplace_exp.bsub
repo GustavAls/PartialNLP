@@ -51,7 +51,7 @@ runs=(0 1 2 3 4)
 run="${runs[$LSB_JOBINDEX - 1]}"
 
 # Create some folders
-dir_outpath="scratch/s184400/SA_results/laplace/${dataset}/${experiment}_prior/run_${run}"
+dir_outpath="scratch/s184400/SA_results/laplace/${dataset}/${experiment}/run_${run}"
 dir_datapath="scratch/s184400/SA_results/Init/${dataset}_dataset/run_${run}"
 
 
