@@ -709,10 +709,10 @@ class PlotFunctionHolder:
 
         data_name = self.find_data_name(self.la_swa_path)
         for method, criteria in  [('Laplace', 'laplace'), ('SWAG', 'swag')]:
-            fig, ax = plt.subplots(1, 1)
             minmax = calculate_max_and_min_for_predictions(self.plot_helper_la_swa, run_type=criteria, epsilon=0.1, idx=4,
                                                            laplace=True if 'laplace' in criteria else False)
             for percentage in percentages:
+                fig, ax = plt.subplots(1, 1)
                 predictions, labels = self.plot_helper_la_swa.get_predictions_and_labels_for_percentage(
                     percentage, 4, criteria, laplace=True if 'laplace' in criteria else False)
                 plot_scatter(predictions, labels, data_name=data_name, minmax=minmax,
@@ -1131,7 +1131,7 @@ class PlotFunctionHolder:
             percentages = ['1', '5', '61', '100']
         save_path = save_path if save_path is not None else self.save_path
         data_name = self.find_data_name(self.vi_hmc_path)
-        num_runs = 1
+        num_runs = 15
         for method, criteria in [('VI', 'vi_run'), ('HMC', 'hmc')]:
             fig, ax = plt.subplots(1, 1)
             for run in percentages:
@@ -1159,7 +1159,8 @@ class PlotFunctionHolder:
             ax.set_title(f'Average Calibration {method}, {data_name}')
             fig.tight_layout()
             if save_path is not None:
-                fig.savefig(os.path.join(save_path, f'{criteria}_calibration_{data_name}_num_runs_{num_runs}.pdf'), format='pdf')
+                fig.savefig(os.path.join(save_path, f'{criteria}_calibration_{data_name}_num_runs_{num_runs}.pdf'), format='pdf',
+                            bbox_inches='tight', pad_inches=0.05)
 
             self.show()
 
@@ -1195,10 +1196,10 @@ class PlotFunctionHolder:
                 plot_calibration(preds, labs, ax=ax, label=f'{run} pct')
             set_legends_to_plot(ax)
             ax.set_title(f'Average Calibration {method}, {data_name}')
-            fig.tight_layout()
+            # fig.tight_layout()
             if save_path is not None:
                 fig.savefig(os.path.join(save_path, f'{criteria}_calibration_{data_name}_num_runs_{num_runs}.pdf'),
-                            format='pdf')
+                            format='pdf', bbox_inches='tight', pad_inches=0.05)
 
             self.show()
 
@@ -1234,10 +1235,10 @@ class PlotFunctionHolder:
                 plot_calibration(preds, labs, ax=ax, label=f'{run} pct')
             set_legends_to_plot(ax)
             ax.set_title(f'Average Calibration {method}, {data_name}')
-            fig.tight_layout()
+            # fig.tight_layout()
             if save_path is not None:
                 fig.savefig(os.path.join(save_path, f'{criteria}_calibration_{data_name}_num_runs_{num_runs}.pdf'),
-                            format='pdf')
+                            format='pdf', bbox_inches='tight', pad_inches=0.05)
 
             self.show()
     @staticmethod
@@ -1440,14 +1441,15 @@ if __name__ == '__main__':
     # change_datasets(path_la)
 
     # GUSTAV PATHS
-    path_la = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG\KFAC\yacht'
-    save_path = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG\KFAC\Figures\Yacht'
-    plot_holder = PlotFunctionHolder(la_swa_path=path_la, calculate=False,
-                                     save_path=save_path,
-                                     eval_method='nll_glm')
-    plot_holder.plot_partial_percentages_kron()
+    # path_la = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG\KFAC\yacht'
+    # save_path = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG\KFAC\Figures\Yacht'
+    # plot_holder = PlotFunctionHolder(la_swa_path=path_la, calculate=False,
+    #                                  save_path=save_path,
+    #                                  eval_method='nll_glm')
+    # plot_holder.plot_partial_percentages_kron()
 
 
+    path_la = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_Laplace_SWAG_all_metrics'
     path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_torch'
 
     path_la_rand = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_Laplace_SWAG_all_metrics_rand'
@@ -1465,18 +1467,18 @@ if __name__ == '__main__':
         la_swa_path_rand = os.path.join(path_la_rand, prediction_folder)
         vi_hmc_path_rand = os.path.join(path_vi_rand, prediction_folder)
 
-        save_path = os.path.join(os.getcwd(), r"Figures\Correlation")
+        save_path = os.path.join(os.getcwd(), r"Figures\Calibration")
         plot_holder = PlotFunctionHolder(la_swa_path=la_swa_path, vi_hmc_path=vi_hmc_path, calculate=True, save_path=save_path,
                                          la_swa_path_rand=la_swa_path_rand, vi_hmc_path_rand=vi_hmc_path_rand, eval_method='nll')
         # plot_holder.plot_pred_labels_vi_hmc()
-        # plot_holder.plot_pred_labels_la_swa()
+        plot_holder.plot_pred_labels_la_swa()
         # plot_holder.plot_pred_labels_node_based()
 
-        # plot_holder.plot_calibration_vi_hmc()
-        # plot_holder.plot_calibration_la_swa()
-        # plot_holder.plot_calibration_nodes()
+        plot_holder.plot_calibration_vi_hmc()
+        plot_holder.plot_calibration_la_swa()
+        plot_holder.plot_calibration_nodes()
 
-        plot_holder.plot_correlation_matrix()
+        # plot_holder.plot_correlation_matrix()
         # plot_holder.write_calibration_latex_table()
 
         # plot_holder.plot_partial_percentages_nodes()

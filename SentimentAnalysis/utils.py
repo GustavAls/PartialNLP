@@ -587,8 +587,7 @@ if __name__ == '__main__':
     ax.set_ylim((ylims[0], diff))
     ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
               ncol=1, fancybox=True, shadow=True)
-
-        plt.show()
+    plt.show()
     breakpoint()
 
 
