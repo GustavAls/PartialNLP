@@ -31,6 +31,7 @@ from torch.utils.data import Dataset, DataLoader
 from SentimentClassifier import SentimentClassifier
 import random
 
+
 class NLIClassifier(SentimentClassifier):
 
     def __init__(self, network_name,
@@ -40,14 +41,15 @@ class NLIClassifier(SentimentClassifier):
                  val_size=None,
                  test_size=None,
                  dataset_name="rte"):
-        super().__init__(network_name, id2label,label2id,train_size,val_size,test_size,dataset_name)
+        super().__init__(network_name, id2label, label2id, train_size, val_size, test_size, dataset_name)
+
 
     def load_text_dataset(self, dataset_name='rte'):
         dataset = load_dataset("glue", dataset_name)
-        seed = np.random.randint(0,100)
+        seed = np.random.randint(0, 100)
 
         dataset['test'] = dataset.pop('validation')
-        dataset['train'] = dataset['train'].train_test_split(test_size = 0.1, shuffle = True, seed=seed)
+        dataset['train'] = dataset['train'].train_test_split(test_size=0.1, shuffle=True, seed=seed)
 
         if self.train_size != 1 and isinstance(self.train_size, int):
             train_data = dataset['train']['train'].shuffle(seed=42).select([i for i in range(self.train_size)])
@@ -77,7 +79,92 @@ class NLIClassifier(SentimentClassifier):
         return dataframe
 
 
+def prepare_nli_Classifier(args, model_name):
+    NLI = NLIClassifier(network_name=model_name,
+                        train_size=args.train_size,
+                        val_size=args.val_size,
+                        test_size=args.test_size,
+                        dataset_name="rte")
+    return NLI
+
+def run_datagen(args, network_name):
+    for run in range(5):
+        nli_classifier = prepare_nli_Classifier(args, network_name)
+        nli_classifier.runner(output_path=args.output_path,
+                              data_path=args.data_path,
+                              train_bs=args.train_batch_size,
+                              eval_bs=args.eval_batch_size,
+                              num_epochs=args.num_epochs,
+                              dataset_name=args.dataset_name,
+                              device_batch_size=args.device_batch_size,
+                              lr=args.learning_rate,
+                              logging_perc=args.logging_perc,
+                              save_strategy=args.save_strategy,
+                              evaluation_strategy=args.evaluation_strategy,
+                              load_best_model_at_end=True,
+                              no_cuda=args.no_cuda,
+                              eval_steps=args.eval_steps,
+                              run=run)
+
+if __name__ == "__main__":
+    """
+
+    Notes: We can avoid compatibility problems if we exempt embeddings and certain types of layer norm from 
+    the gradient calculations. CHECK if this does not affect gradient computations on other modules. 
+
+    If this is to be implemented, similar changes has to be made in the subnetwork choice/selection
+    to avoid indexing errors, or just calculation mistakes without errors. 
 
 
+    Changes in source code:
+    HUGGINGFACE:
+        training_args.py: Added Laplace input as optional, on line 715 (bool)
+        trainer.py: Added function ._prepare_inner_training_for_laplace().
+        trainer.py: Made a check for (args.laplace_partial == True) in .train() so it returns
+                    ._prepare_inner_training_for_laplace(). 
 
+    LAPLACE:
+        subnetlaplace.py: Made new class to accomadate NLP 
+        backpack.py: 3 new classes to accomodate NLP 
+        subnetmask: added new ModuleNameSubnetMaskNLP class 
+        utils.init: added ModuleNameSubnetMaskNLP to imports
+
+    torch backpack\_init.py: change to skip embedding layer for backprop extension
+
+
+    """
+
+    parser = argparse.ArgumentParser(
+        description="Run training and or evaluation of Sentiment Classifier"
+    )
+    parser.add_argument("--output_path", type=str, default=None)
+    parser.add_argument("--data_path", type=str, default=None)
+    parser.add_argument("--train_batch_size", type=int, default=None)
+    parser.add_argument("--eval_batch_size", type=int, default=None)
+    parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument("--num_epochs", type=float, default=1)
+    parser.add_argument("--dataset_name", type=str, default="sst2")
+    parser.add_argument("--train_size", type=int, default=1)  # 1 gives full dataset
+    parser.add_argument("--val_size", type=int, default=1)  # 1 gives full dataset
+    parser.add_argument("--test_size", type=int, default=1)  # 1 gives full dataset
+    parser.add_argument("--device_batch_size", type=int, default=4)
+    parser.add_argument("--learning_rate", type=float, default=5e-05)
+    parser.add_argument('--swag_cfg', default=None)
+    parser.add_argument('--la_cfg', default=None)
+    parser.add_argument('--logging_perc', type=float, default=-1)  # -1 for default from transformers
+    parser.add_argument('--eval_steps', type=float, default=-1)  # -1 for default from transformers
+    parser.add_argument('--save_strategy', default='epoch')  # 'epoch' for default from transformers
+    parser.add_argument('--evaluation_strategy', default='epoch')
+    parser.add_argument('--no_cuda', type=ast.literal_eval, default=False)
+    parser.add_argument('--dataramping', type=ast.literal_eval, default=False)
+    parser.add_argument('--load_best_model_at_end', type=ast.literal_eval, default=False)
+    parser.add_argument('--save_total_limit', type=int, default=1)
+    parser.add_argument('--metric_for_best_model', type=str, default='loss')
+    parser.add_argument('--run', type=int, default=0)
+
+    args = parser.parse_args()
+
+    if not args.dataramping:
+        network_name = 'distilbert-base-uncased'
+        run_datagen(args, network_name)
 
