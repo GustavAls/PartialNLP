@@ -12,6 +12,7 @@ from PartialConstructor import PartialConstructorSwag
 import utils
 import time
 from tqdm import tqdm
+import datasets
 TRANSFORMER_INCOMPATIBLE_MODULES = (nn.Embedding, nn.LayerNorm, nn.BatchNorm1d,
                                     nn.BatchNorm2d, nn.BatchNorm3d)
 
@@ -32,7 +33,7 @@ class SWAGExperiments:
         self.default_args.model_path = args.model_path
         self.default_args.data_path = getattr(args, 'data_path', None)
         self.default_args_swag = {'n_iterations_between_snapshots': 5,
-                                  'module_names': None, 'num_columns': 20, 'num_mc_samples': 50,
+                                  'module_names': None, 'num_columns': 20, 'num_mc_samples': 12,
                                   'min_var': 1e-20, 'reduction': 'mean', 'num_classes': 2, 'optim_max_num_steps': 100 ,
                                   'max_num_steps': 2000}
 
@@ -137,13 +138,14 @@ class SWAGExperiments:
 
     def optimize_lr(self):
 
-        learning_rates = np.logspace(-3, -1, num=6, endpoint=True)
         learning_rates = np.array([1e-3, 1e-2, 2e-2, 1e-1])
         neg_log_likelihoods = []
         pbar = tqdm(learning_rates, desc='Optimizing Learning Rates')
+        random_subset_indices_val = torch.randperm(len(self.tokenized_val))[:int(len(self.tokenized_val) * 0.25)]
+        new_tokenized_val = datasets.Dataset.from_dict(self.tokenized_val[random_subset_indices_val])
         for learning_rate in pbar:
             self.fit(**{'learning_rate': learning_rate, 'max_num_steps': self.default_args_swag['optim_max_num_steps']})
-            evaluator = utils.evaluate_swag(self.partial_constructor, self.trainer, self.tokenized_val)
+            evaluator = utils.evaluate_swag(self.partial_constructor, self.trainer, new_tokenized_val)
             neg_log_likelihoods.append(evaluator.results['nll'])
             self.partial_constructor.init_new_model_for_optim(copy.deepcopy(self.trainer.model))
             pbar.update(1)

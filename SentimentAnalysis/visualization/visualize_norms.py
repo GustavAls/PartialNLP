@@ -31,6 +31,7 @@ class VisualizeModuleSelection:
     def plot_boxplots(self):
 
         norms = np.array([val['norms'] for val in self.norms_and_names.values()])
+        norms = np.abs(norms)
         norms = np.mean(norms, 0)
         names = [val['names'] for val in self.norms_and_names.values()][0]
 
@@ -38,11 +39,12 @@ class VisualizeModuleSelection:
         df['Operator norm'] = norms
         df['Module type'] = ['Attention' if 'attention' in name else 'MLP' for name in names]
         fig, ax = plt.subplots(1,1)
-        sns.violinplot(data =df, x = 'Module type', y = 'Operator norm',hue = 'Module type' ,ax = ax)
+        ax = sns.boxplot(data =df, x = 'Module type', y = 'Operator norm',hue = 'Module type' ,ax = ax)
         plt.gcf().subplots_adjust(bottom=0.12)
         ax.set_title('Operator norms for Attention & MLP')
-        fig.savefig(r'C:\Users\45292\Documents\Master\SentimentClassification\IMDB Figures\Model General\operator_norm_violin.pdf', format = 'pdf')
+        fig.savefig(r'C:\Users\45292\Documents\Master\SentimentClassification\IMDB Figures\Model General\operator_norm_boxplot.pdf', format = 'pdf')
         plt.show()
+
 
     def get_and_plot(self, minimum = False, ax = None):
 
@@ -62,6 +64,7 @@ class VisualizeModuleSelection:
         df = pd.DataFrame()
         df['Modules'] = num_modules
         df['Pairs'] = num_pairs
+
         if ax is None:
             fig, ax = plt.subplots(1,1)
         label = 'Attn module pairs min norm' if minimum else 'Attn module pairs max norm'
@@ -203,13 +206,15 @@ class Simulate:
 
 if __name__ == '__main__':
 
-    simulator = Simulate(num_simulations=6)
-    results = simulator.simulate()
-    breakpoint()
+    # simulator = Simulate(num_simulations=6)
+    # results = simulator.simulate()
+    # breakpoint()
 
 
     plotter = VisualizeModuleSelection(r"C:\Users\45292\Documents\Master\SentimentClassification\imdb_dataset\norms_and_names.pkl")
-    fig, ax = plt.subplots(1,1)
+    # fig, ax = plt.subplots(1,1)
+    plotter.plot_boxplots()
+    breakpoint()
     ax = plotter.get_and_plot(minimum=True, ax = ax)
     ax = plotter.get_and_plot(minimum=False, ax = ax )
     ylims = ax.get_ylim()
@@ -217,7 +222,7 @@ if __name__ == '__main__':
     ax.set_ylim((ylims[0], additional_top))
     ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
               ncol=1, fancybox=True, shadow=True)
-    ax.set_title('Num. attention module (Q,K) pairs selected')
+    ax.set_title('Num. attention module (Q,K,V) pairs selected')
     ax.set_xlabel('Num. Modules')
     ax.set_ylabel('Num. Pairs')
     fig.savefig(r'C:\Users\45292\Documents\Master\SentimentClassification\IMDB Figures\Model General\num_qkv_pairs.pdf', format = 'pdf')
