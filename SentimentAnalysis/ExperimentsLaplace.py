@@ -555,7 +555,7 @@ def run_sublayer_ramping_predefined_modules(args):
         raise ValueError("For sublayer experiment with predifined modules, you need to specificy a path to"
                          "a pickle containing the desired modules for each of the runs")
 
-    module_names = pickle.load(open(os.path.join(args.module_names_path, "modules_names_2_modules.pkl"), 'rb'))
+    module_names = pickle.load(open(os.path.join(args.module_names_path, "module_names_2_modules.pkl"), 'rb'))
     module_names = module_names[args.run_number]
 
     model_path = os.path.join(data_path, model_ext_path)

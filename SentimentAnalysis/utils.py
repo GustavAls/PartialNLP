@@ -224,7 +224,7 @@ class MultipleRampingExperiments:
         }
         self.path_to_names = {path: name for path, name in zip(self.ramping_exp_paths, self.ramping_exp_names)}
 
-        self.exp_number_to_colors = ['tab:blue', 'tab:red', 'tab:orange']
+        self.exp_number_to_colors = ['tab:blue', 'tab:orange', 'tab:red']
         self.metric_to_label_metric = {
             'accuracy_score': 'Accuracy',
             'nll': 'NLL',
@@ -307,7 +307,7 @@ class MultipleRampingExperiments:
                                         /(num_params_mlp(100)+ num_params_attn(100)))*100
                 return percentage_of_params
 
-            numbers = [str(percentile_to_actual_percentile(number)) for number in numbers]
+            numbers = [str(np.round(percentile_to_actual_percentile(number), 3)) for number in numbers]
             x_label = 'Percentages'
 
         else:
@@ -318,6 +318,7 @@ class MultipleRampingExperiments:
         for number, tick in zip(numbers, ticks):
             tick.set_text(number)
 
+        ax.set_xticklabels(ticks)
         ax.set_xlabel(x_label)
         ax.set_ylabel(y_label)
         return ax
