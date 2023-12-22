@@ -224,7 +224,7 @@ class MultipleRampingExperiments:
         }
         self.path_to_names = {path: name for path, name in zip(self.ramping_exp_paths, self.ramping_exp_names)}
 
-        self.exp_number_to_colors = ['tab:blue', 'tab:red', 'tab:orange']
+        self.exp_number_to_colors = ['tab:blue', 'tab:orange', 'tab:red']
         self.metric_to_label_metric = {
             'accuracy_score': 'Accuracy',
             'nll': 'NLL',
@@ -307,7 +307,7 @@ class MultipleRampingExperiments:
                                         /(num_params_mlp(100)+ num_params_attn(100)))*100
                 return percentage_of_params
 
-            numbers = [str(percentile_to_actual_percentile(number)) for number in numbers]
+            numbers = [str(np.round(percentile_to_actual_percentile(number), 3)) for number in numbers]
             x_label = 'Percentages'
 
         else:
@@ -318,6 +318,7 @@ class MultipleRampingExperiments:
         for number, tick in zip(numbers, ticks):
             tick.set_text(number)
 
+        ax.set_xticklabels(ticks)
         ax.set_xlabel(x_label)
         ax.set_ylabel(y_label)
         return ax
@@ -557,7 +558,7 @@ if __name__ == '__main__':
     path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_prior'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\random_ramping'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\SWAG\random_ramping'
-    map_path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\map'
+    map_path = r"C:\Users\45292\Documents\Master\SentimentClassification\SST2\map"
 
     # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\laplace\random_ramping_prior"
     # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag\operator_norm_ramping_subclass"
@@ -568,8 +569,9 @@ if __name__ == '__main__':
                 r"C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_subclass_prior"]
 
     names = ['Min operator norm attn', 'Max operator norm attn']
-
-    plotter = MultipleRampingExperiments(exp_paths, names, map_path=map_path)
+    exp_paths = [r"C:\Users\45292\Documents\Master\SentimentClassification\SST2\Laplace\last_layer"]
+    names = ['LLLA']
+    plotter = MultipleRampingExperiments(exp_paths, names, map_path=map_path,sublayer_ramping=False)
     fig, ax = plt.subplots(1,1)
     plotter.plot_all(fig, ax)
     fig.tight_layout()
@@ -588,7 +590,7 @@ if __name__ == '__main__':
     ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
               ncol=1, fancybox=True, shadow=True)
 
-        plt.show()
+    plt.show()
     breakpoint()
 
 
