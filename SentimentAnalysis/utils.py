@@ -554,54 +554,67 @@ def read_write_all(path_to_runs, save_path, num_modules):
 
 if __name__ == '__main__':
 
-    path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_prior'
+    # path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_prior'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\random_ramping'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\SWAG\random_ramping'
-    map_path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\map'
+    # map_path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\map'
 
     # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\laplace\random_ramping_prior"
     # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag\operator_norm_ramping_subclass"
     # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map"
 
+    # exp_paths = [r"C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_subclass_attn_min",
+    #             r"C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_subclass_prior"]
+    # names = ['Min operator norm attn', 'Max operator norm attn']
 
-    exp_paths = [r"C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_subclass_attn_min",
-                r"C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_subclass_prior"]
+    exp_paths = [r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag\operator_norm_ramping_old"]
+    map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map"
+    names = ['SWAG operator norm']
 
-    names = ['Min operator norm attn', 'Max operator norm attn']
 
-    plotter = MultipleRampingExperiments(exp_paths, names, map_path=map_path)
-    fig, ax = plt.subplots(1,1)
-    plotter.plot_all(fig, ax)
-    fig.tight_layout()
-    plt.show()
+    # exp_paths = [r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\swag\operator_norm_ramping",
+    #          r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\swag\random_ramping"]
+    # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\map"
+    # names = ['SWAG operator norm', 'SWAG random']
+
+
+    metrics = ['nll', 'accuracy_score', 'ECE']
+
+    for metric in metrics:
+        plotter = MultipleRampingExperiments(exp_paths, names, map_path=map_path, metric=metric, method='laplace')
+        fig, ax = plt.subplots(1,1)
+        plotter.plot_all(fig, ax)
+        fig.tight_layout()
+        plt.show()
+
     breakpoint()
-    fig, ax = plt.subplots(1, 1)
-    plotter = RampingExperiments(path, 'nll')
-    plotter.get_and_plot(path = path, has_seen_softmax = True, ax = ax, map_path=map_path, num_modules=11)
-    plotter.color = 'tab:orange'
-    # plotter.get_and_plot(path = path_, has_seen_softmax=True, ax = ax, map_path=map_path)
-    plt.gcf().subplots_adjust(left=0.16)
-    ylims = ax.get_ylim()
-    diff = (ylims[1] - ylims[0]) * 0.3 + ylims[1]
-
-    ax.set_ylim((ylims[0], diff))
-    ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
-              ncol=1, fancybox=True, shadow=True)
-    plt.show()
-    breakpoint()
-
-
-
-    laplace_path = r"C:\Users\45292\Documents\Master\SentimentClassification\Laplace\run_0\run_number_0.pkl"
-    map_path = r"C:\Users\45292\Documents\run_0\run_number_0_map.pkl"
-
-    lap = pickle.load(open(laplace_path, 'rb'))
-    map = pickle.load(open(map_path, 'rb'))
-    # run_evaluator_again(predictions=map['results'].predictions,labels = map['results'].labels)
-    print(evaluate_loss(map['results'].predictions, map['results'].labels, use_softmax=True))
-    eval_ = Evaluator(map['results'].predictions, map['results'].labels, has_seen_softmax=False)
-    results = {0 : eval_.get_all_metrics()}
-    for key in lap['results'].keys():
-        eval_ = Evaluator(lap['results'][key].predictions, lap['results'][key].labels, has_seen_softmax=True)
-        results[key] = eval_.get_all_metrics()
-    breakpoint()
+    # fig, ax = plt.subplots(1, 1)
+    # plotter = RampingExperiments(path, 'nll')
+    # plotter.get_and_plot(path = path, has_seen_softmax = True, ax = ax, map_path=map_path, num_modules=11)
+    # plotter.color = 'tab:orange'
+    # # plotter.get_and_plot(path = path_, has_seen_softmax=True, ax = ax, map_path=map_path)
+    # plt.gcf().subplots_adjust(left=0.16)
+    # ylims = ax.get_ylim()
+    # diff = (ylims[1] - ylims[0]) * 0.3 + ylims[1]
+    #
+    # ax.set_ylim((ylims[0], diff))
+    # ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
+    #           ncol=1, fancybox=True, shadow=True)
+    # plt.show()
+    # breakpoint()
+    #
+    #
+    #
+    # laplace_path = r"C:\Users\45292\Documents\Master\SentimentClassification\Laplace\run_0\run_number_0.pkl"
+    # map_path = r"C:\Users\45292\Documents\run_0\run_number_0_map.pkl"
+    #
+    # lap = pickle.load(open(laplace_path, 'rb'))
+    # map = pickle.load(open(map_path, 'rb'))
+    # # run_evaluator_again(predictions=map['results'].predictions,labels = map['results'].labels)
+    # print(evaluate_loss(map['results'].predictions, map['results'].labels, use_softmax=True))
+    # eval_ = Evaluator(map['results'].predictions, map['results'].labels, has_seen_softmax=False)
+    # results = {0 : eval_.get_all_metrics()}
+    # for key in lap['results'].keys():
+    #     eval_ = Evaluator(lap['results'][key].predictions, lap['results'][key].labels, has_seen_softmax=True)
+    #     results[key] = eval_.get_all_metrics()
+    # breakpoint()
