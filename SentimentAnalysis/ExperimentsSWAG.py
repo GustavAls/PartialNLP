@@ -33,7 +33,7 @@ class SWAGExperiments:
         self.default_args.model_path = args.model_path
         self.default_args.data_path = getattr(args, 'data_path', None)
         self.default_args_swag = {'n_iterations_between_snapshots': 5,
-                                  'module_names': None, 'num_columns': 20, 'num_mc_samples': 12,
+                                  'module_names': None, 'num_columns': 20, 'num_mc_samples': args.mc_samples,
                                   'min_var': 1e-20, 'reduction': 'mean', 'num_classes': 2, 'optim_max_num_steps': 100 ,
                                   'max_num_steps': 2000}
 
@@ -305,7 +305,8 @@ def run_random_ramping_experiments(args):
                 'train_size': args.train_size,
                 'subclass': args.subclass,
                 'val_size': args.val_size,
-                'test_size': args.test_size}
+                'test_size': args.test_size,
+                'mc_samples': args.mc_samples}
 
     exp_args = Namespace(**exp_args)
     swag_exp = SWAGExperiments(args=exp_args)
@@ -325,7 +326,8 @@ def run_max_norm_ramping_experiments(args):
                 'train_size': args.train_size,
                 'subclass': args.subclass,
                 'val_size': args.val_size,
-                'test_size': args.test_size}
+                'test_size': args.test_size,
+                'mc_samples': args.mc_samples}
 
     exp_args = Namespace(**exp_args)
     swag_exp = SWAGExperiments(args=exp_args)
@@ -346,7 +348,8 @@ def run_max_norm_ramping_only_subclass(args):
                 'train_size': args.train_size,
                 'subclass': args.subclass,
                 'val_size': args.val_size,
-                'test_size': args.test_size}
+                'test_size': args.test_size,
+                'mc_samples': args.mc_samples}
 
     exp_args = Namespace(**exp_args)
     swag_exp = SWAGExperiments(args=exp_args)
@@ -367,7 +370,8 @@ def run_sublayer_experiment(args):
                 'train_size': args.train_size,
                 'subclass': args.subclass,
                 'val_size': args.val_size,
-                'test_size': args.test_size}
+                'test_size': args.test_size,
+                'mc_samples': args.mc_samples}
 
     exp_args = Namespace(**exp_args)
     swag_exp = SWAGExperiments(args=exp_args)
@@ -413,6 +417,7 @@ if __name__ == '__main__':
     parser.add_argument('--train_size', type=int, default=1)
     parser.add_argument('--val_size', type=int, default=1)
     parser.add_argument('--test_size', type=int, default=1)
+    parser.add_argument('--mc_samples', type=int, default=12)
 
     args = parser.parse_args()
 
