@@ -371,15 +371,16 @@ class LaplaceExperiments:
             with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
                 pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-    def run_sublayer_ramping_predifined_modules(self, run_number, modules, use_uninformed=False):
-
+    def run_sublayer_ramping_predefined_modules(self, run_number, modules, use_uninformed=False):
         print("Running sublayer ramping experiment on ", self.default_args.dataset_name)
         save_path = self.args.output_path
         self.ensure_path_existence(save_path)
-        self.percentiles = np.arange(1, 7) / 10
+        self.percentiles = np.linspace(10, 90, 9)
         results = {'results': {}, 'percentile': {}}
-
-        for percentile in self.percentiles:
+        remaining_percentiles = self.get_num_remaining_percentiles(save_path, run_number)
+        if len(remaining_percentiles) < len(self.percentiles):
+            results = pickle.load(open(os.path.join(save_path, f"run_number_{run_number}.pkl"), 'rb'))
+        for percentile in remaining_percentiles:
             self.create_partial_sublayer_specific_modules(module_names=modules, percentile=percentile)
             la, prior = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed=use_uninformed)
             evaluator = utils.evaluate_laplace(la, self.trainer)
@@ -387,6 +388,7 @@ class LaplaceExperiments:
             results['results'][str(percentile)] = copy.deepcopy(evaluator)
             with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
                 pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
     def last_layer_experiment(self, run_number, use_uninformed = False):
 
         print("Running last layer experiment on ", self.default_args.dataset_name)
@@ -406,7 +408,7 @@ class LaplaceExperiments:
 
 
 def run_map_eval(args):
-    for run in range(1, 5):
+    for run in range(0, 1):
         data_path = args.data_path
         data_path = os.path.join(data_path, f"run_{run}")
         output_path = os.path.join(args.output_path, f"run_{run}")
@@ -545,7 +547,7 @@ def run_last_layer(args, run_number = 0):
     lap_exp.last_layer_experiment(args.run_number, args.uninformed_prior)
 
 
-def run_sublayer_ramping_predifined_modules(args):
+def run_sublayer_ramping_predefined_modules(args):
     data_path = args.data_path
     model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
 
@@ -553,7 +555,7 @@ def run_sublayer_ramping_predifined_modules(args):
         raise ValueError("For sublayer experiment with predifined modules, you need to specificy a path to"
                          "a pickle containing the desired modules for each of the runs")
 
-    module_names = pickle.load(open(args.module_names_path, 'rb'))
+    module_names = pickle.load(open(os.path.join(args.module_names_path, "module_names_2_modules.pkl"), 'rb'))
     module_names = module_names[args.run_number]
 
     model_path = os.path.join(data_path, model_ext_path)
@@ -576,7 +578,7 @@ def run_sublayer_ramping_predifined_modules(args):
     # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
     la_args = Namespace(**la_args)
     lap_exp = LaplaceExperiments(args=la_args)
-    lap_exp.run_sublayer_ramping_predifined_modules(args.run_number,module_names, args.uninformed_prior)
+    lap_exp.run_sublayer_ramping_predefined_modules(args.run_number,module_names, args.uninformed_prior)
 
 def run_sublayer_ramping_full(args):
 
@@ -634,6 +636,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_batched_modules', type = int, default=0, help='Number of batches, not number of modules in '
                                                                              'each batch')
     parser.add_argument('--minimum_norm', type = ast.literal_eval, default=False)
+    parser.add_argument('--module_names_path', type = str, default='')
     args = parser.parse_args()
 
     if args.map_eval:
@@ -652,8 +655,8 @@ if __name__ == '__main__':
 
     if args.experiment == 'sublayer_full':
         run_sublayer_ramping_full(args)
-    if args.experiment == 'sublayer_predifined':
-        run_sublayer_ramping_predifined_modules(args)
+    if args.experiment == 'sublayer_predefined':
+        run_sublayer_ramping_predefined_modules(args)
 
 
 
