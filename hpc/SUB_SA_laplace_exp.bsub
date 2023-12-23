@@ -3,7 +3,7 @@
 ### –- specify queue --
 #BSUB -q gpua100
 ### -- set the job Name --
-#BSUB -J laplace_min[1-5]
+#BSUB -J laplace_min_mlp[1-5]
 ### -- ask for number of cores (default: 1) --
 #BSUB -n 4
 #BSUB -R "span[hosts=1]"
@@ -47,11 +47,14 @@ echo "Running script..."
 dataset="imdb"
 experiment="operator_norm_ramping_subclass"
 
+#suffix=""
+suffix="_mlp_min"
+
 runs=(0 1 2 3 4)
 run="${runs[$LSB_JOBINDEX - 1]}"
 
 # Create some folders
-dir_outpath="scratch/s184400/SA_results/laplace/${dataset}/${experiment}/run_${run}"
+dir_outpath="scratch/s184400/SA_results/laplace/${dataset}/${experiment}${suffix}/run_${run}"
 dir_datapath="scratch/s184400/SA_results/Init/${dataset}_dataset/run_${run}"
 
 
