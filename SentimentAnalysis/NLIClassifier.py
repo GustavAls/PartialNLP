@@ -88,23 +88,22 @@ def prepare_nli_Classifier(args, model_name):
     return NLI
 
 def run_datagen(args, network_name):
-    for run in range(5):
-        nli_classifier = prepare_nli_Classifier(args, network_name)
-        nli_classifier.runner(output_path=args.output_path,
-                              data_path=args.data_path,
-                              train_bs=args.train_batch_size,
-                              eval_bs=args.eval_batch_size,
-                              num_epochs=args.num_epochs,
-                              dataset_name=args.dataset_name,
-                              device_batch_size=args.device_batch_size,
-                              lr=args.learning_rate,
-                              logging_perc=args.logging_perc,
-                              save_strategy=args.save_strategy,
-                              evaluation_strategy=args.evaluation_strategy,
-                              load_best_model_at_end=True,
-                              no_cuda=args.no_cuda,
-                              eval_steps=args.eval_steps,
-                              run=run)
+    nli_classifier = prepare_nli_Classifier(args, network_name)
+    nli_classifier.runner(output_path=args.output_path,
+                          data_path=args.data_path,
+                          train_bs=args.train_batch_size,
+                          eval_bs=args.eval_batch_size,
+                          num_epochs=args.num_epochs,
+                          dataset_name=args.dataset_name,
+                          device_batch_size=args.device_batch_size,
+                          lr=args.learning_rate,
+                          logging_perc=args.logging_perc,
+                          save_strategy=args.save_strategy,
+                          evaluation_strategy=args.evaluation_strategy,
+                          load_best_model_at_end=True,
+                          no_cuda=args.no_cuda,
+                          eval_steps=args.eval_steps,
+                          run=args.run)
 
 if __name__ == "__main__":
     """
@@ -164,7 +163,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if not args.dataramping:
-        network_name = 'distilbert-base-uncased'
-        run_datagen(args, network_name)
+    network_name = 'distilbert-base-uncased'
+    run_datagen(args, network_name)
 
