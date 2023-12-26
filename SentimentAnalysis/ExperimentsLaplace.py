@@ -297,7 +297,8 @@ class LaplaceExperiments:
             results_file = pickle.load(open(results_path, 'rb'))
             results_key = next(iter(results_file.keys()))
             num_percentiles = list(results_file[results_key].keys())
-            new_percentiles_to_run = sorted(list(set(self.percentiles) - set(num_percentiles)))
+            num_perc_float = [float(num) for num in num_percentiles]
+            new_percentiles_to_run = sorted(list(set(self.percentiles) - set(num_perc_float)))
             return new_percentiles_to_run
 
 

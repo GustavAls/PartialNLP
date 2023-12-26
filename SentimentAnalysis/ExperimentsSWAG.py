@@ -168,7 +168,8 @@ class SWAGExperiments:
         else:
             results_file = pickle.load(open(results_path, 'rb'))
             number_of_modules = list(results_file.keys())
-            new_modules_to_run = sorted(list(set(self.num_modules) - set(number_of_modules)))
+            num_modules_float = [float(num) for num in number_of_modules]
+            new_modules_to_run = sorted(list(set(self.num_modules) - set(num_modules_float)))
             return new_modules_to_run
 
     def random_ramping_experiment(self, run_number=0):
