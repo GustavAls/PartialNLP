@@ -239,7 +239,8 @@ def compute_metrics(train, val, test, dataset, test_mu=None):
     return nll_glm, elpd, elpd_sqrt
 
 
-def run_percentiles(mle_model, train_dataloader, dataset, percentages, save_name, random_mask = False):
+def run_percentiles(mle_model, train_dataloader, dataset, percentages, save_name, random_mask = False,
+                    largest_variance_mask = False):
     """Run the Laplace approximation for different subnetworks.
         Args:
             mle_model: (nn.Module) trained model
@@ -270,6 +271,18 @@ def run_percentiles(mle_model, train_dataloader, dataset, percentages, save_name
                 subnetwork_mask = RandomSubnetMask(ml_model, n_params_subnet=int((p / 100) * num_params))
             else:
                 subnetwork_mask = LargestMagnitudeSubnetMask(ml_model, n_params_subnet=int((p / 100) * num_params))
+
+            if largest_variance_mask:
+                la = Laplace(ml_model, 'regression',
+                             subset_of_weights='all',
+                             hessian_structure='full')
+
+                la.fit(train_dataloader)
+                posterior_scale = la.posterior_precision.diagonal()**(-0.5)
+                proxy_model = copy.deepcopy(ml_model)
+                nn.utils.vector_to_parameters(posterior_scale, proxy_model.parameters())
+                subnetwork_mask = LargestMagnitudeSubnetMask(proxy_model, n_params_subnet=int((p / 100) * num_params))
+
             subnetwork_indices = subnetwork_mask.select()
             batch, labels = next(iter(train_dataloader))
 
@@ -475,6 +488,7 @@ def multiple_runs(data_path,
                   load_map=True,
                   random_mask = False,
                   kron = False,
+                  largest_variance_mask = False,
                   **kwargs):
     """Run the Laplace approximation for different subnetworks.
         Args:
@@ -530,7 +544,7 @@ def multiple_runs(data_path,
                 run_kfac(mle_model, train_dataloader, dataset, save_name)
             else:
                 save_name = os.path.join(output_path, f'results_laplace_run_{run}.pkl')
-                run_percentiles(mle_model, train_dataloader, dataset, percentages, save_name, random_mask)
+                run_percentiles(mle_model, train_dataloader, dataset, percentages, save_name, random_mask, largest_variance_mask)
 
         if fit_swag:
 
@@ -581,6 +595,7 @@ if __name__ == "__main__":
     parser.add_argument('--prior_precision', type=float, default=0.25)
     parser.add_argument('--random_mask', type = ast.literal_eval, default=False)
     parser.add_argument('--kron', type = ast.literal_eval, default=False)
+    parser.add_argument('--largest_variance_mask', type = ast.literal_eval, default=False)
 
 
     # TODO: Save dataset such that it can be loaded in uci_hmc.py
@@ -610,6 +625,6 @@ if __name__ == "__main__":
     else:
         multiple_runs(args.data_path, dataset_class, args.num_runs, args.device, args.num_epochs,
                       args.output_path, args.fit_swag, args.fit_laplace, args.map_path, args.dataset_path,
-                      args.load_map,args.random_mask, args.kron, **loss_arguments)
+                      args.load_map,args.random_mask, args.kron, args.largest_variance_mask, **loss_arguments)
 
     print("Laplace experiments finished!")
