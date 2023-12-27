@@ -35,7 +35,7 @@ from sklearn.gaussian_process.kernels import RBF
 from tqdm import tqdm
 from NLIClassifier import prepare_nli_classifier
 
-experiments = ['last_layer',
+EXPERIMENTS = ['last_layer',
                'random_ramping',
                'operator_norm_ramping',
                'operator_norm_ramping_subclass',
@@ -658,8 +658,8 @@ if __name__ == '__main__':
         else:
             run_map_eval(args)
 
-    if args.experiment not in experiments:
-        raise ValueError(f"Experiment {args.experiment} is not a valid experiment. Choose from {experiments}")
+    if args.experiment not in EXPERIMENTS:
+        raise ValueError(f"Experiment {args.experiment} is not a valid experiment. Choose from {EXPERIMENTS}")
 
     if args.experiment == 'last_layer':
         sequential_last_layer(args)
