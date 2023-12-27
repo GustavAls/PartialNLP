@@ -82,7 +82,7 @@ class NLIClassifier(SentimentClassifier):
         return dataframe
 
 
-def prepare_nli_Classifier(args, model_name, train_size=1):
+def prepare_nli_classifier(args, model_name='distilbert-base-uncased', train_size=1):
     if train_size >= 1:
         train_size = args.train_size
 
@@ -93,8 +93,8 @@ def prepare_nli_Classifier(args, model_name, train_size=1):
                         dataset_name="rte")
     return NLI
 
-def run_datagen(args, network_name):
-    nli_classifier = prepare_nli_Classifier(args, network_name)
+def run_datagen(args, network_name='distilbert-base-uncased'):
+    nli_classifier = prepare_nli_classifier(args, network_name)
     nli_classifier.runner(output_path=args.output_path,
                           data_path=args.data_path,
                           train_bs=args.train_batch_size,
@@ -111,13 +111,13 @@ def run_datagen(args, network_name):
                           eval_steps=args.eval_steps,
                           run=args.run)
 
-def dataramping(args, network_name):
+def dataramping(args, network_name='distilbert-base-uncased'):
     epochs = np.linspace(1, 10, 10, endpoint=True)
     train_sizes = [1.0 / num_epochs for num_epochs in epochs]
 
     for train_size, epoch in zip(train_sizes, epochs):
         args.num_epochs = epoch
-        nli_classifier = prepare_nli_Classifier(args, network_name, train_size=train_size)
+        nli_classifier = prepare_nli_classifier(args, network_name, train_size=train_size)
         nli_classifier.runner(output_path=args.output_path,
                               data_path=args.data_path,
                               train_bs=args.train_batch_size,
