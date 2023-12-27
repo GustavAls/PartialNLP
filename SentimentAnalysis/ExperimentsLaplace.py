@@ -33,10 +33,11 @@ from SentimentClassifier import construct_laplace, prepare_sentiment_classifier
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF
 from tqdm import tqdm
+from NLIClassifier import prepare_nli_Classifier
 
 
 class LaplaceExperiments:
-    def __init__(self, args):
+    def __init__(self, args, nli = False):
         self.default_args = {'output_path': args.output_path,
                              'train_batch_size': args.train_batch_size, 'eval_batch_size': args.eval_batch_size,
                              'train_device_batch_size': args.train_batch_size, 'eval_device_batch_size': args.eval_batch_size,
@@ -61,7 +62,13 @@ class LaplaceExperiments:
         default_args = Namespace(**self.default_args)
         self.default_args = default_args
         default_args.model_path = args.model_path
-        self.sentiment_classifier = prepare_sentiment_classifier(default_args)
+
+        # TODO: NLI classifier or sentiment classifier
+        if nli:
+            self.sentiment_classifier = prepare_nli_Classifier(default_args)
+        else:
+            self.sentiment_classifier = prepare_sentiment_classifier(default_args)
+
         self.subclass = args.subclass
         self.batched_modules_for_batch_grad = args.num_batched_modules
 
@@ -656,8 +663,12 @@ if __name__ == '__main__':
 
     if args.experiment == 'sublayer_full':
         run_sublayer_ramping_full(args)
+
     if args.experiment == 'sublayer_predefined':
         run_sublayer_ramping_predefined_modules(args)
+
+    if args.experiment == 'nli_operator_norm_ramping':
+        run_max_norm_ramping_experiments(args)
 
 
 
