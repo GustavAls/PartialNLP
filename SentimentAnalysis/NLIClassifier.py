@@ -48,6 +48,9 @@ class NLIClassifier(SentimentClassifier):
         dataset = load_dataset("glue", dataset_name)
         seed = np.random.randint(0, 100)
 
+        if 0 < self.train_size < 1:
+            self.train_size = int(self.train_size * len(dataset['train']))
+
         dataset['test'] = dataset.pop('validation')
         dataset['train'] = dataset['train'].train_test_split(test_size=0.1, shuffle=True, seed=seed)
 
@@ -79,17 +82,42 @@ class NLIClassifier(SentimentClassifier):
         return dataframe
 
 
-def prepare_nli_Classifier(args, model_name):
+def prepare_nli_Classifier(args, model_name, train_size=1):
+    if train_size >= 1:
+        train_size = args.train_size
+
     NLI = NLIClassifier(network_name=model_name,
-                        train_size=args.train_size,
+                        train_size=train_size,
                         val_size=args.val_size,
                         test_size=args.test_size,
                         dataset_name="rte")
     return NLI
 
 def run_datagen(args, network_name):
-    for run in range(5):
-        nli_classifier = prepare_nli_Classifier(args, network_name)
+    nli_classifier = prepare_nli_Classifier(args, network_name)
+    nli_classifier.runner(output_path=args.output_path,
+                          data_path=args.data_path,
+                          train_bs=args.train_batch_size,
+                          eval_bs=args.eval_batch_size,
+                          num_epochs=args.num_epochs,
+                          dataset_name=args.dataset_name,
+                          device_batch_size=args.device_batch_size,
+                          lr=args.learning_rate,
+                          logging_perc=args.logging_perc,
+                          save_strategy=args.save_strategy,
+                          evaluation_strategy=args.evaluation_strategy,
+                          load_best_model_at_end=True,
+                          no_cuda=args.no_cuda,
+                          eval_steps=args.eval_steps,
+                          run=args.run)
+
+def dataramping(args, network_name):
+    epochs = np.linspace(1, 10, 10, endpoint=True)
+    train_sizes = [1.0 / num_epochs for num_epochs in epochs]
+
+    for train_size, epoch in zip(train_sizes, epochs):
+        args.num_epochs = epoch
+        nli_classifier = prepare_nli_Classifier(args, network_name, train_size=train_size)
         nli_classifier.runner(output_path=args.output_path,
                               data_path=args.data_path,
                               train_bs=args.train_batch_size,
@@ -104,7 +132,8 @@ def run_datagen(args, network_name):
                               load_best_model_at_end=True,
                               no_cuda=args.no_cuda,
                               eval_steps=args.eval_steps,
-                              run=run)
+                              run=args.run)
+
 
 if __name__ == "__main__":
     """
@@ -164,7 +193,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if not args.dataramping:
-        network_name = 'distilbert-base-uncased'
+    network_name = 'distilbert-base-uncased'
+
+    if args.dataramping:
+        dataramping(args, network_name)
+    else:
         run_datagen(args, network_name)
 

@@ -3,7 +3,7 @@
 ### –- specify queue --
 #BSUB -q gpuv100
 ### -- set the job Name --
-#BSUB -J swag_sst2_op[1-10]%5
+#BSUB -J swag_mlp[1-5]
 ### -- ask for number of cores (default: 1) --
 #BSUB -n 4
 #BSUB -R "span[hosts=1]"
@@ -68,6 +68,7 @@ python3 SentimentAnalysis/ExperimentsSWAG.py \
     --dataset_name $dataset \
     --run_number $run \
     --batch_size 16 \
+    --mc_samples 50 \
     --subclass "mlp" \
 
 
