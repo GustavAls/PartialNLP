@@ -383,7 +383,7 @@ class LaplaceExperiments:
         print("Running sublayer ramping experiment on ", self.default_args.dataset_name)
         save_path = self.args.output_path
         self.ensure_path_existence(save_path)
-        self.percentiles = np.linspace(10, 90, 9)
+        self.percentiles = np.linspace(10, 90, 9)[1:]
         results = {'results': {}, 'percentile': {}}
         remaining_percentiles = self.get_num_remaining_percentiles(save_path, run_number)
         if len(remaining_percentiles) < len(self.percentiles):

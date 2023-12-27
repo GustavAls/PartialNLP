@@ -563,7 +563,7 @@ if __name__ == '__main__':
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_prior'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\random_ramping'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\SWAG\random_ramping'
-    # map_path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\map'
+    map_path = r"C:\Users\45292\Documents\Master\SentimentClassification\SST2\map"
 
     # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\laplace\random_ramping_prior"
     # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag\operator_norm_ramping_subclass"
@@ -579,13 +579,10 @@ if __name__ == '__main__':
     # root = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\laplace"
     # exp_paths = [os.path.join(root, p) for p in os.listdir(root)]
 
-    # exp_paths = [r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\laplace\operator_norm_ramping",
-    #              r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\laplace\operator_norm_ramping_subclass"]
+    exp_paths = [r"C:\Users\45292\Documents\Master\SentimentClassification\SST2\Laplace\sublayer_predefined"]
+    # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map"
+    names = ['Laplace sublayer']
 
-    map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map"
-    # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\map"
-    # names = ['Rand norm', 'Op norm']
-    # names = [os.path.basename(p) for p in exp_paths]
 
     # exp_paths = [r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\swag\operator_norm_ramping",
     #          r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\swag\random_ramping"]
@@ -593,8 +590,6 @@ if __name__ == '__main__':
 
     names = ['sub','rand']
 
-
-    # metrics = ['nll', 'accuracy_score', 'ECE']
     metrics = ['nll']
 
     for metric in metrics:

@@ -120,10 +120,13 @@ class PartialConstructor:
 
         param_indices, subnetwork_indices = [], []
 
+        if 100 >= percentile > 1:
+            percentile = percentile / 100
+
         for name, param in module.named_parameters():
             if name == 'weight':
                 data = param.data.clone()
-                highest_in, highest_out = self.find_maximum_input_and_output_neurons(data)
+                highest_in, highest_out = self.find_maximum_input_and_output_neurons(data, percentile)
                 param_indices.append([highest_in, highest_out])
 
                 subnet_ind_in = torch.zeros_like(data)
