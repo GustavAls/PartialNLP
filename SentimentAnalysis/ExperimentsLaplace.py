@@ -67,7 +67,8 @@ class LaplaceExperiments:
         # self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
         # Memory consideration
         if args.subclass == 'attn':
-            self.num_modules = [1, 2, 3, 4, 5, 8, 11, 13, 17]
+            # self.num_modules = [1, 2, 3, 4, 5, 8, 11, 13, 17]
+            self.num_modules = [1, 2, 3, 4]
         else:
             self.num_modules = [1, 2, 3, 4, 5, 8, 11]
         default_args = Namespace(**self.default_args)
@@ -681,9 +682,6 @@ if __name__ == '__main__':
         run_sublayer_ramping_predefined_modules(args)
 
     ############################# NLI experiments ####################################
-
-    if 'nli' in args.experiment and args.dataset_name != 'rte':
-        raise ValueError("NLI experiments are only for the RTE dataset")
 
     if args.experiment == 'nli_last_layer':
         sequential_last_layer(args, nli=True)
