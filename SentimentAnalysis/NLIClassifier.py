@@ -44,7 +44,8 @@ class NLIClassifier(SentimentClassifier):
         super().__init__(network_name, id2label, label2id, train_size, val_size, test_size, dataset_name)
         self.dataset_cols = {"mrpc": ["sentence1", "sentence2", "label"],
                              "qqp": ["question1", "question2", "label"],
-                             "qnli": ["question", "sentence", "label"]}
+                             "qnli": ["question", "sentence", "label"],
+                             "rte": ["sentence1", "sentence2", "label"]}
 
     def load_text_dataset(self, dataset_name='rte'):
         dataset = load_dataset("glue", dataset_name)
