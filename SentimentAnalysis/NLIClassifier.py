@@ -86,11 +86,19 @@ def prepare_nli_classifier(args, model_name='distilbert-base-uncased', train_siz
     if train_size >= 1:
         train_size = args.train_size
 
-    NLI = NLIClassifier(network_name=model_name,
-                        train_size=train_size,
-                        val_size=args.val_size,
-                        test_size=args.test_size,
-                        dataset_name="rte")
+    if hasattr(args, 'model_path'):
+        model_path_or_name = args.model_path
+        NLI = NLIClassifier(network_name=model_path_or_name,
+                            train_size=train_size,
+                            val_size=args.val_size,
+                            test_size=args.test_size,
+                            dataset_name=args.dataset_name)
+    else:
+        NLI = NLIClassifier(network_name=model_name,
+                            train_size=train_size,
+                            val_size=args.val_size,
+                            test_size=args.test_size,
+                            dataset_name=args.dataset_name)
     return NLI
 
 def run_datagen(args, network_name='distilbert-base-uncased'):

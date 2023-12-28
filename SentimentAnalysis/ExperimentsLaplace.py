@@ -429,7 +429,7 @@ def run_map_eval(args, nli= False):
     for run in range(0, 5):
         data_path = args.data_path
         data_path = os.path.join(data_path, f"run_{run}")
-        output_path = os.path.join(args.output_path, f"run_{run}")
+        output_path = args.output_path
         model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
 
         model_path = os.path.join(data_path, model_ext_path)
