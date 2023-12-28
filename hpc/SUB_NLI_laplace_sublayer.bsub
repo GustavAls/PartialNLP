@@ -3,14 +3,14 @@
 ### –- specify queue --
 #BSUB -q gpuv100
 ### -- set the job Name --
-#BSUB -J laplace_min_mlp[1-5]
+#BSUB -J laplace_sub[1-5]
 ### -- ask for number of cores (default: 1) --
 #BSUB -n 4
 #BSUB -R "span[hosts=1]"
 ### -- Select the resources: 1 gpu in exclusive process mode --
 #BSUB -gpu "num=1:mode=exclusive_process"
 ### -- set walltime limit: hh:mm --  maximum 24 hours for GPU-queues right now
-#BSUB -W 4:00
+#BSUB -W 12:00
 # request XGB of system-memory
 #BSUB -R "select[gpu32gb]"
 #BSUB -R "rusage[mem=6GB]"
@@ -24,8 +24,8 @@
 ##BSUB -N
 ### -- Specify the output and error file. %J is the job-id --
 ### -- -o and -e mean append, -oo and -eo mean overwrite --
-#BSUB -o scratch/s184400/NLI_results/out/gpu_%J.out
-#BSUB -e scratch/s184400/NLI_results/out/gpu_%J.err
+#BSUB -o scratch/s184400/SA_results/out/gpu_%J.out
+#BSUB -e scratch/s184400/SA_results/out/gpu_%J.err
 # -- end of LSF options --
 
 # Activate the python eviorment
@@ -45,26 +45,23 @@ echo "Running script..."
 
 ##### ADD INFO HERE ####
 dataset="rte"
-experiment="nli_operator_norm_ramping"
-
-#suffix=""
-suffix="_mlp_min"
+experiment="sublayer_full"
 
 runs=(0 1 2 3 4)
 run="${runs[$LSB_JOBINDEX - 1]}"
 
 # Create some folders
-dir_outpath="scratch/s184400/NLI_results/laplace/${dataset}/${experiment}${suffix}/run_${run}"
-dir_datapath="scratch/s184400/NLI_results/Init/${dataset}_dataset/run_${run}"
+dir_outpath="scratch/s184400/SA_results/laplace/${dataset}/${experiment}/run_${run}"
+dir_datapath="scratch/s184400/SA_results/Init/${dataset}_dataset/run_${run}"
+dir_module_name_path="scratch/s184400/SA_results/laplace/${dataset}/operator_norm_ramping"
 
 
 # Make the directories if they don't exist
 mkdir -p $dir_outpath
 
-   # --subclass "attn" \
-   # --minimum_norm True \
-
    # --num_batched_modules 5 \
+   
+   # --module_names_path $dir_module_name_path
 
 # Run the training
 python3 SentimentAnalysis/ExperimentsLaplace.py \
@@ -77,8 +74,6 @@ python3 SentimentAnalysis/ExperimentsLaplace.py \
     --train_batch_size 16 \
     --eval_batch_size 1 \
     --num_batched_modules 5 \
-    --subclass 'mlp' \
-    --minimum_norm True \
 
 
 

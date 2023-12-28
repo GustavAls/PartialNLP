@@ -48,8 +48,8 @@ dataset="rte"
 experiment="nli_last_layer"
 
 # Create some folders
-dir_outpath="scratch/s184400/SA_results/laplace/${dataset}/${experiment}"
-dir_datapath="scratch/s184400/SA_results/Init/${dataset}_dataset"
+dir_outpath="scratch/s184400/NLI_results/laplace/${dataset}/${experiment}"
+dir_datapath="scratch/s184400/NLI_results/Init/${dataset}_dataset"
 
 
 # Make the directories if they don't exist
