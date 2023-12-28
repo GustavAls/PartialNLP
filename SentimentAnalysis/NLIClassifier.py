@@ -82,8 +82,10 @@ class NLIClassifier(SentimentClassifier):
         dataframe[self.dataset_cols[self.dataset_name][0]] = dataset[self.dataset_cols[self.dataset_name][0]]
         dataframe[self.dataset_cols[self.dataset_name][1]] = dataset[self.dataset_cols[self.dataset_name][1]]
         dataframe[self.dataset_cols[self.dataset_name][2]] = dataset[self.dataset_cols[self.dataset_name][2]]
-        if 'idx' in dataset.keys():
+        try:
             dataframe['idx'] = dataset['idx']
+        except:
+            pass
         return dataframe
 
 
