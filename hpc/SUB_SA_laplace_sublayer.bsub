@@ -3,7 +3,7 @@
 ### –- specify queue --
 #BSUB -q gpuv100
 ### -- set the job Name --
-#BSUB -J laplace_sub_best[1-5]
+#BSUB -J laplace_sub_pre_s[1-5]
 ### -- ask for number of cores (default: 1) --
 #BSUB -n 4
 #BSUB -R "span[hosts=1]"
@@ -12,7 +12,7 @@
 ### -- set walltime limit: hh:mm --  maximum 24 hours for GPU-queues right now
 #BSUB -W 24:00
 # request XGB of system-memory
-#BSUB -R "select[gpu32gb]"
+###BSUB -R "select[gpu32gb]"
 #BSUB -R "rusage[mem=6GB]"
 ### -- set the email address --
 # please uncomment the following line and put in your e-mail address,
@@ -44,7 +44,7 @@ echo "Running script..."
 # Send sample job to GPU
 
 ##### ADD INFO HERE ####
-dataset="imdb"
+dataset="sst2"
 experiment="sublayer_predefined"
 
 runs=(0 1 2 3 4)
@@ -53,7 +53,7 @@ run="${runs[$LSB_JOBINDEX - 1]}"
 # Create some folders
 dir_outpath="scratch/s184400/SA_results/laplace/${dataset}/${experiment}/run_${run}"
 dir_datapath="scratch/s184400/SA_results/Init/${dataset}_dataset/run_${run}"
-dir_module_name_path="scratch/s184400/SA_results/laplace/${dataset}/operator_norm_ramping_prior"
+dir_module_name_path="scratch/s184400/SA_results/laplace/${dataset}/operator_norm_ramping"
 
 
 # Make the directories if they don't exist
@@ -73,7 +73,7 @@ python3 SentimentAnalysis/ExperimentsLaplace.py \
     --uninformed_prior False \
     --train_batch_size 16 \
     --eval_batch_size 1 \
-    --module_names_path $dir_module_name_path
+    --module_names_path $dir_module_name_path \
 
 
 
