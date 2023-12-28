@@ -73,7 +73,9 @@ class NLIClassifier(SentimentClassifier):
         return train_data, test_data, val_data
 
     def tokenize(self, examples):
-        return self._tokenizer(examples["sentence1"], examples["sentence2"], truncation=True, padding="max_length")
+        return self._tokenizer(examples[self.dataset_cols[self.dataset_name][0]],
+                               examples[self.dataset_cols[self.dataset_name][1]],
+                               truncation=True, padding="max_length")
 
     def to_dataframe(self, dataset):
         dataframe = pd.DataFrame()
