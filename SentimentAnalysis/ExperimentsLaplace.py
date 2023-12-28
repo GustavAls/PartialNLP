@@ -143,6 +143,7 @@ class LaplaceExperiments:
         else:
             partial_constructor.select_max_operator_norm(num_params)
         partial_constructor.select()
+        setattr(self.model, 'batched_modules', self.batched_modules_for_batch_grad)
         self.num_stoch_params = partial_constructor.get_num_stochastic_parameters()
         self.num_params = partial_constructor.get_num_params()
         self.module_names = partial_constructor.module_names
