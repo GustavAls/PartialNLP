@@ -42,7 +42,9 @@ class NLIClassifier(SentimentClassifier):
                  test_size=None,
                  dataset_name="rte"):
         super().__init__(network_name, id2label, label2id, train_size, val_size, test_size, dataset_name)
-
+        self.dataset_cols = {"mrpc": ["sentence1", "sentence2", "label"],
+                             "qqp": ["question1", "question2", "label"],
+                             "qnli": ["question", "sentence", "label"]}
 
     def load_text_dataset(self, dataset_name='rte'):
         dataset = load_dataset("glue", dataset_name)
@@ -75,10 +77,11 @@ class NLIClassifier(SentimentClassifier):
 
     def to_dataframe(self, dataset):
         dataframe = pd.DataFrame()
-        dataframe['sentence1'] = dataset['sentence1']
-        dataframe['sentence2'] = dataset['sentence2']
-        dataframe['label'] = dataset['label']
-        dataframe['idx'] = dataset['idx']
+        dataframe[self.dataset_cols[self.dataset_name][0]] = dataset[self.dataset_cols[self.dataset_name][0]]
+        dataframe[self.dataset_cols[self.dataset_name][1]] = dataset[self.dataset_cols[self.dataset_name][1]]
+        dataframe[self.dataset_cols[self.dataset_name][2]] = dataset[self.dataset_cols[self.dataset_name][2]]
+        if 'idx' in dataset.keys():
+            dataframe['idx'] = dataset['idx']
         return dataframe
 
 
@@ -101,6 +104,7 @@ def prepare_nli_classifier(args, model_name='distilbert-base-uncased', train_siz
                             dataset_name=args.dataset_name)
     return NLI
 
+
 def run_datagen(args, network_name='distilbert-base-uncased'):
     nli_classifier = prepare_nli_classifier(args, network_name)
     nli_classifier.runner(output_path=args.output_path,
@@ -118,6 +122,7 @@ def run_datagen(args, network_name='distilbert-base-uncased'):
                           no_cuda=args.no_cuda,
                           eval_steps=args.eval_steps,
                           run=args.run)
+
 
 def dataramping(args, network_name='distilbert-base-uncased'):
     epochs = np.linspace(1, 10, 10, endpoint=True)
@@ -207,4 +212,3 @@ if __name__ == "__main__":
         dataramping(args, network_name)
     else:
         run_datagen(args, network_name)
-

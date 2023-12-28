@@ -653,7 +653,7 @@ if __name__ == '__main__':
 
 
     if args.map_eval:
-        if args.dataset_name == 'rte':
+        if args.dataset_name == 'mrpc' or args.dataset_name == 'qqp' or args.dataset_name == 'qnli':
             run_map_eval(args, nli=True)
         else:
             run_map_eval(args)
