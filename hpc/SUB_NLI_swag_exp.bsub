@@ -3,14 +3,14 @@
 ### –- specify queue --
 #BSUB -q gpuv100
 ### -- set the job Name --
-#BSUB -J swag_mlp[1-5]
+#BSUB -J swag_attn[1-5]
 ### -- ask for number of cores (default: 1) --
 #BSUB -n 4
 #BSUB -R "span[hosts=1]"
 ### -- Select the resources: 1 gpu in exclusive process mode --
 #BSUB -gpu "num=1:mode=exclusive_process"
 ### -- set walltime limit: hh:mm --  maximum 24 hours for GPU-queues right now
-#BSUB -W 24:00
+#BSUB -W 6:00
 # request XGB of system-memory
 #BSUB -R "rusage[mem=6GB]"
 #BSUB -R "select[gpu32gb]"
@@ -19,9 +19,9 @@
 # if you want to receive e-mail notifications on a non-default address
 ###BSUB -u your_email_address
 ### -- send notification at start --
-##BSUB -B
+###BSUB -B
 ### -- send notification at completion--
-##BSUB -N
+###BSUB -N
 ### -- Specify the output and error file. %J is the job-id --
 ### -- -o and -e mean append, -oo and -eo mean overwrite --
 #BSUB -o scratch/s184400/NLI_results/out/gpu_%J.out
@@ -45,13 +45,15 @@ echo "Running script..."
 
 ##### ADD INFO HERE ####
 dataset="rte"
-experiment="nli_random_ramping"
+experiment="nli_operator_norm_ramping"
+
+suffix="_attn"
 
 runs=(0 1 2 3 4)
 run="${runs[$LSB_JOBINDEX - 1]}"
 
 # Create some folders
-dir_outpath="scratch/s184400/NLI_results/swag/${dataset}/${experiment}/run_${run}"
+dir_outpath="scratch/s184400/NLI_results/swag/${dataset}/${experiment}${suffix}/run_${run}"
 dir_datapath="scratch/s184400/NLI_results/Init/${dataset}_dataset/run_${run}"
 
 
@@ -69,6 +71,7 @@ python3 SentimentAnalysis/ExperimentsSWAG.py \
     --run_number $run \
     --batch_size 16 \
     --mc_samples 50 \
+    --subclass "attn" \
 
 
 if [ $? -eq 0 ]; then

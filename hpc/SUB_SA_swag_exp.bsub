@@ -69,7 +69,6 @@ python3 SentimentAnalysis/ExperimentsSWAG.py \
     --run_number $run \
     --batch_size 16 \
     --mc_samples 50 \
-    --subclass "mlp" \
 
 
 if [ $? -eq 0 ]; then
