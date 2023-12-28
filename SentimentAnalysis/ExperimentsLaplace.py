@@ -67,8 +67,7 @@ class LaplaceExperiments:
         # self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
         # Memory consideration
         if args.subclass == 'attn':
-            # self.num_modules = [1, 2, 3, 4, 5, 8, 11, 13, 17]
-            self.num_modules = [1, 2, 3, 4]
+            self.num_modules = [1, 2, 3, 4, 5, 8, 11, 13, 17]
         else:
             self.num_modules = [1, 2, 3, 4, 5, 8, 11]
         default_args = Namespace(**self.default_args)
@@ -654,7 +653,7 @@ if __name__ == '__main__':
 
 
     if args.map_eval:
-        if args.dataset_name == 'mrpc' or args.dataset_name == 'qqp' or args.dataset_name == 'qnli':
+        if args.dataset_name == 'mrpc' or args.dataset_name == 'qqp' or args.dataset_name == 'qnli' or args.dataset_name == 'rte':
             run_map_eval(args, nli=True)
         else:
             run_map_eval(args)
