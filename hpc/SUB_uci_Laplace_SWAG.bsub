@@ -4,7 +4,7 @@
 ### CHANGE HERE FOR GPU/CPU
 #BSUB -q hpc
 ### -- set the job Name --
-#BSUB -J la_swag_datasets_r[1-3]
+#BSUB -J la_swag_datasets[1-3]
 ### -- ask for number of cores (default: 1) --
 #BSUB -n 1
 #BSUB -R "span[hosts=1]"
@@ -52,8 +52,8 @@ model_name="${datasets[$LSB_JOBINDEX - 1]}"
 #model_name="yacht"
 
 # Create some folders
-dir_outpath="results/UCI_Laplace_SWAG_all_metrics_rand/${model_name}_models"
-dir_datapath="results/UCI_Laplace_SWAG_all_metrics_rand/${model_name}_data"
+dir_outpath="results/UCI_Laplace_SWAG_all_metrics_var_mask/${model_name}_models"
+dir_datapath="results/UCI_Laplace_SWAG_all_metrics_var_mask/${model_name}_data"
 dir_map_path="results/MAP_models/${model_name}"
 dir_dataset_path="results/UCI_Laplace_SWAG/${model_name}_data"
 
@@ -75,9 +75,9 @@ python3 Laplace/uci_laplace.py \
     --get_map True \
     --load_map True \
     --device "cpu" \
-    --fit_swag True \
+    --fit_swag False \
     --fit_laplace True \
-    --random_mask True \
+    --largest_variance_mask True \
 
 if [ $? -eq 0 ]; then
     echo "Success"
