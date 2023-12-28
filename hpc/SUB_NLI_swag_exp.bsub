@@ -45,13 +45,15 @@ echo "Running script..."
 
 ##### ADD INFO HERE ####
 dataset="rte"
-experiment="nli_random_ramping"
+experiment="nli_operator_norm_ramping"
+
+suffix="_attn"
 
 runs=(0 1 2 3 4)
 run="${runs[$LSB_JOBINDEX - 1]}"
 
 # Create some folders
-dir_outpath="scratch/s184400/NLI_results/swag/${dataset}/${experiment}/run_${run}"
+dir_outpath="scratch/s184400/NLI_results/swag/${dataset}/${experiment}${suffix}/run_${run}"
 dir_datapath="scratch/s184400/NLI_results/Init/${dataset}_dataset/run_${run}"
 
 

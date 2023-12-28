@@ -45,7 +45,7 @@ echo "Running script..."
 
 ##### ADD INFO HERE ####
 dataset="rte"
-experiment="last_layer"
+experiment="nli_last_layer"
 
 # Create some folders
 dir_outpath="scratch/s184400/SA_results/laplace/${dataset}/${experiment}"
