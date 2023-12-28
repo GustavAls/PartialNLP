@@ -24,8 +24,8 @@
 ##BSUB -N
 ### -- Specify the output and error file. %J is the job-id --
 ### -- -o and -e mean append, -oo and -eo mean overwrite --
-#BSUB -o scratch/s184400/SA_results/out/gpu_%J.out
-#BSUB -e scratch/s184400/SA_results/out/gpu_%J.err
+#BSUB -o scratch/s184400/NLI_results/out/gpu_%J.out
+#BSUB -e scratch/s184400/NLI_results/out/gpu_%J.err
 # -- end of LSF options --
 
 # Activate the python eviorment
@@ -51,8 +51,8 @@ runs=(0 1 2 3 4)
 run="${runs[$LSB_JOBINDEX - 1]}"
 
 # Create some folders
-dir_outpath="scratch/s184400/SA_results/laplace/${dataset}/${experiment}/run_${run}"
-dir_datapath="scratch/s184400/SA_results/Init/${dataset}_dataset/run_${run}"
+dir_outpath="scratch/s184400/NLI_results/laplace/${dataset}/${experiment}/run_${run}"
+dir_datapath="scratch/s184400/NLI_results/Init/${dataset}_dataset/run_${run}"
 dir_module_name_path="scratch/s184400/SA_results/laplace/${dataset}/operator_norm_ramping"
 
 
