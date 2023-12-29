@@ -1446,7 +1446,7 @@ if __name__ == '__main__':
     # plot_holder = PlotFunctionHolder(la_swa_path=path_la, calculate=False,
     #                                  save_path=save_path,
     #                                  eval_method='nll_glm')
-    # plot_holder.plot_partial_percentages_kron()
+    plot_holder.plot_partial_percentages_kron()
 
 
     path_la = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_Laplace_SWAG_all_metrics'
