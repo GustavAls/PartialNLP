@@ -64,6 +64,7 @@ class LaplaceExperiments:
         self.num_stoch_params = 0
         self.args = args
         self.module_names = None
+        self.include_last_layer = args.include_last_layer
         # self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
         # Memory consideration
         if args.subclass == 'attn':
@@ -135,6 +136,19 @@ class LaplaceExperiments:
         self.num_stoch_params = partial_constructor.get_num_stochastic_parameters()
         self.num_params = partial_constructor.get_num_params()
         self.module_names = partial_constructor.module_names
+
+
+    def select_last_layer_with_other_methods(self):
+        if self.include_last_layer:
+            self.module_names = self.module_names[:-1]
+            partial_constructor = PartialConstructor(self.model)
+            partial_constructor.select_last_layer()
+            partial_constructor.module_names += self.module_names
+            partial_constructor.select()
+            setattr(self.model, 'batched_modules', self.batched_modules_for_batch_grad)
+            self.num_stoch_params = partial_constructor.get_num_stochastic_parameters()
+            self.num_params = partial_constructor.get_num_params()
+            self.module_names = partial_constructor.module_names
 
     def create_partial_max_norm_ramping(self, num_params, use_minimum = False):
         partial_constructor = self.use_subclass_part_only(PartialConstructor(self.model))
@@ -342,6 +356,7 @@ class LaplaceExperiments:
             results = pickle.load(open(os.path.join(save_path, f"run_number_{run_number}.pkl"), 'rb'))
         for num_modules in remaining_modules:
             self.create_partial_random_ramping_construction(num_modules)
+            self.select_last_layer_with_other_methods()
             la, prior = self.optimize_prior_precision(num_steps=self.args.num_optim_steps, use_uninformed = use_uninformed)
             evaluator = utils.evaluate_laplace(la, self.trainer)
             evaluator.results['prior_precision'] = prior
@@ -358,10 +373,13 @@ class LaplaceExperiments:
         save_path = self.args.output_path
         self.ensure_path_existence(save_path)
         remaining_modules = self.get_num_remaining_modules(save_path, run_number)
+
         if len(remaining_modules) < len(self.num_modules):
             results = pickle.load(open(os.path.join(save_path, f"run_number_{run_number}.pkl"), 'rb'))
+
         for num_modules in remaining_modules:
             self.create_partial_max_norm_ramping(num_modules, use_minimum)
+            self.select_last_layer_with_other_methods()
             la, prior = self.optimize_prior_precision(num_steps=self.args.num_optim_steps, use_uninformed = use_uninformed)
             evaluator = utils.evaluate_laplace(la, self.trainer)
             evaluator.results['prior_precision'] = prior
@@ -380,10 +398,13 @@ class LaplaceExperiments:
         # that the total number of parameters sampled scales quadratically with self.percentiles
         self.percentiles = np.linspace(1, 30, 6, endpoint=True)
         remaining_percentiles = self.get_num_remaining_percentiles(save_path, run_number)
+
         if len(remaining_percentiles) < len(self.percentiles):
             results = pickle.load(open(os.path.join(save_path, f"run_number_{run_number}.pkl"), 'rb'))
+
         for percentile in remaining_percentiles:
             self.create_partial_sublayer_full_model(percentile=percentile)
+
             la, prior = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed=use_uninformed)
             evaluator = utils.evaluate_laplace(la, self.trainer)
             evaluator.results['prior_precision'] = prior
@@ -398,10 +419,16 @@ class LaplaceExperiments:
         self.percentiles = np.linspace(10, 90, 9)
         results = {'results': {}, 'percentile': {}}
         remaining_percentiles = self.get_num_remaining_percentiles(save_path, run_number)
+
         if len(remaining_percentiles) < len(self.percentiles):
             results = pickle.load(open(os.path.join(save_path, f"run_number_{run_number}.pkl"), 'rb'))
+
         for percentile in remaining_percentiles:
+            if self.include_last_layer:
+                modules += ['model.classifier']
+
             self.create_partial_sublayer_specific_modules(module_names=modules, percentile=percentile)
+
             la, prior = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed=use_uninformed)
             evaluator = utils.evaluate_laplace(la, self.trainer)
             evaluator.results['prior_precision'] = prior
@@ -447,7 +474,8 @@ def run_map_eval(args, nli= False):
                    'train_size': args.train_size,
                    'val_size': args.val_size,
                    'test_size': args.test_size,
-                   'num_batched_modules': args.num_batched_modules
+                   'num_batched_modules': args.num_batched_modules,
+                   'include_last_layer': args.include_last_layer
                    }
 
         la_args = Namespace(**la_args)
@@ -473,7 +501,8 @@ def run_random_ramping_experiments(args, nli = False):
                'train_size': args.train_size,
                'val_size': args.val_size,
                'test_size': args.test_size,
-               'num_batched_modules': args.num_batched_modules
+               'num_batched_modules': args.num_batched_modules,
+               'include_last_layer': args.include_last_layer
                }
 
     la_args = Namespace(**la_args)
@@ -500,7 +529,8 @@ def run_max_norm_ramping_experiments(args, nli = False):
                'train_size': args.train_size,
                'val_size': args.val_size,
                'test_size': args.test_size,
-               'num_batched_modules': args.num_batched_modules
+               'num_batched_modules': args.num_batched_modules,
+               'include_last_layer': args.include_last_layer
                }
 
     la_args = Namespace(**la_args)
@@ -526,7 +556,8 @@ def run_max_norm_ramping_only_subclass(args):
         'train_size': args.train_size,
         'val_size': args.val_size,
         'test_size': args.test_size,
-        'num_batched_modules': args.num_batched_modules
+        'num_batched_modules': args.num_batched_modules,
+        'include_last_layer': args.include_last_layer
     }
 
     la_args = Namespace(**la_args)
@@ -554,7 +585,8 @@ def run_last_layer(args, run_number = 0, nli = False):
                'train_size': args.train_size,
                'val_size': args.val_size,
                'test_size': args.test_size,
-               'num_batched_modules': args.num_batched_modules
+               'num_batched_modules': args.num_batched_modules,
+               'include_last_layer': args.include_last_layer
                }
 
     la_args = Namespace(**la_args)
@@ -587,7 +619,8 @@ def run_sublayer_ramping_predefined_modules(args, nli = False):
                'train_size': args.train_size,
                'val_size': args.val_size,
                'test_size': args.test_size,
-               'num_batched_modules': args.num_batched_modules
+               'num_batched_modules': args.num_batched_modules,
+               'include_last_layer': args.include_last_layer
                }
 
     la_args = Namespace(**la_args)
@@ -613,7 +646,8 @@ def run_sublayer_ramping_full(args, nli=False):
                'train_size': args.train_size,
                'val_size': args.val_size,
                'test_size': args.test_size,
-               'num_batched_modules': args.num_batched_modules
+               'num_batched_modules': args.num_batched_modules,
+               'include_last_layer': args.include_last_layer
                }
 
     la_args = Namespace(**la_args)
@@ -650,6 +684,7 @@ if __name__ == '__main__':
                                                                              'each batch')
     parser.add_argument('--minimum_norm', type = ast.literal_eval, default=False)
     parser.add_argument('--module_names_path', type = str, default='')
+    parser.add_argument('--include_last_layer', type = ast.literal_eval, default=False)
     args = parser.parse_args()
 
 
