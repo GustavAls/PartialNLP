@@ -144,7 +144,7 @@ class SentimentClassifier:
 
     def runner(self, output_path, train_bs, eval_bs, num_epochs, dataset_name, device_batch_size, lr=5e-05,
                logging_perc = -1, save_strategy = 'epoch', evaluation_strategy='epoch',
-               load_best_model_at_end = False, no_cuda = False, eval_steps=-1, data_path = None, run=0, save_total_limit=1,
+               load_best_model_at_end = False, no_cuda=False, eval_steps=-1, data_path=None, run=0, save_total_limit=1,
                metric_for_best_model='loss'):
 
         train_data, val_data, test_data = self.load_save_dataset(data_path=data_path,
@@ -153,7 +153,8 @@ class SentimentClassifier:
                                                                  output_path=output_path)
 
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
-        tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
+        tokenized_val = val_data.map(self.tokenize, batched=True, batch_size=eval_bs)
+        # tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
 
 
         # Defaults if parameters shouldnt be interpreted as ranges
@@ -182,7 +183,7 @@ class SentimentClassifier:
             model=self.model,
             args=training_args,
             train_dataset=tokenized_train,
-            eval_dataset=tokenized_test,
+            eval_dataset=tokenized_val,
             tokenizer=self._tokenizer,
             data_collator=self.collator,
             compute_metrics=self.compute_metrics
@@ -305,8 +306,9 @@ def prepare_and_run_sentiment_classifier(args, sentiment_classifier=None):
                                 lr=args.learning_rate,
                                 logging_perc = args.logging_perc,
                                 save_strategy = args.save_strategy,
-                                evaluation_strategy = args.evaluation_strategy,
-                                load_best_model_at_end = True,
+                                evaluation_strategy=args.evaluation_strategy,
+                                metric_for_best_model=args.metric_for_best_model,
+                                load_best_model_at_end=True,
                                 no_cuda=args.no_cuda,
                                 eval_steps=args.eval_steps,
                                 run=args.run)

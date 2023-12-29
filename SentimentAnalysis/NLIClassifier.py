@@ -42,7 +42,10 @@ class NLIClassifier(SentimentClassifier):
                  test_size=None,
                  dataset_name="rte"):
         super().__init__(network_name, id2label, label2id, train_size, val_size, test_size, dataset_name)
-
+        self.dataset_cols = {"mrpc": ["sentence1", "sentence2", "label"],
+                             "qqp": ["question1", "question2", "label"],
+                             "qnli": ["question", "sentence", "label"],
+                             "rte": ["sentence1", "sentence2", "label"]}
 
     def load_text_dataset(self, dataset_name='rte'):
         dataset = load_dataset("glue", dataset_name)
@@ -71,30 +74,44 @@ class NLIClassifier(SentimentClassifier):
         return train_data, test_data, val_data
 
     def tokenize(self, examples):
-        return self._tokenizer(examples["sentence1"], examples["sentence2"], truncation=True, padding="max_length")
+        return self._tokenizer(examples[self.dataset_cols[self.dataset_name][0]],
+                               examples[self.dataset_cols[self.dataset_name][1]],
+                               truncation=True, padding="max_length")
 
     def to_dataframe(self, dataset):
         dataframe = pd.DataFrame()
-        dataframe['sentence1'] = dataset['sentence1']
-        dataframe['sentence2'] = dataset['sentence2']
-        dataframe['label'] = dataset['label']
-        dataframe['idx'] = dataset['idx']
+        dataframe[self.dataset_cols[self.dataset_name][0]] = dataset[self.dataset_cols[self.dataset_name][0]]
+        dataframe[self.dataset_cols[self.dataset_name][1]] = dataset[self.dataset_cols[self.dataset_name][1]]
+        dataframe[self.dataset_cols[self.dataset_name][2]] = dataset[self.dataset_cols[self.dataset_name][2]]
+        try:
+            dataframe['idx'] = dataset['idx']
+        except:
+            pass
         return dataframe
 
 
-def prepare_nli_Classifier(args, model_name, train_size=1):
+def prepare_nli_classifier(args, model_name='distilbert-base-uncased', train_size=1):
     if train_size >= 1:
         train_size = args.train_size
 
-    NLI = NLIClassifier(network_name=model_name,
-                        train_size=train_size,
-                        val_size=args.val_size,
-                        test_size=args.test_size,
-                        dataset_name="rte")
+    if hasattr(args, 'model_path'):
+        model_path_or_name = args.model_path
+        NLI = NLIClassifier(network_name=model_path_or_name,
+                            train_size=train_size,
+                            val_size=args.val_size,
+                            test_size=args.test_size,
+                            dataset_name=args.dataset_name)
+    else:
+        NLI = NLIClassifier(network_name=model_name,
+                            train_size=train_size,
+                            val_size=args.val_size,
+                            test_size=args.test_size,
+                            dataset_name=args.dataset_name)
     return NLI
 
-def run_datagen(args, network_name):
-    nli_classifier = prepare_nli_Classifier(args, network_name)
+
+def run_datagen(args, network_name='distilbert-base-uncased'):
+    nli_classifier = prepare_nli_classifier(args, network_name)
     nli_classifier.runner(output_path=args.output_path,
                           data_path=args.data_path,
                           train_bs=args.train_batch_size,
@@ -106,18 +123,20 @@ def run_datagen(args, network_name):
                           logging_perc=args.logging_perc,
                           save_strategy=args.save_strategy,
                           evaluation_strategy=args.evaluation_strategy,
+                          metric_for_best_model=args.metric_for_best_model,
                           load_best_model_at_end=True,
                           no_cuda=args.no_cuda,
                           eval_steps=args.eval_steps,
                           run=args.run)
 
-def dataramping(args, network_name):
+
+def dataramping(args, network_name='distilbert-base-uncased'):
     epochs = np.linspace(1, 10, 10, endpoint=True)
     train_sizes = [1.0 / num_epochs for num_epochs in epochs]
 
     for train_size, epoch in zip(train_sizes, epochs):
         args.num_epochs = epoch
-        nli_classifier = prepare_nli_Classifier(args, network_name, train_size=train_size)
+        nli_classifier = prepare_nli_classifier(args, network_name, train_size=train_size)
         nli_classifier.runner(output_path=args.output_path,
                               data_path=args.data_path,
                               train_bs=args.train_batch_size,
@@ -129,6 +148,7 @@ def dataramping(args, network_name):
                               logging_perc=args.logging_perc,
                               save_strategy=args.save_strategy,
                               evaluation_strategy=args.evaluation_strategy,
+                              metric_for_best_model=args.metric_for_best_model,
                               load_best_model_at_end=True,
                               no_cuda=args.no_cuda,
                               eval_steps=args.eval_steps,
@@ -199,4 +219,3 @@ if __name__ == "__main__":
         dataramping(args, network_name)
     else:
         run_datagen(args, network_name)
-

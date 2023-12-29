@@ -3,14 +3,14 @@
 ### –- specify queue --
 #BSUB -q gpuv100
 ### -- set the job Name --
-#BSUB -J laplace_sub_best[1-5]
+#BSUB -J laplace_sub_pre_i[1-5]
 ### -- ask for number of cores (default: 1) --
 #BSUB -n 4
 #BSUB -R "span[hosts=1]"
 ### -- Select the resources: 1 gpu in exclusive process mode --
 #BSUB -gpu "num=1:mode=exclusive_process"
 ### -- set walltime limit: hh:mm --  maximum 24 hours for GPU-queues right now
-#BSUB -W 24:00
+#BSUB -W 12:00
 # request XGB of system-memory
 #BSUB -R "select[gpu32gb]"
 #BSUB -R "rusage[mem=6GB]"
@@ -73,7 +73,7 @@ python3 SentimentAnalysis/ExperimentsLaplace.py \
     --uninformed_prior False \
     --train_batch_size 16 \
     --eval_batch_size 1 \
-    --module_names_path $dir_module_name_path
+    --module_names_path $dir_module_name_path \
 
 
 

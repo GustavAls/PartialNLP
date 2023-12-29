@@ -33,10 +33,22 @@ from SentimentClassifier import construct_laplace, prepare_sentiment_classifier
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF
 from tqdm import tqdm
+from NLIClassifier import prepare_nli_classifier
 
+EXPERIMENTS = ['last_layer',
+               'random_ramping',
+               'operator_norm_ramping',
+               'operator_norm_ramping_subclass',
+               'sublayer_full',
+               'sublayer_predefined',
+               'nli_last_layer',
+               'nli_random_ramping',
+               'nli_operator_norm_ramping',
+               'nli_sublayer_full',
+               'nli_sublayer_predefined']
 
 class LaplaceExperiments:
-    def __init__(self, args):
+    def __init__(self, args, nli = False):
         self.default_args = {'output_path': args.output_path,
                              'train_batch_size': args.train_batch_size, 'eval_batch_size': args.eval_batch_size,
                              'train_device_batch_size': args.train_batch_size, 'eval_device_batch_size': args.eval_batch_size,
@@ -61,12 +73,18 @@ class LaplaceExperiments:
         default_args = Namespace(**self.default_args)
         self.default_args = default_args
         default_args.model_path = args.model_path
-        self.sentiment_classifier = prepare_sentiment_classifier(default_args)
+
+        # NLI classifier or sentiment classifier
+        if nli:
+            self.classifier = prepare_nli_classifier(default_args)
+        else:
+            self.classifier = prepare_sentiment_classifier(default_args)
+
         self.subclass = args.subclass
         self.batched_modules_for_batch_grad = args.num_batched_modules
 
         self.minimum_prior, self.maximum_prior, self.best_nll = 1e-1, 1e5, np.inf
-        self.train_loader, self.trainer, self.tokenized_val = self.sentiment_classifier.prepare_laplace(
+        self.train_loader, self.trainer, self.tokenized_val = self.classifier.prepare_laplace(
             output_path=default_args.output_path,
             train_bs=default_args.train_batch_size,
             eval_bs=default_args.eval_batch_size,
@@ -81,7 +99,7 @@ class LaplaceExperiments:
         if not isinstance(self.sentiment_classifier.model, Extension):
             self.model = Extension(self.sentiment_classifier.model)
         else:
-            self.model = self.sentiment_classifier.model
+            self.model = self.classifier.model
 
     def create_partial_sublayer_full_model(self, percentile = 0.1):
         partial_constructor = self.use_subclass_part_only(PartialConstructor(self.model))
@@ -125,6 +143,7 @@ class LaplaceExperiments:
         else:
             partial_constructor.select_max_operator_norm(num_params)
         partial_constructor.select()
+        setattr(self.model, 'batched_modules', self.batched_modules_for_batch_grad)
         self.num_stoch_params = partial_constructor.get_num_stochastic_parameters()
         self.num_params = partial_constructor.get_num_params()
         self.module_names = partial_constructor.module_names
@@ -334,7 +353,7 @@ class LaplaceExperiments:
 
     def max_norm_ramping_experiment(self, run_number = 0, use_uninformed = False, use_minimum = False):
 
-        print("Running random ramping experiment on ", self.default_args.dataset_name)
+        print("Running operator norm ramping experiment on ", self.default_args.dataset_name)
         results = {'results': {}, 'module_selection': {}}
         save_path = self.args.output_path
         self.ensure_path_existence(save_path)
@@ -353,7 +372,7 @@ class LaplaceExperiments:
                 pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     def run_sublayer_ramping_experiment(self, run_number, use_uninformed=True):
-        print("Running sublayer ramping experiment on ", self.default_args.dataset_name)
+        print("Running sublayer full ramping experiment on ", self.default_args.dataset_name)
         results = {'results': {}, 'percentile': {}}
         save_path = self.args.output_path
         self.ensure_path_existence(save_path)
@@ -373,10 +392,10 @@ class LaplaceExperiments:
                 pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     def run_sublayer_ramping_predefined_modules(self, run_number, modules, use_uninformed=False):
-        print("Running sublayer ramping experiment on ", self.default_args.dataset_name)
+        print("Running sublayer predefined modules ramping experiment on ", self.default_args.dataset_name)
         save_path = self.args.output_path
         self.ensure_path_existence(save_path)
-        self.percentiles = np.linspace(10, 90, 9)[1:]
+        self.percentiles = np.linspace(10, 90, 9)
         results = {'results': {}, 'percentile': {}}
         remaining_percentiles = self.get_num_remaining_percentiles(save_path, run_number)
         if len(remaining_percentiles) < len(self.percentiles):
@@ -391,7 +410,6 @@ class LaplaceExperiments:
                 pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     def last_layer_experiment(self, run_number, use_uninformed = False):
-
         print("Running last layer experiment on ", self.default_args.dataset_name)
         results = {'results': {}, 'module_selection': {}}
         save_path = self.args.output_path
@@ -408,11 +426,11 @@ class LaplaceExperiments:
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-def run_map_eval(args):
-    for run in range(0, 1):
+def run_map_eval(args, nli= False):
+    for run in range(0, 5):
         data_path = args.data_path
         data_path = os.path.join(data_path, f"run_{run}")
-        output_path = os.path.join(args.output_path, f"run_{run}")
+        output_path = args.output_path
         model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
 
         model_path = os.path.join(data_path, model_ext_path)
@@ -432,12 +450,11 @@ def run_map_eval(args):
                    'num_batched_modules': args.num_batched_modules
                    }
 
-        # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
         la_args = Namespace(**la_args)
-        lap_exp = LaplaceExperiments(args=la_args)
+        lap_exp = LaplaceExperiments(args=la_args, nli=nli)
         lap_exp.map_evaluation(run)
 
-def run_random_ramping_experiments(args):
+def run_random_ramping_experiments(args, nli = False):
 
     data_path = args.data_path
     model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
@@ -459,13 +476,12 @@ def run_random_ramping_experiments(args):
                'num_batched_modules': args.num_batched_modules
                }
 
-    # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
     la_args = Namespace(**la_args)
-    lap_exp = LaplaceExperiments(args = la_args)
+    lap_exp = LaplaceExperiments(args = la_args, nli=nli)
     lap_exp.random_ramping_experiment(args.run_number, args.uninformed_prior)
 
 
-def run_max_norm_ramping_experiments(args):
+def run_max_norm_ramping_experiments(args, nli = False):
 
     data_path = args.data_path
     model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
@@ -487,9 +503,8 @@ def run_max_norm_ramping_experiments(args):
                'num_batched_modules': args.num_batched_modules
                }
 
-    # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
     la_args = Namespace(**la_args)
-    lap_exp = LaplaceExperiments(args = la_args)
+    lap_exp = LaplaceExperiments(args = la_args, nli = nli)
     lap_exp.max_norm_ramping_experiment(args.run_number, args.uninformed_prior, args.minimum_norm)
 
 def run_max_norm_ramping_only_subclass(args):
@@ -514,14 +529,13 @@ def run_max_norm_ramping_only_subclass(args):
         'num_batched_modules': args.num_batched_modules
     }
 
-    # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
     la_args = Namespace(**la_args)
     lap_exp = LaplaceExperiments(args = la_args)
     lap_exp.subclass = args.subclass
     lap_exp.max_norm_ramping_experiment(args.run_number, args.uninformed_prior, args.minimum_norm)
 
 
-def run_last_layer(args, run_number = 0):
+def run_last_layer(args, run_number = 0, nli = False):
     data_path = os.path.join(args.data_path, f"run_{run_number}")
     output_path = os.path.join(args.output_path, f"run_{run_number}")
     model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
@@ -544,11 +558,11 @@ def run_last_layer(args, run_number = 0):
                }
 
     la_args = Namespace(**la_args)
-    lap_exp = LaplaceExperiments(args=la_args)
+    lap_exp = LaplaceExperiments(args=la_args, nli=nli)
     lap_exp.last_layer_experiment(args.run_number, args.uninformed_prior)
 
 
-def run_sublayer_ramping_predefined_modules(args):
+def run_sublayer_ramping_predefined_modules(args, nli = False):
     data_path = args.data_path
     model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
 
@@ -576,12 +590,11 @@ def run_sublayer_ramping_predefined_modules(args):
                'num_batched_modules': args.num_batched_modules
                }
 
-    # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
     la_args = Namespace(**la_args)
-    lap_exp = LaplaceExperiments(args=la_args)
+    lap_exp = LaplaceExperiments(args=la_args, nli=nli)
     lap_exp.run_sublayer_ramping_predefined_modules(args.run_number,module_names, args.uninformed_prior)
 
-def run_sublayer_ramping_full(args):
+def run_sublayer_ramping_full(args, nli=False):
 
     data_path = args.data_path
     model_ext_path = [path for path in os.listdir(data_path) if 'checkpoint' in path][0]
@@ -603,12 +616,11 @@ def run_sublayer_ramping_full(args):
                'num_batched_modules': args.num_batched_modules
                }
 
-    # la_args['model_path']= r"C:\Users\45292\Documents\Master\SentimentClassification\checkpoint-782"
     la_args = Namespace(**la_args)
-    lap_exp = LaplaceExperiments(args = la_args)
+    lap_exp = LaplaceExperiments(args=la_args, nli=nli)
     lap_exp.run_sublayer_ramping_experiment(args.run_number, args.uninformed_prior)
 
-def sequential_last_layer(args):
+def sequential_last_layer(args, nli = False):
     num_runs = 5
     for run in range(num_runs):
         run_last_layer(args, run)
@@ -640,13 +652,22 @@ if __name__ == '__main__':
     parser.add_argument('--module_names_path', type = str, default='')
     args = parser.parse_args()
 
+
     if args.map_eval:
-        run_map_eval(args)
+        if args.dataset_name == 'mrpc' or args.dataset_name == 'qqp' or args.dataset_name == 'qnli' or args.dataset_name == 'rte':
+            run_map_eval(args, nli=True)
+        else:
+            run_map_eval(args)
+
+    if args.experiment not in EXPERIMENTS:
+        raise ValueError(f"Experiment {args.experiment} is not a valid experiment. Choose from {EXPERIMENTS}")
 
     if args.experiment == 'last_layer':
         sequential_last_layer(args)
+
     if args.experiment == 'random_ramping':
         run_random_ramping_experiments(args)
+
     if args.experiment == 'operator_norm_ramping':
         run_max_norm_ramping_experiments(args)
 
@@ -656,8 +677,26 @@ if __name__ == '__main__':
 
     if args.experiment == 'sublayer_full':
         run_sublayer_ramping_full(args)
+
     if args.experiment == 'sublayer_predefined':
         run_sublayer_ramping_predefined_modules(args)
+
+    ############################# NLI experiments ####################################
+
+    if args.experiment == 'nli_last_layer':
+        sequential_last_layer(args, nli=True)
+
+    if args.experiment == 'nli_random_ramping':
+        run_random_ramping_experiments(args, nli=True)
+
+    if args.experiment == 'nli_operator_norm_ramping':
+        run_max_norm_ramping_experiments(args, nli=True)
+
+    if args.experiment == 'nli_sublayer_full':
+        run_sublayer_ramping_full(args, nli=True)
+
+    if args.experiment == 'nli_sublayer_predefined':
+        run_sublayer_ramping_predefined_modules(args, nli=True)
 
 
 

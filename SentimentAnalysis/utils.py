@@ -555,6 +555,11 @@ def read_write_all(path_to_runs, save_path, num_modules):
 
 if __name__ == '__main__':
 
+    # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\laplace\operator_norm_ramping"
+    # save_path = path
+    # num_modules = 2
+
+
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_prior'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\random_ramping'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\SWAG\random_ramping'
@@ -567,6 +572,12 @@ if __name__ == '__main__':
     # exp_paths = [r"C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_subclass_attn_min",
     #             r"C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_subclass_prior"]
     # names = ['Min operator norm attn', 'Max operator norm attn']
+    #
+    exp_paths = [r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag\sublayer_new",
+                 r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag\random_ramping"]
+
+    # root = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\laplace"
+    # exp_paths = [os.path.join(root, p) for p in os.listdir(root)]
 
     exp_paths = [r"C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping"]
     # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map"
@@ -576,8 +587,8 @@ if __name__ == '__main__':
     # exp_paths = [r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\swag\operator_norm_ramping",
     #          r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\swag\random_ramping"]
     # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\map"
-    # names = ['SWAG operator norm', 'SWAG random']
 
+    names = ['sub','rand']
 
     metrics = ['accuracy_score']
 
