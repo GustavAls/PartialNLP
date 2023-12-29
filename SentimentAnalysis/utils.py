@@ -235,7 +235,7 @@ class MultipleRampingExperiments:
 
     def get_dataset_name(self, path):
         if 'imdb' in path.lower():
-            return 'IMDb'
+            return 'IMDB'
 
         elif 'sst' in path.lower():
             return 'SST2'
@@ -563,7 +563,7 @@ if __name__ == '__main__':
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_prior'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\random_ramping'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\SWAG\random_ramping'
-    map_path = r"C:\Users\45292\Documents\Master\SentimentClassification\SST2\map"
+    # map_path = r"C:\Users\45292\Documents\Master\SentimentClassification\SST2\map"
 
     # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\laplace\random_ramping_prior"
     # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag\operator_norm_ramping_subclass"
@@ -573,25 +573,51 @@ if __name__ == '__main__':
     #             r"C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_subclass_prior"]
     # names = ['Min operator norm attn', 'Max operator norm attn']
     #
-    exp_paths = [r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag\sublayer_new",
-                 r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag\random_ramping"]
+    # exp_paths = [r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag\sublayer_new",
+    #              r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag\random_ramping"]
+    #
+    # # root = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\laplace"
+    # # exp_paths = [os.path.join(root, p) for p in os.listdir(root)]
+    #
+    # exp_paths = [r"C:\Users\45292\Documents\Master\SentimentClassification\SST2\Laplace\sublayer_predefined"]
+    # # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map"
+    # names = ['Laplace sublayer']
 
-    # root = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\laplace"
-    # exp_paths = [os.path.join(root, p) for p in os.listdir(root)]
 
-    exp_paths = [r"C:\Users\45292\Documents\Master\SentimentClassification\SST2\Laplace\sublayer_predefined"]
-    # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map"
-    names = ['Laplace sublayer']
-
-
-    # exp_paths = [r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\swag\operator_norm_ramping",
-    #          r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\swag\random_ramping"]
     # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\map"
+    # exp_paths = [r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\laplace\sublayer_full"]
 
-    names = ['sub','rand']
 
-    metrics = ['nll']
 
+
+    # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map"
+
+    # root = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\laplace"
+    # exp_paths = [os.path.join(root, p) for p in os.listdir(root) if "ramping" in p.lower()]
+    # exp_paths = [r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\laplace\sublayer_predefined",
+    #              r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\laplace\operator_norm_ramping_prior"]
+
+    # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\rte\map"
+    # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\map"
+    map_path = None
+    root = r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\rte\laplace\rte"
+    # exp_paths = [os.path.join(root, p) for p in os.listdir(root) if "last" not in p.lower()]
+    exp_paths = [r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\laplace\mrpc\nli_operator_norm_ramping",
+                 r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\laplace\mrpc\nli_operator_norm_ramping_attn",
+                 r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\laplace\mrpc\nli_random_ramping"
+                 ]
+
+    names = [os.path.basename(path) for path in exp_paths]
+    # names = ['laplace rand', 'laplace attn']
+    # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\map"
+    # exp_paths = [r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\nli_operator_norm_ramping_attn"]
+    # names = ['NLI laplace attn']
+
+    # names = [os.path.basename(path) for path in exp_paths]
+    names = ['Laplace op', 'Laplace attn', 'Laplace rand']
+
+    # metrics = ['accuracy_score']
+    metrics = ['nll', 'accuracy_score', 'ECE']
     for metric in metrics:
         plotter = MultipleRampingExperiments(exp_paths, names, map_path=map_path, metric=metric, method='laplace')
         fig, ax = plt.subplots(1,1)
