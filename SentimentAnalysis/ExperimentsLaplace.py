@@ -96,8 +96,8 @@ class LaplaceExperiments:
             run=args.run_number)
 
 
-        if not isinstance(self.sentiment_classifier.model, Extension):
-            self.model = Extension(self.sentiment_classifier.model)
+        if not isinstance(self.classifier.model, Extension):
+            self.model = Extension(self.classifier.model)
         else:
             self.model = self.classifier.model
 
