@@ -77,7 +77,7 @@ class LaplaceExperiments:
             data_path=args.data_path,
             run=args.run_number)
 
-        self.subclass = None
+
         if not isinstance(self.sentiment_classifier.model, Extension):
             self.model = Extension(self.sentiment_classifier.model)
         else:

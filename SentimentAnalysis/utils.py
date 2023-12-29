@@ -558,7 +558,7 @@ if __name__ == '__main__':
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_prior'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\random_ramping'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\SWAG\random_ramping'
-    map_path = r"C:\Users\45292\Documents\Master\SentimentClassification\SST2\map"
+    map_path = r"C:\Users\45292\Documents\Master\SentimentClassification\Laplace\map"
 
     # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\laplace\random_ramping_prior"
     # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag\operator_norm_ramping_subclass"
@@ -568,7 +568,7 @@ if __name__ == '__main__':
     #             r"C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_subclass_prior"]
     # names = ['Min operator norm attn', 'Max operator norm attn']
 
-    exp_paths = [r"C:\Users\45292\Documents\Master\SentimentClassification\SST2\Laplace\sublayer_predefined"]
+    exp_paths = [r"C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping"]
     # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map"
     names = ['Laplace sublayer']
 
@@ -579,7 +579,7 @@ if __name__ == '__main__':
     # names = ['SWAG operator norm', 'SWAG random']
 
 
-    metrics = ['nll']
+    metrics = ['accuracy_score']
 
     for metric in metrics:
         plotter = MultipleRampingExperiments(exp_paths, names, map_path=map_path, metric=metric, method='laplace')
