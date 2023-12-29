@@ -258,7 +258,7 @@ class MultipleRampingExperiments:
 
     def get_dataset_name(self, path):
         if 'imdb' in path.lower():
-            return 'IMDb'
+            return 'IMDB'
 
         elif 'sst' in path.lower():
             return 'SST2'
@@ -610,10 +610,13 @@ if __name__ == '__main__':
     # # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map"
     # names = ['Laplace sublayer']
 
-
-    # exp_paths = [r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\swag\operator_norm_ramping",
-    #          r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\swag\random_ramping"]
     # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\map"
+    # exp_paths = [r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\laplace\sublayer_full"]
+
+
+
+
+    # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map"
 
     # names = ['sub','rand']
     exp_paths = [r"C:\Users\45292\Documents\Master\SentimentClassification\SST2_Final\laplace\operator_norm_ramping_subclass",

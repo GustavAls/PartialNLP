@@ -657,7 +657,7 @@ def run_sublayer_ramping_full(args, nli=False):
 def sequential_last_layer(args, nli = False):
     num_runs = 5
     for run in range(num_runs):
-        run_last_layer(args, run)
+        run_last_layer(args, run, nli=nli)
 
 
 

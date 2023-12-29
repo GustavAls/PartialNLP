@@ -48,6 +48,8 @@ class SentimentClassifier:
         self.val_size = val_size
         self.test_size = test_size
         self.dataset_name = dataset_name
+        self.column_name = { "sst2": "sentence",
+                           "imdb": "text" }
 
     def load_text_dataset(self, dataset_name="imdb"):
         data = load_dataset(dataset_name)
@@ -87,7 +89,7 @@ class SentimentClassifier:
         return train_data, test_data, val_data
 
     def tokenize(self, examples):
-        return self._tokenizer(examples["text"], truncation=True)
+        return self._tokenizer(examples[self.column_name[self.dataset_name]], truncation=True)
 
     @staticmethod
     def compute_metrics(eval_pred):
@@ -102,7 +104,7 @@ class SentimentClassifier:
 
     def to_dataframe(self, dataset):
         dataframe = pd.DataFrame()
-        dataframe['text'] = dataset['text'] if self.dataset_name == "imdb" else dataset['sentence']
+        dataframe[self.column_name[self.dataset_name]] = dataset[self.column_name[self.dataset_name]]
         dataframe['label'] = dataset['label']
         return dataframe
 

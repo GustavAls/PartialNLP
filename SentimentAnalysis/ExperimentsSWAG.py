@@ -58,7 +58,7 @@ class SWAGExperiments:
         self.classifier = None
         self.train_loader, self.trainer, self.tokenized_val, self.optimizer = (None, None, None, None)
         self.loss_fn = nn.CrossEntropyLoss()
-        self.subclass = None
+        self.subclass = args.subclass
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     def initialize_classifier(self, nli=False):
