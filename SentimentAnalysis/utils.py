@@ -237,19 +237,24 @@ class MultipleRampingExperiments:
             'ECE': 'ECE', 'MCE': 'MCE', 'RMSCE': 'RMSCE'
         }
 
-    def draw_line_at_best(self, other_path, ax, name = None, color = None):
+    def draw_line_at_best(self, other_path, ax, name = None, color = None, num_modules = None):
 
         ramping_experiment = RampingExperiments(other_path, metric=self.metric)
         results = ramping_experiment.get_metrics_from_all_files(has_seen_softmax=True)
         df = ramping_experiment.get_specific_results(results, self.metric)
         medians, modules = [], []
-        for mod in df['modules'].unique():
-            scores = df[df['modules'] == mod][self.metric]
-            medians.append(scores.median())
-            modules.append(mod)
+        if num_modules is None:
+            for mod in df['modules'].unique():
+                scores = df[df['modules'] == mod][self.metric]
+                medians.append(scores.median())
+                modules.append(mod)
+                best_score = np.min(medians)
+                best_mod = int(modules[np.argmin(medians)])
+        else:
+            scores = df[df['modules']==num_modules][self.metric]
+            best_score = scores.median().item()
+            best_mod = int(num_modules)
 
-        best_score = np.min(medians)
-        best_mod = int(modules[np.argmin(medians)])
         ax.axhline(y=best_score, linestyle='--', linewidth=1, alpha=0.7,
                     color='tab:red' if color is None else color, label= name + " " + f"{best_mod}")
         ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
