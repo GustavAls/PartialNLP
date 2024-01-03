@@ -237,19 +237,24 @@ class MultipleRampingExperiments:
             'ECE': 'ECE', 'MCE': 'MCE', 'RMSCE': 'RMSCE'
         }
 
-    def draw_line_at_best(self, other_path, ax, name = None, color = None):
+    def draw_line_at_best(self, other_path, ax, name = None, color = None, num_modules = None):
 
         ramping_experiment = RampingExperiments(other_path, metric=self.metric)
         results = ramping_experiment.get_metrics_from_all_files(has_seen_softmax=True)
         df = ramping_experiment.get_specific_results(results, self.metric)
         medians, modules = [], []
-        for mod in df['modules'].unique():
-            scores = df[df['modules'] == mod][self.metric]
-            medians.append(scores.median())
-            modules.append(mod)
+        if num_modules is None:
+            for mod in df['modules'].unique():
+                scores = df[df['modules'] == mod][self.metric]
+                medians.append(scores.median())
+                modules.append(mod)
+                best_score = np.min(medians)
+                best_mod = int(modules[np.argmin(medians)])
+        else:
+            scores = df[df['modules']==num_modules][self.metric]
+            best_score = scores.median().item()
+            best_mod = int(num_modules)
 
-        best_score = np.min(medians)
-        best_mod = int(modules[np.argmin(medians)])
         ax.axhline(y=best_score, linestyle='--', linewidth=1, alpha=0.7,
                     color='tab:red' if color is None else color, label= name + " " + f"{best_mod}")
         ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
@@ -587,7 +592,7 @@ if __name__ == '__main__':
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\random_ramping'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\SWAG\random_ramping'
     map_path = r"C:\Users\45292\Documents\Master\SentimentClassification\Laplace\map"
-    imdb_map_path =r"C:\Users\45292\Documents\Master\SentimentClassification\SST2\map"
+    imdb_map_path =r"C:\Users\45292\Documents\Master\NLI\RTE\map"
 
     root_imdb_laplace_path = r'C:\Users\45292\Documents\Master\SentimentClassification\IMDB\Laplace'
     exp_paths = [os.path.join(root_imdb_laplace_path, p) for p in os.listdir(root_imdb_laplace_path)
@@ -619,22 +624,28 @@ if __name__ == '__main__':
     # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map"
 
     # names = ['sub','rand']
-    exp_paths = [r"C:\Users\45292\Documents\Master\SentimentClassification\SST2_Final\laplace\operator_norm_ramping_subclass",
-                 r"C:\Users\45292\Documents\Master\SentimentClassification\SST2_Final\laplace\operator_norm_ramping_attn_min"]
+    exp_paths = [r"C:\Users\45292\Documents\Master\NLI\RTE\swag\nli_operator_norm_ramping_attn",
+                 r"C:\Users\45292\Documents\Master\NLI\RTE\swag\nli_operator_norm_ramping_mlp",
+                 r"C:\Users\45292\Documents\Master\NLI\RTE\swag\nli_random_ramping"]
 
-    names = ['Max Operator norm attn.', 'Min Operator norm attn.']
-    metrics = ['nll', 'ECE', 'MCE']
-    save_path = r'C:\Users\45292\Documents\Master\SentimentClassification\SST2_Final\Figures Laplace\max_min_op_norm'
-    name = 'Max operator norm attn'
-    other_path = r"C:\Users\45292\Documents\Master\SentimentClassification\IMDB\Laplace\operator_norm_ramping_subclass_prior"
+    # exp_paths = [r"C:\Users\45292\Documents\Master\NLI\RTE\swag\nli_sublayer"]
+
+    names = ['Max operator norm attn', 'Max operator norm mlp', 'Random ramping']
+    metrics = ['nll', 'accuracy_score']
+    save_path = r'C:\Users\45292\Documents\Master\SentimentClassification\SST2_Final\Figures Laplace\sublayer'
+    name = 'Max operator norm mlp'
+    other_path = r"C:\Users\45292\Documents\Master\NLI\RTE\laplace\nli_operator_norm_ramping"
+    other_path_two = r"C:\Users\45292\Documents\Master\NLI\RTE\laplace\nli_sublayer_full"
+    name_two = 'Sublayer full model'
     for metric in metrics:
-        plotter = MultipleRampingExperiments(exp_paths, names, map_path=imdb_map_path, metric=metric, method='laplace',
+        plotter = MultipleRampingExperiments(exp_paths, names, map_path=imdb_map_path, metric=metric, method='SWAG',
                                              sublayer_ramping=False)
         fig, ax = plt.subplots(1,1)
         plotter.plot_all(fig, ax)
         # plotter.draw_line_at_best(other_path, ax, name = name)
+        # plotter.draw_line_at_best(other_path_two, ax, name= name_two, color = 'tab:orange')
         fig.tight_layout()
-        fig.savefig(os.path.join(save_path, f"{metric}_attn.pdf"), format = 'pdf')
+        # fig.savefig(os.path.join(save_path, f"{metric}_full.pdf"), format = 'pdf')
         plt.show()
 
     breakpoint()

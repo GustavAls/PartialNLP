@@ -47,6 +47,7 @@ class SWAGExperiments:
                                   'max_num_steps': 2000}
 
         self.partial_constructor = None
+        self.stopping_criteria = args.stopping_criteria
         if args.subclass == "attn":
             self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17]
         elif args.subclass == "mlp":
@@ -159,7 +160,10 @@ class SWAGExperiments:
         for learning_rate in pbar:
             self.fit(**{'learning_rate': learning_rate, 'max_num_steps': self.default_args_swag['optim_max_num_steps']})
             evaluator = utils.evaluate_swag(self.partial_constructor, self.trainer, new_tokenized_val)
-            neg_log_likelihoods.append(evaluator.results['nll'])
+            if self.stopping_criteria == 'nll':
+                neg_log_likelihoods.append(evaluator.results['nll'])
+            elif self.stopping_criteria in ['accuracy', 'accuracy_score', 'acc']:
+                neg_log_likelihoods.append(-evaluator.results['accuracy_score'])
             self.partial_constructor.init_new_model_for_optim(copy.deepcopy(self.trainer.model))
             pbar.update(1)
 
@@ -320,7 +324,8 @@ def run_random_ramping_experiments(args, nli=False):
                 'subclass': args.subclass,
                 'val_size': args.val_size,
                 'test_size': args.test_size,
-                'mc_samples': args.mc_samples}
+                'mc_samples': args.mc_samples,
+                'stopping_criteria': args.stopping_criteria}
 
     exp_args = Namespace(**exp_args)
     swag_exp = SWAGExperiments(args=exp_args)
@@ -341,7 +346,8 @@ def run_max_norm_ramping_experiments(args, nli=False):
                 'subclass': args.subclass,
                 'val_size': args.val_size,
                 'test_size': args.test_size,
-                'mc_samples': args.mc_samples}
+                'mc_samples': args.mc_samples,
+                'stopping_criteria': args.stopping_criteria}
 
     exp_args = Namespace(**exp_args)
     swag_exp = SWAGExperiments(args=exp_args)
@@ -363,7 +369,8 @@ def run_max_norm_ramping_only_subclass(args, nli=False):
                 'subclass': args.subclass,
                 'val_size': args.val_size,
                 'test_size': args.test_size,
-                'mc_samples': args.mc_samples}
+                'mc_samples': args.mc_samples,
+                'stopping_criteria': args.stopping_criteria}
 
     exp_args = Namespace(**exp_args)
     swag_exp = SWAGExperiments(args=exp_args)
@@ -385,7 +392,7 @@ def run_sublayer_experiment(args, nli=False):
                 'subclass': args.subclass,
                 'val_size': args.val_size,
                 'test_size': args.test_size,
-                'mc_samples': args.mc_samples}
+                'mc_samples': args.mc_samples,'stopping_criteria': args.stopping_criteria}
 
     exp_args = Namespace(**exp_args)
     swag_exp = SWAGExperiments(args=exp_args)
@@ -432,6 +439,7 @@ if __name__ == '__main__':
     parser.add_argument('--val_size', type=int, default=1)
     parser.add_argument('--test_size', type=int, default=1)
     parser.add_argument('--mc_samples', type=int, default=12)
+    parser.add_argument('--stopping_criteria', type = str, default='nll')
 
     args = parser.parse_args()
 
