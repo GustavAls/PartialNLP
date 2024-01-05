@@ -45,6 +45,7 @@ class SWAGExperiments:
                                   'module_names': None, 'num_columns': 20, 'num_mc_samples': args.mc_samples,
                                   'min_var': 1e-20, 'reduction': 'mean', 'num_classes': 2, 'optim_max_num_steps': 100 ,
                                   'max_num_steps': 2000}
+        self.last_layer = getattr(args, 'last_layer', False)
 
         self.partial_constructor = None
         self.stopping_criteria = args.stopping_criteria
@@ -202,6 +203,9 @@ class SWAGExperiments:
             self.initialize_classifier(nli=nli)
             self.initialize_swag(copy.deepcopy(self.trainer.model))
             self.create_partial_random_ramping_construction(number_of_modules)
+            if self.last_layer:
+                self.partial_constructor.module_names = ['classifier']
+                self.partial_constructor.select()
             print("Swag initialized")
             get_mem_nvidia()
 
@@ -227,6 +231,9 @@ class SWAGExperiments:
 
             with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
                 pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+            if self.last_layer:
+                break
 
     def sublayer_experiment_full(self, run_number = 0, nli=False):
         results = {}
@@ -326,7 +333,8 @@ def run_random_ramping_experiments(args, nli=False):
                 'val_size': args.val_size,
                 'test_size': args.test_size,
                 'mc_samples': args.mc_samples,
-                'stopping_criteria': args.stopping_criteria}
+                'stopping_criteria': args.stopping_criteria,
+                'last_layer': args.last_layer}
 
     exp_args = Namespace(**exp_args)
     swag_exp = SWAGExperiments(args=exp_args)
@@ -441,7 +449,7 @@ if __name__ == '__main__':
     parser.add_argument('--test_size', type=int, default=1)
     parser.add_argument('--mc_samples', type=int, default=12)
     parser.add_argument('--stopping_criteria', type = str, default='nll')
-
+    parser.add_argument('--last_layer', type = ast.literal_eval, default=False)
     args = parser.parse_args()
 
     if args.experiment == 'random_ramping':
