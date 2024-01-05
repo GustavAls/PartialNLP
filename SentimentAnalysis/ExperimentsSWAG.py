@@ -223,6 +223,7 @@ class SWAGExperiments:
             print("Model evaluated")
             get_mem_nvidia()
             results[number_of_modules] = evaluator
+            results['module_selection'] = copy.deepcopy(self.partial_constructor.module_names)
 
             with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
                 pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
