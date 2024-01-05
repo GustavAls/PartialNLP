@@ -586,6 +586,8 @@ if __name__ == '__main__':
     # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\laplace\operator_norm_ramping"
     # save_path = path
     # num_modules = 2
+    # read_write_all(path, save_path, num_modules)
+    # breakpoint()
 
 
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_prior'
@@ -608,31 +610,26 @@ if __name__ == '__main__':
     # exp_paths = [r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag\sublayer_new",
     #              r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag\random_ramping"]
 
-    # root = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\laplace"
+    # root = r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\rte\laplace"
     # exp_paths = [os.path.join(root, p) for p in os.listdir(root)]
-    #
+
     # exp_paths = [r"C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping"]
-    # # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map"
-    # names = ['Laplace sublayer']
 
-    # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\map"
-    # exp_paths = [r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\laplace\sublayer_full"]
+    # exp_paths = [r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\laplace\nli_sublayer_full"]
 
+    map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\rte\map"
+    # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_map_nll"
+    # map_path = None
 
+    exp_paths = [r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\rte\laplace\nli_last_layer"]
 
+    # root = r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\laplace"
+    # exp_paths = [os.path.join(root, p) for p in os.listdir(root) if 'full' not in p]
+    # names = [os.path.basename(p) for p in exp_paths]
+    names = ['Acc current']
+    # names = ['Min operator norm mlp', 'operator norm nlp', 'Random', 'sub']
 
-    # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\rte\map"
-    # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\map"
-    map_path = None
-
-    # exp_paths = [r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\swag\nli_sublayer"]
-
-    root = r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\rte\laplace"
-    exp_paths = [os.path.join(root, p) for p in os.listdir(root) if 'full' not in p]
-    #
-    names = [os.path.basename(p) for p in exp_paths]
-
-    metrics = ['nll']
+    metrics = ['accuracy_score']
     # name = 'Max operator norm attn'
     # name_col_path = [("Operator Norm", 'tab:brown', r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\swag\nli_operator_norm_ramping_mlp")]
     # name = 'Op norm'
