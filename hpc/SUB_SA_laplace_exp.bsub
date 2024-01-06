@@ -1,9 +1,9 @@
 #!/bin/sh
 ### General options
 ### –- specify queue --
-#BSUB -q gpua100
+#BSUB -q gpuv100
 ### -- set the job Name --
-#BSUB -J laplace_min_mlp[1-5]
+#BSUB -J laplace_mlp_min[1-5]
 ### -- ask for number of cores (default: 1) --
 #BSUB -n 4
 #BSUB -R "span[hosts=1]"
@@ -12,7 +12,7 @@
 ### -- set walltime limit: hh:mm --  maximum 24 hours for GPU-queues right now
 #BSUB -W 24:00
 # request XGB of system-memory
-#BSUB -R "select[gpu80gb]"
+#BSUB -R "select[gpu32gb]"
 #BSUB -R "rusage[mem=6GB]"
 ### -- set the email address --
 # please uncomment the following line and put in your e-mail address,
@@ -44,8 +44,8 @@ echo "Running script..."
 # Send sample job to GPU
 
 ##### ADD INFO HERE ####
-dataset="imdb"
-experiment="operator_norm_ramping_subclass"
+dataset="sst2"
+experiment="operator_norm_ramping"
 
 #suffix=""
 suffix="_mlp_min"
@@ -63,7 +63,6 @@ mkdir -p $dir_outpath
 
    # --subclass "attn" \
    # --minimum_norm True \
-
    # --num_batched_modules 5 \
 
 # Run the training
@@ -76,9 +75,8 @@ python3 SentimentAnalysis/ExperimentsLaplace.py \
     --uninformed_prior False \
     --train_batch_size 16 \
     --eval_batch_size 1 \
-    --subclass "mlp" \
+    --subclass 'mlp' \
     --minimum_norm True \
-
 
 
 if [ $? -eq 0 ]; then

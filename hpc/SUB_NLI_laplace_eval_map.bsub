@@ -3,17 +3,17 @@
 ### –- specify queue --
 #BSUB -q gpuv100
 ### -- set the job Name --
-#BSUB -J swag_rand[1-5]
+#BSUB -J laplace_map_eval
 ### -- ask for number of cores (default: 1) --
 #BSUB -n 4
 #BSUB -R "span[hosts=1]"
 ### -- Select the resources: 1 gpu in exclusive process mode --
 #BSUB -gpu "num=1:mode=exclusive_process"
 ### -- set walltime limit: hh:mm --  maximum 24 hours for GPU-queues right now
-#BSUB -W 24:00
+#BSUB -W 8:00
 # request XGB of system-memory
-#BSUB -R "rusage[mem=6GB]"
 #BSUB -R "select[gpu32gb]"
+#BSUB -R "rusage[mem=6GB]"
 ### -- set the email address --
 # please uncomment the following line and put in your e-mail address,
 # if you want to receive e-mail notifications on a non-default address
@@ -24,8 +24,8 @@
 ##BSUB -N
 ### -- Specify the output and error file. %J is the job-id --
 ### -- -o and -e mean append, -oo and -eo mean overwrite --
-#BSUB -o scratch/s184400/SA_results/out/gpu_%J.out
-#BSUB -e scratch/s184400/SA_results/out/gpu_%J.err
+#BSUB -o scratch/s184400/NLI_results/out/gpu_%J.out
+#BSUB -e scratch/s184400/NLI_results/out/gpu_%J.err
 # -- end of LSF options --
 
 # Activate the python eviorment
@@ -44,31 +44,29 @@ echo "Running script..."
 # Send sample job to GPU
 
 ##### ADD INFO HERE ####
-dataset="sst2"
-experiment="random_ramping"
-
-runs=(0 1 2 3 4)
-run="${runs[$LSB_JOBINDEX - 1]}"
+dataset="mrpc"
 
 # Create some folders
-dir_outpath="scratch/s184400/SA_results/swag/${dataset}/${experiment}/run_${run}"
-dir_datapath="scratch/s184400/SA_results/Init/${dataset}_dataset/run_${run}"
-
+dir_outpath="scratch/s184400/NLI_results/${dataset}_map_nll"
+dir_datapath="scratch/s184400/NLI_results/Init/${dataset}_dataset_nll"
 
 # Make the directories if they don't exist
 mkdir -p $dir_outpath
 
-#--subclass "attn" \
+   # --subclass "attn" \
+   # --minimum_norm True \
+
+   # --num_batched_modules 5 \
 
 # Run the training
-python3 SentimentAnalysis/ExperimentsSWAG.py \
+python3 SentimentAnalysis/ExperimentsLaplace.py \
     --output_path $dir_outpath \
     --data_path $dir_datapath \
-    --experiment $experiment \
     --dataset_name $dataset \
-    --run_number $run \
-    --batch_size 16 \
-    --mc_samples 50 \
+    --train_batch_size 16 \
+    --eval_batch_size 1 \
+    --map_eval True \
+
 
 
 if [ $? -eq 0 ]; then
