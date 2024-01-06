@@ -18,6 +18,7 @@ import numpy as np
 import argparse
 import yaml
 from argparse import Namespace
+from transformers.models.llama import LlamaForSequenceClassification
 import importlib
 # Heavily based on: https://huggingface.co/blog/sentiment-analysis-python, and
 # https://huggingface.co/docs/transformers/tasks/sequence_classification
@@ -172,10 +173,16 @@ class LaplaceExperiments:
         return partial_constructor
 
     def fit_laplace(self, prior_precision=1.0, train_loader = None):
+
         la = lp.Laplace(self.model, 'classification',
-                        subset_of_weights='all',  # Deprecated
-                        hessian_structure='kron',
-                        prior_precision=prior_precision)
+                        hessian_structure='full'
+                        )
+        #
+        # la = lp.Laplace(self.model, 'classification',
+        #                 subset_of_weights='all',  # Deprecated
+        #                 hessian_structure='kron',
+        #                 prior_precision=prior_precision)
+
         train_loader = self.train_loader if train_loader is None else train_loader
         la.fit(train_loader)
         return la
