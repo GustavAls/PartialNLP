@@ -45,7 +45,7 @@ echo "Running script..."
 
 ##### ADD INFO HERE ####
 dataset="rte"
-experiment="sublayer"
+experiment="nli_sublayer"
 
 runs=(0 1 2 3 4)
 run="${runs[$LSB_JOBINDEX - 1]}"
