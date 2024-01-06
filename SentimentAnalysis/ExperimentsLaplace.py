@@ -66,6 +66,7 @@ class LaplaceExperiments:
         self.args = args
         self.module_names = None
         self.include_last_layer = args.include_last_layer
+        self.last_layer_full = args.last_layer_full
         # self.num_modules = [1, 2, 3, 4, 5, 8, 11, 17, 28, 38]
         # Memory consideration
         if args.subclass == 'attn':
@@ -173,15 +174,15 @@ class LaplaceExperiments:
         return partial_constructor
 
     def fit_laplace(self, prior_precision=1.0, train_loader = None):
-
-        la = lp.Laplace(self.model, 'classification',
-                        hessian_structure='full'
-                        )
-        #
-        # la = lp.Laplace(self.model, 'classification',
-        #                 subset_of_weights='all',  # Deprecated
-        #                 hessian_structure='kron',
-        #                 prior_precision=prior_precision)
+        if self.last_layer_full:
+            la = lp.Laplace(self.model, 'classification',
+                            hessian_structure='full'
+                            )
+        else:
+            la = lp.Laplace(self.model, 'classification',
+                            subset_of_weights='all',  # Deprecated
+                            hessian_structure='kron',
+                            prior_precision=prior_precision)
 
         train_loader = self.train_loader if train_loader is None else train_loader
         la.fit(train_loader)
@@ -482,7 +483,8 @@ def run_map_eval(args, nli= False):
                    'val_size': args.val_size,
                    'test_size': args.test_size,
                    'num_batched_modules': args.num_batched_modules,
-                   'include_last_layer': args.include_last_layer
+                   'include_last_layer': args.include_last_layer,
+                   'last_layer_full': args.last_layer_full
                    }
 
         la_args = Namespace(**la_args)
@@ -509,7 +511,8 @@ def run_random_ramping_experiments(args, nli = False):
                'val_size': args.val_size,
                'test_size': args.test_size,
                'num_batched_modules': args.num_batched_modules,
-               'include_last_layer': args.include_last_layer
+               'include_last_layer': args.include_last_layer,
+               'last_layer_full': args.last_layer_full
                }
 
     la_args = Namespace(**la_args)
@@ -537,7 +540,8 @@ def run_max_norm_ramping_experiments(args, nli = False):
                'val_size': args.val_size,
                'test_size': args.test_size,
                'num_batched_modules': args.num_batched_modules,
-               'include_last_layer': args.include_last_layer
+               'include_last_layer': args.include_last_layer,
+               'last_layer_full': args.last_layer_full
                }
 
     la_args = Namespace(**la_args)
@@ -564,7 +568,8 @@ def run_max_norm_ramping_only_subclass(args):
         'val_size': args.val_size,
         'test_size': args.test_size,
         'num_batched_modules': args.num_batched_modules,
-        'include_last_layer': args.include_last_layer
+        'include_last_layer': args.include_last_layer,
+        'last_layer_full': args.last_layer_full
     }
 
     la_args = Namespace(**la_args)
@@ -593,7 +598,8 @@ def run_last_layer(args, run_number = 0, nli = False):
                'val_size': args.val_size,
                'test_size': args.test_size,
                'num_batched_modules': args.num_batched_modules,
-               'include_last_layer': args.include_last_layer
+               'include_last_layer': args.include_last_layer,
+               'last_layer_full': args.last_layer_full
                }
 
     la_args = Namespace(**la_args)
@@ -627,7 +633,8 @@ def run_sublayer_ramping_predefined_modules(args, nli = False):
                'val_size': args.val_size,
                'test_size': args.test_size,
                'num_batched_modules': args.num_batched_modules,
-               'include_last_layer': args.include_last_layer
+               'include_last_layer': args.include_last_layer,
+               'last_layer_full': args.last_layer_full
                }
 
     la_args = Namespace(**la_args)
@@ -654,7 +661,8 @@ def run_sublayer_ramping_full(args, nli=False):
                'val_size': args.val_size,
                'test_size': args.test_size,
                'num_batched_modules': args.num_batched_modules,
-               'include_last_layer': args.include_last_layer
+               'include_last_layer': args.include_last_layer,
+               'last_layer_full': args.last_layer_full
                }
 
     la_args = Namespace(**la_args)
@@ -692,8 +700,8 @@ if __name__ == '__main__':
     parser.add_argument('--minimum_norm', type = ast.literal_eval, default=False)
     parser.add_argument('--module_names_path', type = str, default='')
     parser.add_argument('--include_last_layer', type = ast.literal_eval, default=False)
+    parser.add_argument('--last_layer_full', type = ast.literal_eval, default=False)
     args = parser.parse_args()
-
 
     if args.map_eval:
         if args.dataset_name == 'mrpc' or args.dataset_name == 'qqp' or args.dataset_name == 'qnli' or args.dataset_name == 'rte':
