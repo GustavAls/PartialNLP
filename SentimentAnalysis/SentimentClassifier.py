@@ -155,8 +155,8 @@ class SentimentClassifier:
                                                                  output_path=output_path)
 
         tokenized_train = train_data.map(self.tokenize, batched=True, batch_size=train_bs)
-        tokenized_val = val_data.map(self.tokenize, batched=True, batch_size=eval_bs)
-        # tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
+        # tokenized_val = val_data.map(self.tokenize, batched=True, batch_size=eval_bs)
+        tokenized_test = test_data.map(self.tokenize, batched=True, batch_size=eval_bs)
 
 
         # Defaults if parameters shouldnt be interpreted as ranges
@@ -185,7 +185,7 @@ class SentimentClassifier:
             model=self.model,
             args=training_args,
             train_dataset=tokenized_train,
-            eval_dataset=tokenized_val,
+            eval_dataset=tokenized_test,
             tokenizer=self._tokenizer,
             data_collator=self.collator,
             compute_metrics=self.compute_metrics
