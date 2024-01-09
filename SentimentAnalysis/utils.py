@@ -13,6 +13,7 @@ from transformers import (AutoTokenizer,
                           Trainer)
 from transformers.modeling_outputs import SequenceClassifierOutput
 from transformers.models.distilbert.modeling_distilbert import DistilBertForSequenceClassification
+from sklearn.calibration import CalibrationDisplay, calibration_curve
 import numpy as np
 import argparse
 import yaml
@@ -206,7 +207,13 @@ class MultipleRampingExperiments:
         self.ramping_exp_paths = ramping_exp_paths
         self.ramping_exp_names = ramping_exp_names
         self.ramping_exp_names = self.get_names_from_paths()
-        self.map_path = map_path
+
+        if isinstance(map_path, list):
+            self.map_path = map_path
+        else:
+            self.map_path = [map_path]*len(self.ramping_exp_paths)
+
+
         self.metric = metric
         self.sublayer_ramping = sublayer_ramping
         self.dataset_name = self.get_dataset_name(self.ramping_exp_paths[0])
@@ -221,6 +228,7 @@ class MultipleRampingExperiments:
         self.ramping_experiments = {
             path: RampingExperiments(path, metric=metric) for path in self.ramping_exp_paths
         }
+        self.path_to_map_path = {path: map_p for path, map_p in zip(self.ramping_exp_paths, self.map_path)}
         self.path_to_names = {path: name for path, name in zip(self.ramping_exp_paths, self.ramping_exp_names)}
 
         self.exp_number_to_colors = ['tab:blue', 'tab:orange', 'tab:red',
@@ -235,6 +243,13 @@ class MultipleRampingExperiments:
             'f1': 'F1 score',
             'ECE': 'ECE', 'MCE': 'MCE', 'RMSCE': 'RMSCE'
         }
+
+
+    def calc_temperature_scaling(self, map_path, val_path):
+        ramping_exp = self.ramping_experiments[self.ramping_exp_paths[0]]
+        preds, labels, nll, ece = ramping_exp.apply_temp_scaling(map_path, val_path)
+        return nll.item(), ece.item()
+
 
     def find_best_and_make_bold(self, df, column, num_indices=3):
 
@@ -260,12 +275,12 @@ class MultipleRampingExperiments:
         new_values = []
         for idx, val in enumerate(values):
             if idx == best:
-                format_ = f"\\textbf{'{' + '{:.3f}'.format(val) + '}'}"
+                format_ = f"\\textbf{'{' + '{:.2f}'.format(val) + '}'}"
             else:
                 if np.abs(val) == np.inf:
                     format_ = "-"
                 else:
-                    format_ = '{:.3f}'.format(val)
+                    format_ = '{:.2f}'.format(val)
             new_values.append(format_)
         df[column] = new_values
         return df
@@ -304,7 +319,7 @@ class MultipleRampingExperiments:
                 df_combined = self.find_best_and_make_bold(df_combined, column)
 
         print(r"\begin{table}", "\n", '\centering \n', '\caption{} \n',
-              df_combined.to_latex(index=True, float_format="{:.3f}".format),
+              df_combined.to_latex(index=True, float_format="{:.2f}".format),
               '\label{} \n', r"\end{table}", "\n")
 
     def draw_line_at_best(self, other_path, ax, name=None, color=None, num_modules=None, best_mod=True,
@@ -321,10 +336,11 @@ class MultipleRampingExperiments:
                 modules.append(mod)
                 if self.metric not in ['nll', 'ECE', 'RMSCE', 'MCE']:
                     best_score = np.max(medians)
+                    best_mod = int(modules[np.argmax(medians)])
                 else:
                     best_score = np.min(medians)
+                    best_mod = int(modules[np.argmin(medians)])
 
-                best_mod = int(modules[np.argmin(medians)])
         else:
             scores = df[df['modules'] == num_modules][self.metric]
             best_score = scores.median().item()
@@ -394,7 +410,7 @@ class MultipleRampingExperiments:
 
         dfs = {}
         for key, val in self.ramping_experiments.items():
-            dfs[key] = val.get_df(map_path=self.map_path, has_seen_softmax=True)
+            dfs[key] = val.get_df(map_path=self.path_to_map_path[key], has_seen_softmax=True)
 
         return dfs
 
@@ -516,6 +532,85 @@ class RampingExperiments:
                 run_numbers_and_paths.append((run_number, pp))
 
         return sorted(run_numbers_and_paths)
+
+
+    def get_predictions_from_file(self, file, key = "", softmax = True):
+
+        evaluation = read_file(file)
+        if 'results' in evaluation:
+            results = evaluation['results']
+        else:
+            results = evaluation
+
+        if key:
+            results = results[key]
+        softmax_ = nn.Softmax(dim = -1)
+        predictions = results.predictions
+        if predictions.sum(-1).mean() != 1 and softmax:
+            predictions = softmax_(predictions)
+
+        labels = results.labels
+        return predictions, labels
+
+    def apply_temp_scaling(self, test_path, val_path):
+
+        test_predictions, test_labels = self.get_predictions_from_file(test_path)
+        val_predictions, val_labels = self.get_predictions_from_file(val_path)
+
+        self.train_temperature_scaling(val_predictions, val_labels)
+        softmax_ = nn.Softmax(dim = -1)
+        scaled_test = self.temperature_scaler(test_predictions)
+        nll = self.temperature_scaler.loss_function(scaled_test, test_labels)
+        ece = MulticlassCalibrationError(num_classes=2, n_bins=20)(scaled_test, test_labels)
+        test_predictions = softmax_(self.temperature_scaler(test_predictions)).detach()
+        return test_predictions, test_labels, nll, ece
+
+
+    def train_temperature_scaling(self, predictions, labels):
+        from TemperatureScaler import TemperatureScaler
+        self.temperature_scaler = TemperatureScaler(predictions, labels)
+        self.temperature_scaler.optimize(int(1e3))
+
+    def collect_predictions_and_calculate_calib(self, key, map_path = "", val_path = ""):
+        path = self.ramping_exp_path
+        self.experiment_name = os.path.basename(path)
+
+        run_number_and_paths = self.find_files(path)
+        df = pd.DataFrame()
+        prop_trues, prob_preds = [], []
+        for run_number, path in run_number_and_paths:
+            predictions, labels = self.get_predictions_from_file(path, key = key)
+            prob_true, prob_pred = self.get_calib_(predictions, labels)
+            prop_trues += list(prob_true)
+            prob_preds += list(prob_pred)
+            break
+
+        if map_path:
+            map_path = os.path.join(map_path, f"run_number_{run_number}_map.pkl")
+            if not val_path:
+                predictions_map, labels_map = self.get_predictions_from_file(map_path)
+            else:
+                val_path = os.path.join(val_path, f"run_number_{run_number}_map.pkl")
+                predictions_map, labels_map, nll, ece = self.apply_temp_scaling(map_path, val_path)
+
+            prob_true_map, prob_pred_map = self.get_calib_(predictions_map, labels_map)
+            prob_true_map = list(prob_true_map)
+            prob_pred_map = list(prob_pred_map)
+            output_map = (prob_true_map, prob_pred_map, predictions_map)
+
+        else:
+            output_map = ()
+
+        return (prob_true, prob_pred, predictions[:, 1]), output_map
+
+    def get_calib_(self, predictions, labels):
+        prob_true, prob_pred = calibration_curve(labels, predictions[:, 1], n_bins=20,strategy='quantile')
+        return prob_true, prob_pred
+
+    def plot_calibration(self, prob_true, prob_pred, predictions, ax = None, color = 'tab:orange', label = ""):
+        calib_disp = CalibrationDisplay(prob_true, prob_pred,predictions)
+        calib_disp.plot(ax = ax, color = color, label = label)
+
 
     def get_metrics_from_file(self, file, has_seen_softmax=True):
 
@@ -716,8 +811,11 @@ def make_experiment_to_path_mapping(experiment_path):
             if 'min' not in path:
                 if '_ll' in path:
                     paths['operator_norm_ramping_mlp_ll'] = path
+                elif 'acc' in path:
+                    paths['operator_norm_ramping_mlp_acc'] = path
                 else:
                     paths['operator_norm_ramping_mlp'] = path
+
             else:
                 paths['operator_norm_ramping_mlp_min'] = path
 
@@ -725,6 +823,8 @@ def make_experiment_to_path_mapping(experiment_path):
             if 'min' not in path:
                 if '_ll' in path:
                     paths['operator_norm_ramping_attn_ll'] = path
+                elif 'acc' in path:
+                    paths['operator_norm_ramping_attn_acc'] = path
                 else:
                     paths['operator_norm_ramping_attn'] = path
             else:
@@ -736,7 +836,10 @@ def make_experiment_to_path_mapping(experiment_path):
             else:
                 paths['random_ramping'] = path
         if 'last_layer' in path:
-            paths['last_layer'] = path
+            if 'full' in path:
+                paths['last_layer_full'] = path
+            else:
+                paths['last_layer'] = path
 
         if 'sublayer_full' in path:
             if 'acc' in path:
@@ -755,25 +858,30 @@ def make_experiment_to_path_mapping(experiment_path):
     return new_dict
 
 
-def make_laplace_plot_one(experiment_path, map_path=None, save_path=""):
+def make_laplace_plot_one(experiment_path, map_path=None, save_path="", metric = 'nll'):
     experiment_to_paths = make_experiment_to_path_mapping(experiment_path)
     names = ['Operator norm MLP', 'Operator norm attn', 'Random ramping']
     keys = ['operator_norm_ramping_mlp', 'operator_norm_ramping_attn', 'random_ramping']
     experiment_paths = [experiment_to_paths[key] for key in keys]
 
-    last_layer_path = experiment_to_paths['last_layer']
-    last_layer_name = 'Last layer'
+    last_layer_path = experiment_to_paths['last_layer_full']
+    last_layer_name = 'Last layer full'
 
-    plotter = MultipleRampingExperiments(experiment_paths, names, map_path, method='Laplace')
+    plotter = MultipleRampingExperiments(experiment_paths, names, map_path,metric = metric, method='Laplace')
     fig, ax = plt.subplots(1, 1)
     plotter.plot_all(fig=fig, ax=ax)
     plotter.draw_line_at_best(last_layer_path, ax, last_layer_name, color='tab:green', best_mod=False)
+    last_layer_path = experiment_to_paths['last_layer']
+    last_layer_name = 'Last layer KFAC'
+    plotter.draw_line_at_best(last_layer_path, ax, last_layer_name, color='tab:brown', best_mod=False)
     fig.tight_layout()
     if save_path:
         if map_path is not None:
-            fig.savefig(os.path.join(save_path, 'laplace_plot_one_w_map.pdf'))
+            save_name = f"laplace_plot_three_full_{metric}_w_map.pdf"
+            fig.savefig(os.path.join(save_path, save_name))
         else:
-            fig.savefig(os.path.join(save_path, 'laplace_plot_one.pdf'))
+            save_name = f"laplace_plot_three_full_{metric}.pdf"
+            fig.savefig(os.path.join(save_path, save_name))
 
     plt.show()
 
@@ -850,8 +958,23 @@ def choose_right_ones_speficic(path):
         raise ValueError("Could not decipher path")
     return names, keys
 
+def include_temperature_scaling(plotter, map_path, val_path):
 
-def make_laplace_plot_three_full(experiment_path, map_path=None, save_path=""):
+    runs = [0,1,2,3,4]
+    map_paths, val_paths = [],[]
+    for run in runs:
+        map_paths.append(os.path.join(map_path, f"run_number_{run}_map.pkl"))
+        val_paths.append(os.path.join(val_path, f"run_number_{run}_map.pkl"))
+
+    nlls, eces = [], []
+    for mp, vp in zip(map_paths, val_paths):
+        nll, ece = plotter.calc_temperature_scaling(mp, vp)
+        nlls.append(nll)
+        eces.append(ece)
+
+    return nlls, eces
+
+def make_laplace_plot_three_full(experiment_path, map_path=None, save_path="", metric = 'nll', val_path = None):
     experiment_to_paths = make_experiment_to_path_mapping(experiment_path)
 
     names = ['S-KFAC full model']
@@ -862,7 +985,8 @@ def make_laplace_plot_three_full(experiment_path, map_path=None, save_path=""):
     colors = ['tab:green', 'tab:orange', 'tab:brown']
     names_, keys_ = choose_right_ones_full(experiment_path)
 
-    plotter = MultipleRampingExperiments(exp_paths, names, map_path, sublayer_ramping=True, method='Laplace')
+    plotter = MultipleRampingExperiments(exp_paths, names, map_path if val_path is None else None,
+                                         sublayer_ramping=True, metric = metric, method='Laplace')
 
     fig, ax = plt.subplots(1, 1)
     plotter.plot_all(fig=fig, ax=ax)
@@ -871,12 +995,31 @@ def make_laplace_plot_three_full(experiment_path, map_path=None, save_path=""):
         col = colors[idx]
         plotter.draw_line_at_best(p, ax, name=n, color=col)
 
+    if val_path is not None and map_path is not None:
+        nlls, eces = include_temperature_scaling(plotter, map_path, val_path)
+        best_score = np.median(nlls) if metric == 'nll' else np.median(eces)
+        ybounds = ax.get_ybound()
+        diff = ybounds[1] - ybounds[0]
+        if ybounds[1] < (best_score - diff / 4):
+            y1 = best_score + diff / 3
+            ax.set_ybound(ybounds[0], y1)
+
+        color = 'tab:red'
+        label_name = 'Temp. scaled MAP'
+        ax.axhline(y=best_score, linestyle='--', linewidth=1.5, alpha=0.7,
+                   color='tab:red' if color is None else color, label=label_name)
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
+                  ncol=1, fancybox=True, shadow=True)
+
+
     fig.tight_layout()
     if save_path:
-        if map_path is not None:
-            fig.savefig(os.path.join(save_path, 'laplace_plot_three_full_w_map.pdf'))
+        if map_path is not None and val_path is None:
+            save_name = f"laplace_plot_three_full_{metric}_w_map.pdf"
+            fig.savefig(os.path.join(save_path, save_name))
         else:
-            fig.savefig(os.path.join(save_path, 'laplace_plot_three_full.pdf'))
+            save_name = f"laplace_plot_three_full_{metric}.pdf"
+            fig.savefig(os.path.join(save_path, save_name))
 
     plt.show()
 
@@ -914,6 +1057,30 @@ def make_laplace_plot_three_predefined(experiment_path, map_path=None, save_path
     plt.show()
 
 
+def make_rte_laplace_ll_plot(experiment_path, map_path = None, save_path = ""):
+    experiment_to_paths = make_experiment_to_path_mapping(experiment_path)
+    names = ['Operator norm MLP + LLLA', 'Operator norm attn + LLLA']
+    keys = ['operator_norm_ramping_mlp_ll', 'operator_norm_ramping_attn_ll']
+    experiment_paths = [experiment_to_paths[key] for key in keys]
+
+    last_layer_path = experiment_to_paths['last_layer_full']
+    last_layer_name = 'Last layer full'
+    random_ramping_path = experiment_to_paths['random_ramping']
+    random_ramping_name = 'Random ramping'
+
+    plotter = MultipleRampingExperiments(experiment_paths, names, map_path, method='Laplace')
+    fig, ax = plt.subplots(1, 1)
+    plotter.plot_all(fig=fig, ax=ax)
+    plotter.draw_line_at_best(last_layer_path, ax, last_layer_name, color='tab:green', best_mod=False)
+    plotter.draw_line_at_best(random_ramping_path, ax, random_ramping_name, color = 'tab:brown')
+    fig.tight_layout()
+    if save_path:
+        if map_path is not None:
+            fig.savefig(os.path.join(save_path, 'laplace_plot_ll_rte_w_map.pdf'))
+        else:
+            fig.savefig(os.path.join(save_path, 'laplace_plot_ll_rte.pdf'))
+
+    plt.show()
 def make_plot_one_swag(experiment_path, map_path=None, save_path=""):
     # experiment_to_paths = make_experiment_to_path_mapping(experiment_path)
 
@@ -965,6 +1132,7 @@ def make_plot_two_full_swag(experiment_path, map_path=None, save_path=""):
         plotter.draw_line_at_best(experiment_to_paths[key], ax=ax, name=name, color=colors[idx])
     plotter.draw_line_at_best(full_path, ax=ax, name=full_name, num_modules=38, set_point_instead=True)
     ax.set_xlabel('Percentages')
+    # ax.set_ybound(0.5, 2.5)
     fig.tight_layout()
     if save_path:
         if map_path is not None:
@@ -982,6 +1150,7 @@ def make_plot_two_full_swag(experiment_path, map_path=None, save_path=""):
     for idx, (key, name) in enumerate(zip(other_keys, other_names)):
         plotter.draw_line_at_best(experiment_to_paths[key], ax=ax, name=name, color=colors[idx])
 
+
     if 'mrpc' in experiment_path.lower():
         ax.set_ybound(0.76, 0.95)
     ax.set_xlabel('Percentages')
@@ -995,6 +1164,119 @@ def make_plot_two_full_swag(experiment_path, map_path=None, save_path=""):
     plt.show()
 
 
+
+def find_diff_between_map_and_other(map_path, other_path, data_path, save_path = ""):
+
+    data = pd.read_csv(data_path)
+    map_eval = pickle.load(open(map_path, 'rb'))
+    other_eval = pickle.load(open(other_path, 'rb'))
+    map_eval = map_eval['results']
+    softmax_ = nn.Softmax(dim = 1)
+    best = other_eval['results']['1.0']
+    labels_eval = best.labels
+    labels_map = map_eval.labels
+    map_preds, best_preds = softmax_(map_eval.predictions).numpy(), best.predictions.numpy()
+    labels = labels_map.numpy()
+    labels_data = np.asarray(data['label'])
+    assert np.sum(labels - labels_data) == 0
+
+    _,data_cls_one, diff_one = find_stuff_for_class(labels, map_preds, best_preds, 0, np.array([data['sentence1'], data['sentence2']]))
+    _,data_cls_two, diff_two = find_stuff_for_class(labels, map_preds, best_preds, 1, np.array([data['sentence1'], data['sentence2']]))
+    data_one = pd.DataFrame(data = data_cls_one)
+    data_two = pd.DataFrame(data = data_cls_two)
+    data_one['sentences'] = data_cls_one
+    data_two['sentences'] = data_cls_two
+    if save_path:
+        data_one.to_csv(os.path.join(save_path, 'wrongly_labeled_data_cls_one.txt'), index = False)
+        data_two.to_csv(os.path.join(save_path, 'wrongly_labeled_data_cls_two.txt'), index = False)
+
+
+def find_stuff_for_class(labels, preds_map, preds_la, class_number, data):
+
+    data = data.T
+    class_indices = labels == class_number
+    pred_ma, pred_la, data_cls = preds_map[class_indices], preds_la[class_indices], data[class_indices]
+    wrongly_predicted = np.argwhere(pred_ma.argmax(-1) != class_number)
+    pred_ma = pred_ma[wrongly_predicted.squeeze(1)]
+    pred_la = pred_la[wrongly_predicted.squeeze(1)]
+    data_cls = data_cls[wrongly_predicted.squeeze(1)]
+    diffs = pred_la[:, class_number] - pred_ma[:, class_number]
+    best_ones = np.argsort(diffs)[::-1]
+    diffs = diffs[best_ones]
+    percentages = diffs/np.sum(diffs)*100
+    data_cls = data_cls[best_ones]
+    repeated_sentences = []
+    for perc, sentence in zip(percentages, data_cls):
+        num_rep = int(perc * 30)
+        if num_rep == 0:
+            num_rep = 1
+        repeated_sentences += [sentence]*num_rep
+
+    return repeated_sentences, data_cls, diffs
+
+
+def make_acc_swag_plots_across_datasets(experiment_paths, map_paths, save_path = ""):
+
+    rte_path = experiment_paths[0]
+    ss2_path = experiment_paths[1]
+    mrpc_path = experiment_paths[2]
+
+    rte_map = map_paths[0]
+    sst2_map = map_paths[1]
+    mrpc_map = map_paths[2]
+
+    experiment_to_paths_rte = make_experiment_to_path_mapping(rte_path)
+    experiment_to_paths_sst2 = make_experiment_to_path_mapping(ss2_path)
+    experiment_to_paths_mrpc = make_experiment_to_path_mapping(mrpc_path)
+
+    names = ['Max operator norm MLP RTE','Max operator norm attn. SST2','Max operator norm MLP MRPC']
+    keys = ['operator_norm_ramping_mlp_acc', 'operator_norm_ramping_attn_acc', 'operator_norm_ramping_mlp_acc']
+
+    exp_paths = [experiment_to_paths_rte[keys[0]],experiment_to_paths_sst2[keys[1]],experiment_to_paths_mrpc[keys[2]]]
+    plotter = MultipleRampingExperiments(exp_paths, names, [rte_map, sst2_map, mrpc_map], metric = 'nll', method='SWAG')
+    fig, ax = plt.subplots(1,1)
+    plotter.plot_all(fig, ax)
+    ax.set_title('SWAG w. accuracy')
+    fig.tight_layout()
+    if save_path:
+        fig.savefig(os.path.join(save_path, 'swag_across_datasets_acc_trained_NLL.pdf'), format = 'pdf')
+    plt.show()
+    plotter = MultipleRampingExperiments(exp_paths, names, [rte_map, sst2_map, mrpc_map], metric='accuracy_score', method='SWAG')
+    fig, ax = plt.subplots(1, 1)
+    plotter.plot_all(fig, ax)
+    ax.set_title('SWAG w. accuracy')
+    fig.tight_layout()
+    if save_path:
+        fig.savefig(os.path.join(save_path, 'swag_across_datasets_acc_trained_accuracy.pdf'), format='pdf')
+    plt.show()
+
+    breakpoint()
+
+
+def write_ECE_plot_for_dataset(experiment_path, map_path):
+
+    last_p_name = os.path.basename(experiment_path)
+    if 'laplace' in last_p_name.lower() or 'swag' in last_p_name.lower():
+        experiment_path = os.path.dirname(experiment_path)
+
+    add_paths = os.listdir(experiment_path)
+    laplace_path, swag_path = experiment_path, experiment_path
+    for p in add_paths:
+        if 'laplace' in p.lower():
+            laplace_path = os.path.join(laplace_path, p)
+        if 'swag' in p.lower():
+            swag_path = os.path.join(swag_path, p)
+
+    laplace_paths = [os.path.join(laplace_path,p) for p in os.listdir(laplace_path) if 'sublayer' not in p.lower()]
+    swag_paths = [os.path.join(swag_path, p) for p in os.listdir(swag_path) if 'sublayer' not in p.lower()]
+
+    plotter_laplace = MultipleRampingExperiments(laplace_paths, map_path=map_path,metric='ECE')
+    plotter_swag = MultipleRampingExperiments(swag_paths, map_path=map_path, metric='ECE')
+    plotter_laplace.write_latex_table(bold_direction='method')
+    plotter_swag.write_latex_table(bold_direction='method')
+
+
+
 if __name__ == '__main__':
 
     # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\laplace\operator_norm_ramping"
@@ -1005,10 +1287,74 @@ if __name__ == '__main__':
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\random_ramping'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\SWAG\random_ramping'
 
-    imdb_map_path = r"C:\Users\45292\Documents\Master\NLP\SST2\map"
-    experiment_path = r"C:\Users\45292\Documents\Master\NLP\SST2\swag"
-    save_path = r'C:\Users\45292\Documents\Master\NLP\SST2\Figures\SWAG'
-    # exp_paths = [r"C:\Users\45292\Documents\Master\NLP\MRPC\swag\nli_random_ramping_ll"]
+    map_path = r"C:\Users\45292\Documents\Master\NLP\RTE\map\run_number_0_map.pkl"
+    other_path = r"C:\Users\45292\Documents\Master\NLP\RTE\laplace\nli_sublayer_full\run_0\run_number_0.pkl"
+    data_path =  r"C:\Users\45292\Documents\Master\NLP\RTE\Data\test_data.csv"
+    find_diff_between_map_and_other(map_path, other_path, data_path)
+
+    breakpoint()
+    # save_path = r'C:\Users\45292\Documents\Master\NLP\SST2\Figures\Examples\Data'
+    # find_diff_between_map_and_other(map_path, other_path, data_path, save_path)
+    # breakpoint()
+    # imdb_map_path = [r"C:\Users\45292\Documents\Master\NLP\RTE\map",
+    #                  r"C:\Users\45292\Documents\Master\NLP\SST2\map",
+    #                  r"C:\Users\45292\Documents\Master\NLP\MRPC\map"]
+    # experiment_path = [r"C:\Users\45292\Documents\Master\NLP\RTE\swag",
+    #                    r"C:\Users\45292\Documents\Master\NLP\SST2\swag",
+    #                    r"C:\Users\45292\Documents\Master\NLP\MRPC\swag"]
+    #
+    # save_path = r'C:\Users\45292\Documents\Master\NLP\Overall Figures'
+    # make_acc_swag_plots_across_datasets(experiment_paths=experiment_path, map_paths=imdb_map_path,
+    #                                     save_path= save_path)
+    # breakpoint()
+    # experiment_path = r"C:\Users\45292\Documents\Master\NLP\RTE\laplace"
+    # map_path = r"C:\Users\45292\Documents\Master\NLP\RTE\map"
+    # save_path = r"C:\Users\45292\Documents\Master\NLP\RTE\Figures\Laplace"
+    # val_path =  r"C:\Users\45292\Documents\Master\NLP\RTE\map_val"
+    # make_laplace_plot_three_full(experiment_path, map_path, val_path=val_path, metric='ECE', save_path = save_path)
+    # breakpoint()
+
+
+    fig, ax = plt.subplots(1,1)
+    plotter = RampingExperiments(r"C:\Users\45292\Documents\Master\NLP\MRPC\laplace\nli_sublayer_full")
+    map_path = r"C:\Users\45292\Documents\Master\NLP\MRPC\map"
+    val_path =r"C:\Users\45292\Documents\Master\NLP\MRPC\map_val"
+    save_path = r"C:\Users\45292\Documents\Master\NLP\MRPC\Figures\Laplace\calibration_curves.pdf"
+    estimator, map = plotter.collect_predictions_and_calculate_calib(key = '1.0', map_path=map_path)
+    estimator, temp_map = plotter.collect_predictions_and_calculate_calib(key = '1.0', map_path = map_path, val_path=val_path)
+    plotter.plot_calibration(*estimator, ax = ax, color = 'tab:orange', label = 'S-KFAC 0.01 pct')
+    plotter.plot_calibration(*map, ax = ax, color = 'tab:blue', label = 'MAP')
+    plotter.plot_calibration(*temp_map, ax = ax, color = 'tab:brown', label = 'Temp. scaled MAP')
+    ax.set_ybound(0, 1.2)
+    ax.legend()
+    ax.set_title('MRPC Calibration Curves')
+    fig.savefig(save_path, format = 'pdf')
+    plt.show()
+    breakpoint()
+
+    save_path = r'C:\Users\45292\Documents\Master\NLP\RTE\Figures\Swag'
+    exp_paths = [r"C:\Users\45292\Documents\Master\NLP\SST2\laplace\last_layer_full",
+                 r"C:\Users\45292\Documents\Master\NLP\SST2\laplace\last_layer"]
+
+    experiment_path = r"C:\Users\45292\Documents\Master\NLP\RTE"
+    map_path = r"C:\Users\45292\Documents\Master\NLP\RTE\map"
+    save_path = r"C:\Users\45292\Documents\Master\NLP\RTE\Figures\Laplace"
+
+    write_ECE_plot_for_dataset(experiment_path, map_path=None)
+    breakpoint()
+    # plotter = MultipleRampingExperiments(ramping_exp_paths=exp_paths,
+    #                                      ramping_exp_names = ['last layer full', 'normal'], method = 'Laplace')
+    # fig, ax = plt.subplots(1,1)
+    # plotter.plot_all(fig, ax)
+    # plt.show()
+    # make_rte_laplace_ll_plot()
+    # make_plot_one_swag(experiment_path, map_path = map_path, save_path=save_path)
+    make_laplace_plot_three_full(experiment_path,map_path=map_path, metric='ECE', save_path=save_path)
+    # make_laplace_plot_one(experiment_path,map_path=map_path, metric = 'ECE')
+
+    breakpoint()
+    make_plot_two_full_swag(experiment_path,map_path=map_path, save_path=save_path)
+    breakpoint()
     # plotter.write_latex_table(bold_direction='method')
     # breakpoint()
     # make_laplace_plot_one(experiment_path, save_path=r'C:\Users\45292\Documents\Master\NLP\RTE\Figures\Laplace')

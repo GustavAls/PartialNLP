@@ -53,12 +53,30 @@ class T_SNEPlotter:
 
     def plot_grid(self):
         down = self.downsampled.copy()
+
         down = down + down.min(0)
         down = down / down.max(0)
-        grid_x, grid_y = np.mgrid[0:1:100j, 0:1:200j]
+        max_x, max_y = down.max(0)
+        min_x, min_y = down.min(0)
 
-        grid_z2 = griddata(down, self.predictions, (grid_x, grid_y), method='cubic')
-        plt.imshow(grid_z2.T, extent=(0, 1, 0, 1), origin='lower')
+        grid_x, grid_y = np.mgrid[min_x:max_x:100j, min_y:max_y:200j]
+        fig, ax = plt.subplots(1,1)
+
+        grid_z2 = griddata(down, self.predictions[:,0], (grid_x, grid_y), method='cubic', fill_value=0)
+        grid_z2_label_1 = griddata(down, self.predictions[:, 1], (grid_x, grid_y), method='cubic', fill_value=0)
+        grid_z2_label_1 /= np.max(grid_z2_label_1)
+        grid_z2 /= np.max(grid_z2)
+        showing = (grid_z2 - grid_z2_label_1) + 1
+        ax.imshow(showing, vmin=showing.min(),
+                      vmax=showing.max(), cmap='seismic')
+
+        # ax.imshow(grid_z2_label_1, vmin=0, vmax=grid_z2_label_1.max(), cmap = 'Blues')
+        fig.show()
+        breakpoint()
+        # plt.imshow(grid_z2, extent=(0, 1, 0, 1), origin='lower')
+
+        plt.show()
+        plt.imshow(grid_z2,extent=(0, 1, 0, 1), origin='lower')
         plt.show()
     def make_simulation(self):
         mean_1 = np.random.normal(0,1, (50, ))
@@ -159,10 +177,6 @@ class MommyPlotter:
 
 
 if __name__ == '__main__':
-    plotter = MommyPlotter()
-    plotter.get_other_for_all()
-    breakpoint(
 
-    )
     plotter = T_SNEPlotter()
-    plotter.plot()
+    plotter.plot_grid()
