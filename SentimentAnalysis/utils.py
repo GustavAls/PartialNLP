@@ -1282,6 +1282,8 @@ if __name__ == '__main__':
     # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\laplace\operator_norm_ramping"
     # save_path = path
     # num_modules = 2
+    # read_write_all(path, save_path, num_modules)
+    # breakpoint()
 
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping_prior'
     # path = r'C:\Users\45292\Documents\Master\SentimentClassification\Laplace\random_ramping'
@@ -1381,34 +1383,20 @@ if __name__ == '__main__':
     # exp_paths = [r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag\sublayer_new",
     #              r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag\random_ramping"]
 
-    # root = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\laplace"
+    # root = r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\rte\laplace"
     # exp_paths = [os.path.join(root, p) for p in os.listdir(root)]
-    #
-    # exp_paths = [r"C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping"]
-    # # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map"
-    # names = ['Laplace sublayer']
 
-    # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\map"
-    # exp_paths = [r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\laplace\sublayer_full"]
+    # exp_paths = [r"C:\Users\45292\Documents\Master\SentimentClassification\Laplace\operator_norm_ramping"]
 
     # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map"
 
-    # names = ['sub','rand']
-    exp_paths = [r"C:\Users\45292\Documents\Master\NLI\RTE\swag\nli_operator_norm_ramping_attn",
-                 r"C:\Users\45292\Documents\Master\NLI\RTE\swag\nli_operator_norm_ramping_mlp",
-                 r"C:\Users\45292\Documents\Master\NLI\RTE\swag\nli_random_ramping"]
+    metrics = ['accuracy_score']
+    # name = 'Max operator norm attn'
+    # name_col_path = [("Operator Norm", 'tab:brown', r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\swag\nli_operator_norm_ramping_mlp")]
+    # name = 'Op norm'
 
-    # exp_paths = [r"C:\Users\45292\Documents\Master\NLI\RTE\swag\nli_sublayer"]
-
-    names = ['Max operator norm attn', 'Max operator norm mlp', 'Random ramping']
-    metrics = ['nll', 'accuracy_score']
-    save_path = r'C:\Users\45292\Documents\Master\SentimentClassification\SST2_Final\Figures Laplace\sublayer'
-    name = 'Max operator norm mlp'
-    other_path = r"C:\Users\45292\Documents\Master\NLI\RTE\laplace\nli_operator_norm_ramping"
-    other_path_two = r"C:\Users\45292\Documents\Master\NLI\RTE\laplace\nli_sublayer_full"
-    name_two = 'Sublayer full model'
     for metric in metrics:
-        plotter = MultipleRampingExperiments(exp_paths, names, map_path=imdb_map_path, metric=metric, method='SWAG',
+        plotter = MultipleRampingExperiments(exp_paths, names, map_path=map_path, metric=metric, method='Laplace',
                                              sublayer_ramping=False)
         # fig, ax = plt.subplots(1,1)
         # plotter.plot_all(fig, ax)
