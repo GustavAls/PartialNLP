@@ -411,6 +411,7 @@ class LaplaceExperiments:
             results = pickle.load(open(os.path.join(save_path, f"run_number_{run_number}.pkl"), 'rb'))
 
         for percentile in remaining_percentiles:
+            print(f"Running percentile {percentile} out of {self.percentiles}")
             self.create_partial_sublayer_full_model(percentile=percentile)
 
             la, prior = self.optimize_prior_precision(self.args.num_optim_steps, use_uninformed=use_uninformed)
