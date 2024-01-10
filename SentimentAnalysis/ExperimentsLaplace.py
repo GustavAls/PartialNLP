@@ -674,7 +674,7 @@ def run_sublayer_ramping_full(args, nli=False):
 
     la_args = Namespace(**la_args)
     lap_exp = LaplaceExperiments(args=la_args, nli=nli)
-    lap_exp.run_sublayer_ramping_experiment(args.run_number, args.uninformed_prior, args.percentile_ramping)
+    lap_exp.run_sublayer_ramping_experiment(args.run_number, args.uninformed_prior, args.percentile_range)
 
 def sequential_last_layer(args, nli = False):
     num_runs = 5
