@@ -397,14 +397,20 @@ class LaplaceExperiments:
             with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
                 pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-    def run_sublayer_ramping_experiment(self, run_number, use_uninformed=True):
+    def run_sublayer_ramping_experiment(self, run_number, use_uninformed=True, predefined_percentiles = False):
         print("Running sublayer full ramping experiment on ", self.default_args.dataset_name)
         results = {'results': {}, 'percentile': {}}
         save_path = self.args.output_path
         self.ensure_path_existence(save_path)
         # This is the percentiles subsampled in input and output dimensions of each module, which means
         # that the total number of parameters sampled scales quadratically with self.percentiles
-        self.percentiles = np.linspace(1, 30, 6, endpoint=True)
+
+        if predefined_percentiles:
+            self.percentiles = np.linspace(predefined_percentiles[0],
+                                           predefined_percentiles[1],
+                                           predefined_percentiles[2], endpoint=True)
+        else:
+            self.percentiles = np.linspace(1, 30, 6, endpoint=True)
         remaining_percentiles = self.get_num_remaining_percentiles(save_path, run_number)
 
         if len(remaining_percentiles) < len(self.percentiles):
@@ -668,12 +674,30 @@ def run_sublayer_ramping_full(args, nli=False):
 
     la_args = Namespace(**la_args)
     lap_exp = LaplaceExperiments(args=la_args, nli=nli)
-    lap_exp.run_sublayer_ramping_experiment(args.run_number, args.uninformed_prior)
+    lap_exp.run_sublayer_ramping_experiment(args.run_number, args.uninformed_prior, args.percentile_ramping)
 
 def sequential_last_layer(args, nli = False):
     num_runs = 5
     for run in range(num_runs):
         run_last_layer(args, run, nli=nli)
+
+def parse_percentile_ramping_specification(args):
+
+    if args.percentile_range:
+        splitted = args.percentile_range.split()
+        if len(splitted) != 3:
+            raise ValueError("--percentile_range must be of the format 'start end num_points'")
+
+        try:
+            start = int(splitted[0])
+            end = int(splitted[1])
+            num_points = int(splitted[2])
+        except:
+            raise ValueError("each element in --percentile_range must be castable to integer")
+
+        args.percentile_range = [start, end, num_points]
+
+    return args
 
 
 
@@ -702,8 +726,10 @@ if __name__ == '__main__':
     parser.add_argument('--module_names_path', type = str, default='')
     parser.add_argument('--include_last_layer', type = ast.literal_eval, default=False)
     parser.add_argument('--last_layer_full', type = ast.literal_eval, default=False)
+    parser.add_argument('--percentile_range', type = str, default = "")
     args = parser.parse_args()
 
+    args = parse_percentile_ramping_specification(args)
     if args.map_eval:
         if args.dataset_name == 'mrpc' or args.dataset_name == 'qqp' or args.dataset_name == 'qnli' or args.dataset_name == 'rte':
             run_map_eval(args, nli=True)

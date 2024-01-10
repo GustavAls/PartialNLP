@@ -128,7 +128,6 @@ class PartialConstructor:
                 data = param.data.clone()
                 highest_in, highest_out = self.find_maximum_input_and_output_neurons(data, percentile)
                 param_indices.append([highest_in, highest_out])
-
                 subnet_ind_in = torch.zeros_like(data)
                 subnet_ind_out = torch.zeros_like(data)
                 subnet_ind_in[:,highest_in] = 1

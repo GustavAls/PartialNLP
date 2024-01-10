@@ -1204,6 +1204,33 @@ def find_diff_between_map_and_other(map_path, other_path, data_path, save_path =
         data_two.to_csv(os.path.join(save_path, 'wrongly_labeled_data_cls_two.txt'), index = False)
 
 
+def find_diff_between_map_and_other_swag(map_path, other_path, data_path):
+    data = pd.read_csv(data_path)
+    map_eval = pickle.load(open(map_path, 'rb'))
+    other_eval = pickle.load(open(other_path, 'rb'))
+    map_eval = map_eval['results']
+    softmax_ = nn.Softmax(dim=1)
+    best = other_eval[5]
+    labels_map = map_eval.labels
+    map_preds, best_preds = softmax_(map_eval.predictions).numpy(), best.predictions.numpy()
+    labels = labels_map.numpy()
+    labels_data = np.asarray(data['label'])
+    assert np.sum(labels - labels_data) == 0
+
+    data_cls = find_stuff_for_class_swag(labels, map_preds, best_preds, 0, np.array([data['sentence1'], data['sentence2']]))
+    return data_cls
+def find_stuff_for_class_swag(labels, preds_map, preds_swa, class_number, data):
+
+    data = data.T
+    correct_other = list(np.argwhere(preds_swa.argmax(-1) == labels).flatten())
+    correct_map = list(np.argwhere(preds_map.argmax(-1) == labels).flatten())
+    disjoint =  list(set(correct_other) - set(correct_map))
+    disjoint_labels = labels[disjoint]
+    highest_scoring = np.argsort(preds_swa[disjoint, disjoint_labels])[::-1]
+    data_cls = data[disjoint][highest_scoring]
+    return data_cls
+
+
 def find_stuff_for_class(labels, preds_map, preds_la, class_number, data):
 
     data = data.T
