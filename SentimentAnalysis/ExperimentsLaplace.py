@@ -691,9 +691,9 @@ def parse_percentile_ramping_specification(args):
         try:
             start = float(splitted[0])
             end = float(splitted[1])
-            num_points = float(splitted[2])
+            num_points = int(splitted[2])
         except:
-            raise ValueError("each element in --percentile_range must be castable to float")
+            raise ValueError("each element in --percentile_range must be castable to float, except last which is int")
 
         args.percentile_range = [start, end, num_points]
 

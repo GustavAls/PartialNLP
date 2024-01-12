@@ -322,6 +322,26 @@ class MultipleRampingExperiments:
               df_combined.to_latex(index=True, float_format="{:.2f}".format),
               '\label{} \n', r"\end{table}", "\n")
 
+
+    def find_best_measure(self, other_path):
+        ramping_experiment = RampingExperiments(other_path, metric=self.metric)
+        results = ramping_experiment.get_metrics_from_all_files(has_seen_softmax=True)
+
+        df = ramping_experiment.get_specific_results(results, self.metric)
+        best_score, best_mod = None, None
+        medians, modules = [], []
+        for mod in df['modules'].unique():
+            scores = df[df['modules'] == mod][self.metric]
+            medians.append(scores.median())
+            modules.append(mod)
+            if self.metric not in ['nll', 'ECE', 'RMSCE', 'MCE']:
+                best_score = np.max(medians)
+                best_mod = int(modules[np.argmax(medians)])
+            else:
+                best_score = np.min(medians)
+                best_mod = int(modules[np.argmin(medians)])
+
+        return best_score, best_mod   # Not really sure I need to return best_mod here, but it never hurts
     def draw_line_at_best(self, other_path, ax, name=None, color=None, num_modules=None, best_mod=True,
                           set_point_instead=False, sublayer_ramping=False):
 
@@ -1269,6 +1289,165 @@ def find_stuff_for_class(labels, preds_map, preds_la, class_number, data):
     return repeated_sentences, data_cls, diffs
 
 
+def make_main_plot_specific_experiment(ax, experiment_path, counter, metric = 'nll'):
+    """
+
+    Hello Gustav, welcome to the madness.. this should give you a helping hand
+    Also this is a helper function, the main function is juuuust below
+    :param ax: Axes object meant for plotting in fig, ax = plt.subplots(2, 3) for ECE below and NLL above,
+                This is supposed to be an indexed ax object i.e ax[i,j] so functions like ax.plot() are accessible
+    :param experiment_path: Path to experiments, either Laplace or SWAG paths, names are read automatically
+    :param counter: Counter to how many experiments have already been plotted so they aren't positioned on top of
+                    eachother
+    :return: Updated ax object, and counter + number of newly plotted experiments: I.e the function is designed for
+            an outer loop
+    """
+
+    if 'laplace' in experiment_path.lower():
+        experiment_name_prefix = 'LA'
+        keys = ['operator_norm_ramping_mlp', 'operator_norm_ramping_attn', 'random_ramping', 'sublayer_full']
+        names = ['Operator norm LA', 'Operator norm attn. LA', 'Random ramping LA', 'S-KFAC LA']
+        point_types = ['o', 'v', '1', 's']
+        colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red']
+    elif 'swag' in experiment_path.lower():
+        experiment_name_prefix = 'SWAG'
+        keys = ['operator_norm_ramping_mlp', 'operator_norm_ramping_attn', 'random_ramping', 'sublayer_full']
+        names = ['Operator norm SWAG', 'Operator norm attn. SWAG', 'Random ramping SWAG', 'Sublayer l1 SWAG']
+        point_types = ["P", '*', '+', 'd']
+        colors = ['tab:purple', 'tab:brown', 'tab:pink', 'tab:olive']
+    else:
+        raise ValueError("Either 'laplace' or 'swag' must be in experiment_path.lower() to ascertain which experiments"
+                         "we are working on you dumb fuck")
+
+    def plot_point(ax, x_val, y_val, marker, color):
+        ax.plot(x_val, y_val, marker = marker, color = color)
+        return ax
+
+    experiment_to_paths = make_experiment_to_path_mapping(experiment_path)
+    experiment_paths = [experiment_to_paths[key] for key in keys]
+
+    plotter = MultipleRampingExperiments(experiment_paths, metric=metric)
+
+    for path, name, point, color in zip(experiment_paths, names, point_types, colors):
+        best_val, best_mod = plotter.find_best_measure(path)
+        plot_point(ax, counter, best_val, point, color)
+        counter += 1
+
+    return ax, counter
+
+
+def make_main_plot(experiment_paths, save_path = ""):
+
+    """
+    Hello again Mr Gustav, I am now on my second beer, so the voices are finally starting to quite down
+    This is the main function for plotting the things we talked about so have fun
+    :param experiment_paths: list[str, str,...]  containing the overall experiment paths for SST2, RTE, and MRPC
+            They need not be ordered in that way. It is assumed that both SWAG and Laplace experiments are in subfolders
+            to each of those paths for the respective experiments
+    :param save_path: str/os.path_like path to the directory you would like to save the figure: file will be saved as pdf
+    :return: TBD
+    """
+
+    def extract_laplace_and_swag(experiment_path):
+        if any(('swag' in experiment_path, 'laplace' in experiment_path)):
+            raise ValueError("This is a function that is supposed to plot for both experiments you dumb fucker")
+
+        laplace_path = [os.path.join(experiment_path, p)
+                        for p in os.listdir(experiment_path) if 'laplace' in p.lower()][0]
+        swag_path = [os.path.join(experiment_path, p) for p in os.listdir(experiment_path) if 'swag' in p.lower()][0]
+        return laplace_path, swag_path
+
+    dataset_name_to_swag_la_paths = {}
+    for path in experiment_paths:
+        la_path, swa_path = extract_laplace_and_swag(path)
+        if 'sst2' in path.lower():
+            dataset_name_to_swag_la_paths['SST2'] = {'LA': la_path, 'swa': swa_path}
+        elif 'mrpc' in path.lower():
+            dataset_name_to_swag_la_paths['MRPC'] = {'LA': la_path, 'swa': swa_path}
+        elif 'rte' in path.lower():
+            dataset_name_to_swag_la_paths['RTE'] = {'LA': la_path, 'swa': swa_path}
+        else:
+            raise ValueError("Why are you giving paths that dont contain the dataset name, are you out of your mind???")
+
+    def order_stuff_in_plot(ax, metric, column):
+        """
+        Helper function to make the ax[i,j] behave themselves
+        """
+        ax.get_xaxis().set_visible(False)  # there is no reason to have an unordered axis
+        y_label = 'NLL' if metric == 'nll' else 'ECE'
+        if column == 0:
+            ax.set_ylabel(y_label)
+        ax.grid(True)
+        return ax
+
+
+
+    fig, ax = plt.subplots(2, 3)   # [NLL x ECE] [SST2 MRPC RTE]^T  if you enjoy some outer products :))
+    metrics = ['nll', 'ECE']
+    datasets = ['SST2', 'MRPC', 'RTE']
+
+    """
+    I think we need larger markersizes, that is changed in make_main_plot_specific_experiment()
+    """
+    for i, metric in enumerate(metrics):
+        for j, dataset in enumerate(datasets):
+            counter = 0
+            la_path, swa_path = dataset_name_to_swag_la_paths[dataset]['LA'], dataset_name_to_swag_la_paths[dataset]['swa']
+            ax[i, j], counter = make_main_plot_specific_experiment(ax[i, j], la_path, counter, metric)
+            ax[i, j], counter = make_main_plot_specific_experiment(ax[i, j], swa_path, counter, metric)
+            ax[i, j] = order_stuff_in_plot(ax[i,j], metric, j)
+
+    """
+    
+    The following numbers need to be adjusted to make sure numbers are visible
+    """
+    plt.subplots_adjust(left=0.2,
+                        bottom=0.1,
+                        right=0.9,
+                        top=0.9,
+                        wspace=0.4,
+                        hspace=0.5)
+
+    lines = []
+    labels = []
+    for ax in fig.axes:
+        Line, Label = ax.get_legend_handles_labels()
+        # print(Label)
+        lines.extend(Line)
+        labels.extend(Label)
+        break
+
+
+    """
+    Something is not really working with the legends, see 
+    https://www.geeksforgeeks.org/how-to-create-a-single-legend-for-all-subplots-in-matplotlib/
+    for how i got the inspiration
+    """
+    fig.legend(lines, labels, loc='upper center')
+    fig.legend()
+
+    if save_path:
+        if os.path.exists(save_path):
+            fig.savefig(os.path.join(save_path, 'swag_la_comparison_plot_all_datasets.pdf'))
+        else:
+            raise ValueError("You fucked up again, and provided a save path that doesn't even exist on your computer")
+
+    plt.show()
+
+
+def find_and_dataset_paths_and_plot(overall_path):
+
+    """
+    This is a function primarily for me because it really requires that you have put all your stuff
+    in the same order as me
+    :param overall_path:
+    :return:
+    """
+
+    names = ['MRPC', 'SST2', 'RTE']
+    paths = [os.path.join(overall_path, name) for name in names]
+    make_main_plot(experiment_paths=paths)
+
 def make_acc_swag_plots_across_datasets(experiment_paths, map_paths, save_path = ""):
 
     rte_path = experiment_paths[0]
@@ -1307,7 +1486,7 @@ def make_acc_swag_plots_across_datasets(experiment_paths, map_paths, save_path =
     breakpoint()
 
 
-def write_ECE_plot_for_dataset(experiment_path, map_path):
+def write_ECE_plot_for_dataset(experiment_path, map_path, metric = 'ECE'):
 
     last_p_name = os.path.basename(experiment_path)
     if 'laplace' in last_p_name.lower() or 'swag' in last_p_name.lower():
@@ -1324,8 +1503,8 @@ def write_ECE_plot_for_dataset(experiment_path, map_path):
     laplace_paths = [os.path.join(laplace_path,p) for p in os.listdir(laplace_path) if 'sublayer' not in p.lower()]
     swag_paths = [os.path.join(swag_path, p) for p in os.listdir(swag_path) if 'sublayer' not in p.lower()]
 
-    plotter_laplace = MultipleRampingExperiments(laplace_paths, map_path=map_path,metric='ECE')
-    plotter_swag = MultipleRampingExperiments(swag_paths, map_path=map_path, metric='ECE')
+    plotter_laplace = MultipleRampingExperiments(laplace_paths, map_path=map_path,metric=metric)
+    plotter_swag = MultipleRampingExperiments(swag_paths, map_path=map_path, metric=metric)
     plotter_laplace.write_latex_table(bold_direction='method')
     plotter_swag.write_latex_table(bold_direction='method')
 
@@ -1350,6 +1529,12 @@ def write_map_metrics():
 
 
 if __name__ == '__main__':
+
+
+
+    overall_path = r'C:\Users\45292\Documents\Master\NLP'
+    find_and_dataset_paths_and_plot(overall_path)
+    breakpoint()
 
     # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\laplace\operator_norm_ramping"
     # save_path = path
@@ -1414,7 +1599,9 @@ if __name__ == '__main__':
     # map_path = r"C:\Users\45292\Documents\Master\NLP\RTE\map"
     # save_path = r"C:\Users\45292\Documents\Master\NLP\RTE\Figures\Laplace"
     #
-    # write_ECE_plot_for_dataset(experiment_path, map_path=None)
+    experiment_path = r'C:\Users\45292\Documents\Master\NLP\SST2\laplace'
+    write_ECE_plot_for_dataset(experiment_path, map_path=None, metric='nll')
+    breakpoint()
     # breakpoint()
     # # plotter = MultipleRampingExperiments(ramping_exp_paths=exp_paths,
     # #                                      ramping_exp_names = ['last layer full', 'normal'], method = 'Laplace')
