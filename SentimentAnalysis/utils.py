@@ -933,7 +933,7 @@ def make_laplace_plot_two(experiment_path, map_path=None, save_path=""):
 
 
 def choose_right_ones_full(path):
-    experiment_to_paths = make_experiment_to_path_mapping(experiment_path)
+    # experiment_to_paths = make_experiment_to_path_mapping(experiment_path)
     if 'RTE' in path:
         names = ['Random ramping', 'Last layer']
         keys = ['random_ramping', 'last_layer']
@@ -959,7 +959,7 @@ def choose_right_ones_full(path):
 
 
 def choose_right_ones_speficic(path):
-    experiment_to_paths = make_experiment_to_path_mapping(experiment_path)
+    # experiment_to_paths = make_experiment_to_path_mapping(experiment_path)
 
     if 'RTE' in path:
         names = ['Max operator norm attn. + LL', 'S-KFAC full model', 'Last layer']
@@ -1331,14 +1331,21 @@ def write_ECE_plot_for_dataset(experiment_path, map_path):
 
 
 def write_map_metrics():
-    ###
-    map_paths = [("MRPC", r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\mrpc_map_acc_100"),
-                 ("RTE", r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\rte\map"),
-                 ("SST2", r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\map")]
+
+    acc_map_paths = [("SST2", r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\map"),
+                     ("MRPC", r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\mrpc_map_acc_100"),
+                     ("RTE", r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\rte\map"),
+                     ("IMDb", r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb_map_acc_100")]
+    nll_map_paths = [("SST2", r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\map"),
+                     ("MRPC", r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\map_nll"),
+                     ("RTE", r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\rte\map_nll"),
+                     ("IMDb", r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map")]
     metrics = ['nll', 'accuracy_score', 'ECE']
     plotter = RampingExperiments("")
-    map_metrics = plotter.get_map_metrics(map_paths=map_paths, metrics=metrics)
-    print(map_metrics)
+    acc_map_metrics = plotter.get_map_metrics(map_paths=acc_map_paths, metrics=metrics)
+    nll_map_metrics = plotter.get_map_metrics(map_paths=nll_map_paths, metrics=metrics)
+    print("Accuracy map metrics: ", acc_map_metrics,"\n"
+          "NLL map metrics: ", nll_map_metrics)
 
 
 
@@ -1418,18 +1425,18 @@ if __name__ == '__main__':
     # # make_plot_one_swag(experiment_path, map_path = map_path, save_path=save_path)
 
 
-    experiment_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\laplace"
-    map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\map"
-    save_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\Figures"
-    make_laplace_plot_one(experiment_path, map_path=map_path, metric='nll', save_path=save_path)
-    make_laplace_plot_two(experiment_path, map_path=map_path, save_path=save_path)
-    make_laplace_plot_three_full(experiment_path, map_path=map_path, metric='nll', save_path=save_path)
-    make_laplace_plot_three_predefined(experiment_path, map_path=map_path, save_path=save_path)
-
-    experiment_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\swag"
-    make_plot_one_swag(experiment_path, map_path=map_path, save_path=save_path)
-    make_plot_two_full_swag(experiment_path, map_path=map_path, save_path=save_path)
-    breakpoint()
+    # experiment_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\laplace"
+    # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\map"
+    # save_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\Figures"
+    # make_laplace_plot_one(experiment_path, map_path=map_path, metric='nll', save_path=save_path)
+    # make_laplace_plot_two(experiment_path, map_path=map_path, save_path=save_path)
+    # make_laplace_plot_three_full(experiment_path, map_path=map_path, metric='nll', save_path=save_path)
+    # make_laplace_plot_three_predefined(experiment_path, map_path=map_path, save_path=save_path)
+    #
+    # experiment_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\swag"
+    # make_plot_one_swag(experiment_path, map_path=map_path, save_path=save_path)
+    # make_plot_two_full_swag(experiment_path, map_path=map_path, save_path=save_path)
+    # breakpoint()
 
 
     # breakpoint()
