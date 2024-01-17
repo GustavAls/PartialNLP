@@ -3,6 +3,7 @@ import copy
 import os
 import pickle
 
+import matplotlib.text
 import torch
 from datasets import load_dataset, Dataset
 import evaluate
@@ -323,23 +324,28 @@ class MultipleRampingExperiments:
               '\label{} \n', r"\end{table}", "\n")
 
 
-    def find_best_measure(self, other_path):
+    def find_best_measure(self, other_path, num_modules = None):
         ramping_experiment = RampingExperiments(other_path, metric=self.metric)
         results = ramping_experiment.get_metrics_from_all_files(has_seen_softmax=True)
 
         df = ramping_experiment.get_specific_results(results, self.metric)
         best_score, best_mod = None, None
         medians, modules = [], []
-        for mod in df['modules'].unique():
-            scores = df[df['modules'] == mod][self.metric]
-            medians.append(scores.median())
-            modules.append(mod)
-            if self.metric not in ['nll', 'ECE', 'RMSCE', 'MCE']:
-                best_score = np.max(medians)
-                best_mod = int(modules[np.argmax(medians)])
-            else:
-                best_score = np.min(medians)
-                best_mod = int(modules[np.argmin(medians)])
+        if num_modules is None:
+            for mod in df['modules'].unique():
+                scores = df[df['modules'] == mod][self.metric]
+                medians.append(scores.median())
+                modules.append(mod)
+                if self.metric not in ['nll', 'ECE', 'RMSCE', 'MCE']:
+                    best_score = np.max(medians)
+                    best_mod = modules[np.argmax(medians)]
+                else:
+                    best_score = np.min(medians)
+                    best_mod = modules[np.argmin(medians)]
+        else:
+            scores = df[df['modules'] == num_modules][self.metric]
+            best_score = scores.median()
+            best_mod = num_modules
 
         return best_score, best_mod   # Not really sure I need to return best_mod here, but it never hurts
     def draw_line_at_best(self, other_path, ax, name=None, color=None, num_modules=None, best_mod=True,
@@ -434,7 +440,7 @@ class MultipleRampingExperiments:
 
         return dfs
 
-    def plot_all(self, fig=None, ax=None):
+    def plot_all(self, fig=None, ax=None, subset_ = None):
         if ax is None:
             fig, ax = plt.subplots(1, 1)
 
@@ -449,6 +455,11 @@ class MultipleRampingExperiments:
         error_bar_percentile = lambda x: np.percentile(x, [25, 75])
         for idx, key in enumerate(self.ramping_experiments.keys()):
             df = dataframes[key]
+            if subset_ is not None:
+                for mod in df['modules'].unique():
+                    if mod < subset_:
+                        df = df[df['modules'] != mod]
+
             name = self.path_to_names[key]
             color = self.exp_number_to_colors[idx]
 
@@ -505,11 +516,16 @@ class MultipleRampingExperiments:
             numbers = [str(int(number)) for number in numbers]
             x_label = "Num. stoch. modules "
 
+        def handle_str_number(number):
+            numb = float(number)
+            numb = np.round(numb, 2)
+            return str(numb)
         y_label = self.metric_to_label_metric[self.metric]
         for number, tick in zip(numbers, ticks):
-            tick.set_text(number)
+            tick.set_text(handle_str_number(number))
 
         ax.set_xticklabels(ticks)
+        # ax.xaxis.set_major_formatter('{x:1.2f}')
         ax.set_xlabel(x_label)
         ax.set_ylabel(y_label)
         return ax
@@ -874,6 +890,8 @@ def make_experiment_to_path_mapping(experiment_path):
         if 'sublayer_full' in path:
             if 'acc' in path:
                 paths['sublayer_full_acc'] = path
+            elif 'fine_grained' in path:
+                paths['sublayer_full_fine_grained'] = path
             else:
                 paths['sublayer_full'] = path
         elif 'sublayer_predefined' in path:
@@ -1011,7 +1029,7 @@ def make_laplace_plot_three_full(experiment_path, map_path=None, save_path="", m
     experiment_to_paths = make_experiment_to_path_mapping(experiment_path)
 
     names = ['S-KFAC full model']
-    keys = ['sublayer_full']
+    keys = ['sublayer_full_fine_grained']
 
     exp_paths = [experiment_to_paths[key] for key in keys]
 
@@ -1022,7 +1040,7 @@ def make_laplace_plot_three_full(experiment_path, map_path=None, save_path="", m
                                          sublayer_ramping=True, metric = metric, method='Laplace')
 
     fig, ax = plt.subplots(1, 1)
-    plotter.plot_all(fig=fig, ax=ax)
+    plotter.plot_all(fig=fig, ax=ax, subset_=5)
     for idx, (n, k) in enumerate(zip(names_, keys_)):
         p = experiment_to_paths[k]
         col = colors[idx]
@@ -1033,7 +1051,12 @@ def make_laplace_plot_three_full(experiment_path, map_path=None, save_path="", m
         best_score = np.median(nlls) if metric == 'nll' else np.median(eces)
         ybounds = ax.get_ybound()
         diff = ybounds[1] - ybounds[0]
-        if ybounds[1] < (best_score - diff / 4):
+
+        if best_score > ybounds[1]:
+            new_lim = best_score + diff / 5
+            ax.set_ybound(ybounds[0], new_lim)
+
+        elif ybounds[1] < (best_score - diff / 4):
             y1 = best_score + diff / 3
             ax.set_ybound(ybounds[0], y1)
 
@@ -1043,15 +1066,16 @@ def make_laplace_plot_three_full(experiment_path, map_path=None, save_path="", m
                    color='tab:red' if color is None else color, label=label_name)
         ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
                   ncol=1, fancybox=True, shadow=True)
+        # ax.xaxis.set_major_formatter('{x:1.3f}')
 
 
     fig.tight_layout()
     if save_path:
         if map_path is not None and val_path is None:
-            save_name = f"laplace_plot_three_full_{metric}_w_map.pdf"
+            save_name = f"laplace_plot_three_full_fgrained_{metric}_w_map.pdf"
             fig.savefig(os.path.join(save_path, save_name))
         else:
-            save_name = f"laplace_plot_three_full_{metric}.pdf"
+            save_name = f"laplace_plot_three_full_fgrained_{metric}.pdf"
             fig.savefig(os.path.join(save_path, save_name))
 
     plt.show()
@@ -1293,20 +1317,29 @@ def make_main_plot_specific_experiment(ax, experiment_path, counter, metric = 'n
         experiment_name_prefix = 'LA'
         keys = ['operator_norm_ramping_mlp', 'operator_norm_ramping_attn', 'random_ramping', 'sublayer_full']
         names = ['Operator norm LA', 'Operator norm attn. LA', 'Random ramping LA', 'S-KFAC LA']
-        point_types = ['o', 'v', '1', 's']
+        point_types = ['o', 'v', 'p', 's']
         colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red']
     elif 'swag' in experiment_path.lower():
         experiment_name_prefix = 'SWAG'
         keys = ['operator_norm_ramping_mlp', 'operator_norm_ramping_attn', 'random_ramping', 'sublayer_full']
         names = ['Operator norm SWAG', 'Operator norm attn. SWAG', 'Random ramping SWAG', 'Sublayer l1 SWAG']
-        point_types = ["P", '*', '+', 'd']
+        point_types = ["P", '*', 'H', 'd']
         colors = ['tab:purple', 'tab:brown', 'tab:pink', 'tab:olive']
     else:
         raise ValueError("Either 'laplace' or 'swag' must be in experiment_path.lower() to ascertain which experiments"
                          "we are working on you dumb fuck")
 
-    def plot_point(ax, x_val, y_val, marker, color):
-        ax.plot(x_val, y_val, marker = marker, color = color)
+    def plot_point(ax, x_val, y_val, marker, color, label):
+
+        ax.plot(x_val, y_val, marker = marker, color = color, label = label, markersize = 18)
+        ylims = ax.get_ybound()
+        if y_val > ylims[1]:
+            new_ylim = (ylims[0], y_val)
+            ax.set_ybound(new_ylim)
+        elif y_val < ylims[0]:
+            new_ylim = (y_val, ylims[1])
+            ax.set_ybound(new_ylim)
+
         return ax
 
     experiment_to_paths = make_experiment_to_path_mapping(experiment_path)
@@ -1315,14 +1348,18 @@ def make_main_plot_specific_experiment(ax, experiment_path, counter, metric = 'n
     plotter = MultipleRampingExperiments(experiment_paths, metric=metric)
 
     for path, name, point, color in zip(experiment_paths, names, point_types, colors):
-        best_val, best_mod = plotter.find_best_measure(path)
-        plot_point(ax, counter, best_val, point, color)
+        best_mod = globals().get(f'best_mod_{path}', None)
+        best_val, best_mod = plotter.find_best_measure(path, best_mod)
+        if np.isnan(best_val):
+            breakpoint()
+        plot_point(ax, counter, best_val, point, color, name)
         counter += 1
+        globals().__setitem__(f'best_mod_{path}', best_mod)
 
     return ax, counter
 
 
-def make_main_plot(experiment_paths, save_path = ""):
+def make_main_plot(experiment_paths, save_path = "", lazy = False):
 
     """
     Hello again Mr Gustav, I am now on my second beer, so the voices are finally starting to quite down
@@ -1355,62 +1392,75 @@ def make_main_plot(experiment_paths, save_path = ""):
         else:
             raise ValueError("Why are you giving paths that dont contain the dataset name, are you out of your mind???")
 
-    def order_stuff_in_plot(ax, metric, column):
+    def order_stuff_in_plot(ax, metric, column, row, dataset):
         """
         Helper function to make the ax[i,j] behave themselves
         """
-        ax.get_xaxis().set_visible(False)  # there is no reason to have an unordered axis
+
+
         y_label = 'NLL' if metric == 'nll' else 'ECE'
         if column == 0:
             ax.set_ylabel(y_label)
+
+        ax.yaxis.set_major_formatter('{x:1.3f}')
+        if row == 1:
+            ax.set_xlabel(dataset, labelpad=25)
+            ax.set_xticks([])
+        else:
+            ax.get_xaxis().set_visible(False)  # there is no reason to have an unordered axis
         ax.grid(True)
         return ax
 
+    font = {'family': 'serif',
+            'size': 20,
+            'serif': 'cmr10'
+            }
+    mpl.rc('font', **font)
+    mpl.rc('legend', fontsize=17)
+    mpl.rc('axes', labelsize=25)
 
 
-    fig, ax = plt.subplots(2, 3)   # [NLL x ECE] [SST2 MRPC RTE]^T  if you enjoy some outer products :))
+    fig, ax = plt.subplots(2, 3, figsize = (13,9.6))   # [NLL x ECE] [SST2 MRPC RTE]^T  if you enjoy some outer products :))
     metrics = ['nll', 'ECE']
     datasets = ['SST2', 'MRPC', 'RTE']
 
     """
     I think we need larger markersizes, that is changed in make_main_plot_specific_experiment()
     """
+
     for i, metric in enumerate(metrics):
         for j, dataset in enumerate(datasets):
             counter = 0
             la_path, swa_path = dataset_name_to_swag_la_paths[dataset]['LA'], dataset_name_to_swag_la_paths[dataset]['swa']
             ax[i, j], counter = make_main_plot_specific_experiment(ax[i, j], la_path, counter, metric)
             ax[i, j], counter = make_main_plot_specific_experiment(ax[i, j], swa_path, counter, metric)
-            ax[i, j] = order_stuff_in_plot(ax[i,j], metric, j)
+            ax[i, j] = order_stuff_in_plot(ax[i,j], metric, j, i, dataset)
 
     """
     
     The following numbers need to be adjusted to make sure numbers are visible
     """
-    plt.subplots_adjust(left=0.2,
-                        bottom=0.1,
+    plt.subplots_adjust(left=0.1,
+                        bottom=0.08,
                         right=0.9,
-                        top=0.9,
+                        top=0.85,
                         wspace=0.4,
-                        hspace=0.5)
+                        hspace=0.2)
 
     lines = []
     labels = []
     for ax in fig.axes:
         Line, Label = ax.get_legend_handles_labels()
         # print(Label)
+        for line in Line:
+            line.set_linewidth(0)
         lines.extend(Line)
         labels.extend(Label)
         break
 
 
-    """
-    Something is not really working with the legends, see 
-    https://www.geeksforgeeks.org/how-to-create-a-single-legend-for-all-subplots-in-matplotlib/
-    for how i got the inspiration
-    """
-    fig.legend(lines, labels, loc='upper center')
-    fig.legend()
+    fig.legend(lines, labels, loc='upper center', bbox_to_anchor=(0.5, 1.01), ncols = 3, fontsize = 18)
+
 
     if save_path:
         if os.path.exists(save_path):
@@ -1421,7 +1471,7 @@ def make_main_plot(experiment_paths, save_path = ""):
     plt.show()
 
 
-def find_and_dataset_paths_and_plot(overall_path):
+def find_and_dataset_paths_and_plot(overall_path, save_path = ""):
 
     """
     This is a function primarily for me because it really requires that you have put all your stuff
@@ -1432,7 +1482,7 @@ def find_and_dataset_paths_and_plot(overall_path):
 
     names = ['MRPC', 'SST2', 'RTE']
     paths = [os.path.join(overall_path, name) for name in names]
-    make_main_plot(experiment_paths=paths)
+    make_main_plot(experiment_paths=paths, save_path=save_path)
 
 def make_acc_swag_plots_across_datasets(experiment_paths, map_paths, save_path = ""):
 
@@ -1506,14 +1556,73 @@ def write_map_metrics():
     print(map_metrics)
 
 
+def change_keys(path_one, path_two):
+    pcl_one = pickle.load(open(path_one, 'rb'))
+    pcl_two = pickle.load(open(path_two, 'rb'))
+
+    for key in pcl_two['results'].keys():
+        if key not in pcl_one['results']:
+            if key == '1.0':
+                pcl_one['results']['100'] = pcl_two['results'][key]
+            else:
+                pcl_one['results'][key] = pcl_two['results'][key]
+
+    if '1.0' in pcl_one['results']:
+        pcl_one['results']['100'] = pcl_one['results']['1.0']
+        del pcl_one['results']['1.0']
+
+    key_name = None
+    kk = None
+    for key in pcl_one['results'].keys():
+        if key[:2] == '0.':
+            key_name = key[2:]
+            kk = key
+            break
+
+    if key_name is not None and kk is not None:
+        pcl_one['results'][key_name] = pcl_one['results'][kk]
+        del pcl_one['results'][kk]
+
+    with open(path_one, 'wb') as handle:
+        pickle.dump(pcl_one, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+def find_paths(path_one, path_two):
+    paths_one = [os.path.join(path_one, f'run_{i}') for i in range(5)]
+    paths_two = [os.path.join(path_two, f'run_{i}') for i in range(5)]
+
+    paths_one = [os.path.join(p, f'run_number_{i}.pkl') for i, p in enumerate(paths_one)]
+    paths_two = [os.path.join(p, f'run_number_{i}.pkl') for i, p in enumerate(paths_two)]
+
+    for p1, p2 in zip(paths_one, paths_two):
+        change_keys(p1, p2)
+
+
+def change_01_to_100(exp_path):
+    paths_one = [os.path.join(exp_path, f'run_{i}') for i in range(5)]
+    # paths_two = [os.path.join(path_two, f'run_{i}') for i in range(5)]
+    paths_one = [os.path.join(p, f'run_number_{i}.pkl') for i, p in enumerate(paths_one)]
+
+    for p in paths_one:
+        pcl = pickle.load(open(p, 'rb'))
+
+        if '1.0' in pcl['results']:
+            pcl['results']['100'] = pcl['results']['1.0']
+            del pcl['results']['1.0']
+
+        with open(p, 'wb') as handle:
+            pickle.dump(pcl, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
 
 if __name__ == '__main__':
 
 
 
-    overall_path = r'C:\Users\45292\Documents\Master\NLP'
-    find_and_dataset_paths_and_plot(overall_path)
-    breakpoint()
+    # overall_path = r'C:\Users\45292\Documents\Master\NLP'
+    # save_path = r'C:\Users\45292\Documents\Master\NLP\Overall Figures'
+    # find_and_dataset_paths_and_plot(overall_path, save_path = save_path)
+    # breakpoint()
 
     # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\laplace\operator_norm_ramping"
     # save_path = path
@@ -1545,17 +1654,19 @@ if __name__ == '__main__':
     # # make_acc_swag_plots_across_datasets(experiment_paths=experiment_path, map_paths=imdb_map_path,
     # #                                     save_path= save_path)
     # # breakpoint()
-    # # experiment_path = r"C:\Users\45292\Documents\Master\NLP\RTE\laplace"
-    # # map_path = r"C:\Users\45292\Documents\Master\NLP\RTE\map"
-    # # save_path = r"C:\Users\45292\Documents\Master\NLP\RTE\Figures\Laplace"
-    # # val_path =  r"C:\Users\45292\Documents\Master\NLP\RTE\map_val"
-    # # make_laplace_plot_three_full(experiment_path, map_path, val_path=val_path, metric='ECE', save_path = save_path)
-    # # breakpoint()
+
+    experiment_path = r"C:\Users\45292\Documents\Master\NLP\SST2\laplace"
+    map_path = r"C:\Users\45292\Documents\Master\NLP\SST2\map"
+    save_path = r"C:\Users\45292\Documents\Master\NLP\SST2\Figures\Laplace"
+    val_path =  r"C:\Users\45292\Documents\Master\NLP\SST2\map_val"
+    make_laplace_plot_three_full(experiment_path, map_path=map_path, val_path=val_path, metric='nll', save_path = save_path)
+    breakpoint()
     #
     #
     # fig, ax = plt.subplots(1,1)
     # plotter = RampingExperiments(r"C:\Users\45292\Documents\Master\NLP\MRPC\laplace\nli_sublayer_full")
-    # map_path = r"C:\Users\45292\Documents\Master\NLP\MRPC\map"
+    # map_path = r"C:\Users\45292\Documents\Master\N
+    # LP\MRPC\map"
     # val_path =r"C:\Users\45292\Documents\Master\NLP\MRPC\map_val"
     # save_path = r"C:\Users\45292\Documents\Master\NLP\MRPC\Figures\Laplace\calibration_curves.pdf"
     # estimator, map = plotter.collect_predictions_and_calculate_calib(key = '1.0', map_path=map_path)
@@ -1578,13 +1689,23 @@ if __name__ == '__main__':
     # map_path = r"C:\Users\45292\Documents\Master\NLP\RTE\map"
     # save_path = r"C:\Users\45292\Documents\Master\NLP\RTE\Figures\Laplace"
     #
-    experiment_path = r'C:\Users\45292\Documents\Master\NLP\SST2\laplace'
-    write_ECE_plot_for_dataset(experiment_path, map_path=None, metric='nll')
-    breakpoint()
+    # experiment_path = r'C:\Users\45292\Documents\Master\NLP\SST2\laplace'
+    # write_ECE_plot_for_dataset(experiment_path, map_path=None, metric='nll')
     # breakpoint()
-    # # plotter = MultipleRampingExperiments(ramping_exp_paths=exp_paths,
-    # #                                      ramping_exp_names = ['last layer full', 'normal'], method = 'Laplace')
-    # # fig, ax = plt.subplots(1,1)
+    exp_paths = [r"C:\Users\45292\Documents\Master\NLP\SST2\laplace\sublayer_full_fine_grained",
+                 r"C:\Users\45292\Documents\Master\NLP\SST2\laplace\sublayer_full"
+                 ]
+    find_paths(exp_paths[0], exp_paths[1])
+
+    names = ['Fine grained', 'normal']
+
+    fig,ax = plt.subplots(1,1)
+    plotter = MultipleRampingExperiments(ramping_exp_paths=exp_paths,
+                                         ramping_exp_names = names, method = 'Laplace')
+    plotter.plot_all(fig = fig, ax = ax)
+    plt.show()
+    # breakpoint()
+    # fig, ax = plt.subplots(1,1)
     # # plotter.plot_all(fig, ax)
     # # plt.show()
     # # make_rte_laplace_ll_plot()
