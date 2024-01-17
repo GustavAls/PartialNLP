@@ -156,7 +156,7 @@ class SWAGExperiments:
         learning_rates = np.array([1e-3, 1e-2, 2e-2, 1e-1])
         neg_log_likelihoods = []
         pbar = tqdm(learning_rates, desc='Optimizing Learning Rates')
-        random_subset_indices_val = torch.randperm(len(self.tokenized_val))[:int(len(self.tokenized_val) * 0.25)]
+        random_subset_indices_val = torch.randperm(len(self.tokenized_val))[:int(len(self.tokenized_val) * 0.5)]
         new_tokenized_val = datasets.Dataset.from_dict(self.tokenized_val[random_subset_indices_val])
         for learning_rate in pbar:
             self.fit(**{'learning_rate': learning_rate, 'max_num_steps': self.default_args_swag['optim_max_num_steps']})

@@ -319,7 +319,7 @@ class MultipleRampingExperiments:
                 df_combined = self.find_best_and_make_bold(df_combined, column)
 
         print(r"\begin{table}", "\n", '\centering \n', '\caption{} \n',
-              df_combined.to_latex(index=True, float_format="{:.2f}".format),
+              df_combined.to_latex(index=True, float_format="{:.2f}".format, escape=False),
               '\label{} \n', r"\end{table}", "\n")
 
 
@@ -767,7 +767,7 @@ class RampingExperiments:
             map_results[dataset] = {}
             for metric in metrics:
                 metric_val = self.include_map(map_path)
-                map_results[dataset][metric] = np.median(metric_val[metric])
+                map_results[dataset][metric] = round(np.median(metric_val[metric]), ndigits=4)
         return map_results
 
 
@@ -908,10 +908,10 @@ def make_laplace_plot_one(experiment_path, map_path=None, save_path="", metric =
     fig.tight_layout()
     if save_path:
         if map_path is not None:
-            save_name = f"laplace_plot_three_full_{metric}_w_map.pdf"
+            save_name = f"laplace_plot_one_full_{metric}_w_map.pdf"
             fig.savefig(os.path.join(save_path, save_name))
         else:
-            save_name = f"laplace_plot_three_full_{metric}.pdf"
+            save_name = f"laplace_plot_one_full_{metric}.pdf"
             fig.savefig(os.path.join(save_path, save_name))
 
     plt.show()
@@ -1515,6 +1515,7 @@ def write_map_metrics():
                      ("MRPC", r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\mrpc_map_acc_100"),
                      ("RTE", r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\rte\map"),
                      ("IMDb", r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb_map_acc_100")]
+
     nll_map_paths = [("SST2", r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\map"),
                      ("MRPC", r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\map_nll"),
                      ("RTE", r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\rte\map_nll"),
@@ -1532,9 +1533,9 @@ if __name__ == '__main__':
 
 
 
-    overall_path = r'C:\Users\45292\Documents\Master\NLP'
-    find_and_dataset_paths_and_plot(overall_path)
-    breakpoint()
+    # overall_path = r'C:\Users\45292\Documents\Master\NLP'
+    # find_and_dataset_paths_and_plot(overall_path)
+    # breakpoint()
 
     # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\laplace\operator_norm_ramping"
     # save_path = path
@@ -1574,22 +1575,24 @@ if __name__ == '__main__':
     # # breakpoint()
     #
     #
+
     # fig, ax = plt.subplots(1,1)
-    # plotter = RampingExperiments(r"C:\Users\45292\Documents\Master\NLP\MRPC\laplace\nli_sublayer_full")
-    # map_path = r"C:\Users\45292\Documents\Master\NLP\MRPC\map"
-    # val_path =r"C:\Users\45292\Documents\Master\NLP\MRPC\map_val"
-    # save_path = r"C:\Users\45292\Documents\Master\NLP\MRPC\Figures\Laplace\calibration_curves.pdf"
-    # estimator, map = plotter.collect_predictions_and_calculate_calib(key = '1.0', map_path=map_path)
-    # estimator, temp_map = plotter.collect_predictions_and_calculate_calib(key = '1.0', map_path = map_path, val_path=val_path)
-    # plotter.plot_calibration(*estimator, ax = ax, color = 'tab:orange', label = 'S-KFAC 0.01 pct')
+    # plotter = RampingExperiments(r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\laplace\sublayer_full")
+    # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb_map_nll"
+    # val_path =r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\imdb_val_map_nll"
+    # save_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\Figures\calibration_curves.pdf"
+    # estimator, map = plotter.collect_predictions_and_calculate_calib(key = '12.6', map_path=map_path)
+    # estimator, temp_map = plotter.collect_predictions_and_calculate_calib(key = '12.6', map_path = map_path, val_path=val_path)
+    # plotter.plot_calibration(*estimator, ax = ax, color = 'tab:orange', label = 'S-KFAC 1.588 pct')
     # plotter.plot_calibration(*map, ax = ax, color = 'tab:blue', label = 'MAP')
     # plotter.plot_calibration(*temp_map, ax = ax, color = 'tab:brown', label = 'Temp. scaled MAP')
     # ax.set_ybound(0, 1.2)
     # ax.legend()
-    # ax.set_title('MRPC Calibration Curves')
+    # ax.set_title('IMDb Calibration Curves')
     # fig.savefig(save_path, format = 'pdf')
     # plt.show()
     # breakpoint()
+
     #
     # save_path = r'C:\Users\45292\Documents\Master\NLP\RTE\Figures\Swag'
     # exp_paths = [r"C:\Users\45292\Documents\Master\NLP\SST2\laplace\last_layer_full",
@@ -1599,9 +1602,9 @@ if __name__ == '__main__':
     # map_path = r"C:\Users\45292\Documents\Master\NLP\RTE\map"
     # save_path = r"C:\Users\45292\Documents\Master\NLP\RTE\Figures\Laplace"
     #
-    experiment_path = r'C:\Users\45292\Documents\Master\NLP\SST2\laplace'
-    write_ECE_plot_for_dataset(experiment_path, map_path=None, metric='nll')
-    breakpoint()
+    # experiment_path = r'C:\Users\45292\Documents\Master\NLP\SST2\laplace'
+    # write_ECE_plot_for_dataset(experiment_path, map_path=None, metric='nll')
+    # breakpoint()
     # breakpoint()
     # # plotter = MultipleRampingExperiments(ramping_exp_paths=exp_paths,
     # #                                      ramping_exp_names = ['last layer full', 'normal'], method = 'Laplace')
@@ -1612,17 +1615,21 @@ if __name__ == '__main__':
     # # make_plot_one_swag(experiment_path, map_path = map_path, save_path=save_path)
 
 
-    # experiment_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\laplace"
-    # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\map"
-    # save_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\Figures"
-    # make_laplace_plot_one(experiment_path, map_path=map_path, metric='nll', save_path=save_path)
-    # make_laplace_plot_two(experiment_path, map_path=map_path, save_path=save_path)
-    # make_laplace_plot_three_full(experiment_path, map_path=map_path, metric='nll', save_path=save_path)
-    # make_laplace_plot_three_predefined(experiment_path, map_path=map_path, save_path=save_path)
+    # experiment_path_laplace = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\laplace"
+    # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb_map_nll"
+    # save_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\Figures"
+    # make_laplace_plot_one(experiment_path_laplace, map_path=map_path, metric='nll', save_path=save_path)
+    # make_laplace_plot_two(experiment_path_laplace, map_path=map_path, save_path=save_path)
+    # make_laplace_plot_three_full(experiment_path_laplace, map_path=map_path, metric='nll', save_path=save_path)
+    # make_laplace_plot_three_predefined(experiment_path_laplace, map_path=map_path, save_path=save_path)
     #
-    # experiment_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\swag"
-    # make_plot_one_swag(experiment_path, map_path=map_path, save_path=save_path)
-    # make_plot_two_full_swag(experiment_path, map_path=map_path, save_path=save_path)
+    # experiment_path_swag = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag"
+    # make_plot_one_swag(experiment_path_swag, map_path=map_path, save_path=save_path)
+    # make_plot_two_full_swag(experiment_path_swag, map_path=map_path, save_path=save_path)
+    #
+    # # write_ECE_plot_for_dataset(experiment_path_laplace, map_path=None, metric='ECE')
+    # # write_ECE_plot_for_dataset(experiment_path_swag, map_path=None, metric='ECE')
+    #
     # breakpoint()
 
 
@@ -1674,6 +1681,7 @@ if __name__ == '__main__':
     # plotter = RampingExperiments(r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\laplace\nli_last_layer")
     # plotter.get_map_metrics(map_paths=map_paths, metrics=metrics)
 
+    ### MAP METRICS ###
     write_map_metrics()
     breakpoint()
 
