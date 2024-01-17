@@ -421,7 +421,7 @@ class MultipleRampingExperiments:
 
     def get_dataset_name(self, path):
         if 'imdb' in path.lower():
-            return 'IMDB'
+            return 'IMDb'
         elif 'sst' in path.lower():
             return 'SST2'
 
@@ -783,7 +783,7 @@ class RampingExperiments:
             map_results[dataset] = {}
             for metric in metrics:
                 metric_val = self.include_map(map_path)
-                map_results[dataset][metric] = metric_val[metric]
+                map_results[dataset][metric] = np.median(metric_val[metric])
         return map_results
 
 
@@ -912,19 +912,17 @@ def make_laplace_plot_one(experiment_path, map_path=None, save_path="", metric =
     keys = ['operator_norm_ramping_mlp', 'operator_norm_ramping_attn', 'random_ramping']
     experiment_paths = [experiment_to_paths[key] for key in keys]
 
-    last_layer_path = experiment_to_paths['last_layer_full'] \
-        if experiment_to_paths['last_layer_full'] in experiment_to_paths.keys() \
-        else experiment_to_paths['last_layer']
+    last_layer_path = experiment_to_paths['last_layer_full'] if 'last_layer_full' in experiment_to_paths.keys() else experiment_to_paths['last_layer']
 
-    last_layer_name = 'Last layer full'
+    last_layer_name = 'Last layer'
 
     plotter = MultipleRampingExperiments(experiment_paths, names, map_path,metric = metric, method='Laplace')
     fig, ax = plt.subplots(1, 1)
     plotter.plot_all(fig=fig, ax=ax)
     plotter.draw_line_at_best(last_layer_path, ax, last_layer_name, color='tab:green', best_mod=False)
     last_layer_path = experiment_to_paths['last_layer']
-    last_layer_name = 'Last layer KFAC'
-    plotter.draw_line_at_best(last_layer_path, ax, last_layer_name, color='tab:brown', best_mod=False)
+    # last_layer_name = 'Last layer KFAC'
+    # plotter.draw_line_at_best(last_layer_path, ax, last_layer_name, color='tab:brown', best_mod=False)
     fig.tight_layout()
     if save_path:
         if map_path is not None:
@@ -973,8 +971,12 @@ def make_laplace_plot_two(experiment_path, map_path=None, save_path=""):
 
 
 def choose_right_ones_full(path):
-    experiment_to_paths = make_experiment_to_path_mapping(experiment_path)
+    # experiment_to_paths = make_experiment_to_path_mapping(experiment_path)
     if 'RTE' in path:
+        names = ['Random ramping', 'Last layer']
+        keys = ['random_ramping', 'last_layer']
+
+    elif 'sst2_nll' in path:
         names = ['Random ramping', 'Last layer']
         keys = ['random_ramping', 'last_layer']
 
@@ -985,23 +987,35 @@ def choose_right_ones_full(path):
     elif 'MRPC' in path:
         names = ['Random ramping', 'Last layer']
         keys = ['random_ramping', 'last_layer']
+
+    elif 'imdb' in path:
+        names = ['Operator norm attn', 'Last layer']
+        keys = ['operator_norm_ramping_attn', 'last_layer']
     else:
         raise ValueError("Could not decipher path")
     return names, keys
 
 
 def choose_right_ones_speficic(path):
-    experiment_to_paths = make_experiment_to_path_mapping(experiment_path)
+    # experiment_to_paths = make_experiment_to_path_mapping(experiment_path)
 
     if 'RTE' in path:
         names = ['Max operator norm attn. + LL', 'S-KFAC full model', 'Last layer']
         keys = ['operator_norm_ramping_attn_ll', 'sublayer_full', 'last_layer']
+
+    elif 'sst2_nll' in path:
+        names = ['Max operator norm MLP', 'S-KFAC full model', 'Last layer']
+        keys = ['operator_norm_ramping_mlp', 'sublayer_full', 'last_layer']
 
     elif 'SST2' in path:
         names = ['Max operator norm MLP', 'S-KFAC full model', 'Last layer']
         keys = ['operator_norm_ramping_mlp', 'sublayer_full', 'last_layer']
 
     elif 'MRPC' in path:
+        names = ['Max operator norm MLP', 'S-KFAC full model', 'Last layer']
+        keys = ['operator_norm_ramping_mlp', 'sublayer_full', 'last_layer']
+
+    elif 'imdb' in path:
         names = ['Max operator norm MLP', 'S-KFAC full model', 'Last layer']
         keys = ['operator_norm_ramping_mlp', 'sublayer_full', 'last_layer']
 
@@ -1546,14 +1560,21 @@ def write_ECE_plot_for_dataset(experiment_path, map_path, metric = 'ECE'):
 
 
 def write_map_metrics():
-    ###
-    map_paths = [("MRPC", r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\mrpc_map_acc_100"),
-                 ("RTE", r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\rte\map"),
-                 ("SST2", r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\map")]
+
+    acc_map_paths = [("SST2", r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\map"),
+                     ("MRPC", r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\mrpc_map_acc_100"),
+                     ("RTE", r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\rte\map"),
+                     ("IMDb", r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb_map_acc_100")]
+    nll_map_paths = [("SST2", r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\map"),
+                     ("MRPC", r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\map_nll"),
+                     ("RTE", r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\rte\map_nll"),
+                     ("IMDb", r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map")]
     metrics = ['nll', 'accuracy_score', 'ECE']
     plotter = RampingExperiments("")
-    map_metrics = plotter.get_map_metrics(map_paths=map_paths, metrics=metrics)
-    print(map_metrics)
+    acc_map_metrics = plotter.get_map_metrics(map_paths=acc_map_paths, metrics=metrics)
+    nll_map_metrics = plotter.get_map_metrics(map_paths=nll_map_paths, metrics=metrics)
+    print("Accuracy map metrics: ", acc_map_metrics,"\n"
+          "NLL map metrics: ", nll_map_metrics)
 
 
 def change_keys(path_one, path_two):
@@ -1712,11 +1733,17 @@ if __name__ == '__main__':
     # # make_plot_one_swag(experiment_path, map_path = map_path, save_path=save_path)
 
 
-    # experiment_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\laplace"
-    # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map"
-    # save_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\Figures"
-    # make_laplace_plot_one(experiment_path,map_path=map_path, metric = 'nll')
-    # # make_laplace_plot_three_full(experiment_path,map_path=map_path, metric='ECE', save_path=save_path)
+    # experiment_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\laplace"
+    # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\map"
+    # save_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\Figures"
+    # make_laplace_plot_one(experiment_path, map_path=map_path, metric='nll', save_path=save_path)
+    # make_laplace_plot_two(experiment_path, map_path=map_path, save_path=save_path)
+    # make_laplace_plot_three_full(experiment_path, map_path=map_path, metric='nll', save_path=save_path)
+    # make_laplace_plot_three_predefined(experiment_path, map_path=map_path, save_path=save_path)
+    #
+    # experiment_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\swag"
+    # make_plot_one_swag(experiment_path, map_path=map_path, save_path=save_path)
+    # make_plot_two_full_swag(experiment_path, map_path=map_path, save_path=save_path)
     # breakpoint()
 
 
