@@ -31,7 +31,6 @@ EXPERIMENTS = ['random_ramping',
 class SWAGExperiments:
 
     def __init__(self, args=None):
-        # TODO set correct train and val sizes
         self.default_args = {'output_path': args.output_path,
                              'train_batch_size': args.batch_size, 'eval_batch_size': args.batch_size,'device_batch_size': args.batch_size,
                              'device': 'cuda', 'num_epochs': 1.0, 'dataset_name': args.dataset_name, 'train': True,
@@ -43,7 +42,7 @@ class SWAGExperiments:
         self.default_args.data_path = getattr(args, 'data_path', None)
         self.default_args_swag = {'n_iterations_between_snapshots': 5,
                                   'module_names': None, 'num_columns': 20, 'num_mc_samples': args.mc_samples,
-                                  'min_var': 1e-20, 'reduction': 'mean', 'num_classes': 2, 'optim_max_num_steps': 100 ,
+                                  'min_var': 1e-20, 'reduction': 'mean', 'num_classes': 2, 'optim_max_num_steps': 400 ,
                                   'max_num_steps': 2000}
         self.last_layer = getattr(args, 'last_layer', False)
 

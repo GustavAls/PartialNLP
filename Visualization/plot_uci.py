@@ -250,7 +250,6 @@ def read_data_swag_la(path, include_map=True):
 
 
 def read_data_swag_la_combined(path, include_map=True):
-    # TODO: NLL name correction, needs correction in uci_laplace.py for correct keys
     percentages = []
     test_nll_la = []
     test_mse_la = []
@@ -1248,7 +1247,7 @@ class PlotFunctionHolder:
         save_path = save_path if save_path is not None else self.save_path
         data_name = self.find_data_name(self.vi_hmc_path)
         num_runs = 15
-        for method, criteria in [('Additive', 'add'), ('Multiplicative', 'node_run')]:
+        for method, criteria in [('Additive', 'add'), ('Multi.', 'node_run')]:
             fig, ax = plt.subplots(1, 1)
             for run in percentages:
                 for idx in range(num_runs):
@@ -1513,7 +1512,7 @@ if __name__ == '__main__':
 
         la_var_path = os.path.join(path_la_var, prediction_folder)
 
-        save_path = os.path.join(os.getcwd(), r"Figures\Torch")
+        save_path = os.path.join(os.getcwd(), r"Figures\Calibration")
         plot_holder = PlotFunctionHolder(la_swa_path=la_swa_path, vi_hmc_path=vi_hmc_path, calculate=True, save_path=save_path,
                                          la_swa_path_rand=la_swa_path_rand, vi_hmc_path_rand=vi_hmc_path_rand, eval_method=metric,
                                          la_var_path=la_var_path)
@@ -1527,9 +1526,9 @@ if __name__ == '__main__':
         # plot_holder.plot_calibration_la_swa()
         # plot_holder.plot_calibration_nodes()
 
-        # plot_holder.plot_correlation_matrix()
+        plot_holder.plot_correlation_matrix()
         # plot_holder.write_calibration_latex_table()
-        plot_holder.write_latex_table()
+        # plot_holder.write_latex_table()
 
         # plot_holder.plot_partial_percentages_nodes()
         # plot_holder.plot_partial_percentages_vi_hmc()
