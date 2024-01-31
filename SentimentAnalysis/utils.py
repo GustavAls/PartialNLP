@@ -509,7 +509,7 @@ class MultipleRampingExperiments:
                 df_combined = self.find_best_and_make_bold(df_combined, column)
 
         print(r"\begin{table}", "\n", '\centering \n', '\caption{} \n',
-              df_combined.to_latex(index=True, float_format="{:.2f}".format),
+              df_combined.to_latex(index=True, float_format="{:.2f}".format, escape=False),
               '\label{} \n', r"\end{table}", "\n")
 
 
@@ -983,7 +983,7 @@ class RampingExperiments:
             map_results[dataset] = {}
             for metric in metrics:
                 metric_val = self.include_map(map_path)
-                map_results[dataset][metric] = np.median(metric_val[metric])
+                map_results[dataset][metric] = round(np.median(metric_val[metric]), ndigits=4)
         return map_results
 
 
@@ -1126,10 +1126,10 @@ def make_laplace_plot_one(experiment_path, map_path=None, save_path="", metric =
     fig.tight_layout()
     if save_path:
         if map_path is not None:
-            save_name = f"laplace_plot_three_full_{metric}_w_map.pdf"
+            save_name = f"laplace_plot_one_full_{metric}_w_map.pdf"
             fig.savefig(os.path.join(save_path, save_name))
         else:
-            save_name = f"laplace_plot_three_full_{metric}.pdf"
+            save_name = f"laplace_plot_one_full_{metric}.pdf"
             fig.savefig(os.path.join(save_path, save_name))
 
     plt.show()
@@ -1243,7 +1243,7 @@ def make_laplace_plot_three_full(experiment_path, map_path=None, save_path="", m
     experiment_to_paths = make_experiment_to_path_mapping(experiment_path)
 
     names = ['S-KFAC full model']
-    keys = ['sublayer_full_fine_grained']
+    keys = ['sublayer_full']
 
     exp_paths = [experiment_to_paths[key] for key in keys]
 
@@ -1303,7 +1303,7 @@ def make_laplace_plot_three_full(experiment_path, map_path=None, save_path="", m
     fig.tight_layout()
     if save_path:
         if map_path is not None and val_path is None:
-            save_name = f"laplace_plot_three_full_fgrained_{metric}_w_map.pdf"
+            save_name = f"laplace_plot_three_full_{metric}_w_map.pdf"
             fig.savefig(os.path.join(save_path, save_name))
         else:
             save_name = f"laplace_plot_three_RTE_full_fgrained_{metric}.pdf"
@@ -1948,6 +1948,7 @@ def write_map_metrics():
                      ("MRPC", r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\mrpc_map_acc_100"),
                      ("RTE", r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\rte\map"),
                      ("IMDb", r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb_map_acc_100")]
+
     nll_map_paths = [("SST2", r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\map"),
                      ("MRPC", r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\map_nll"),
                      ("RTE", r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\rte\map_nll"),
@@ -2097,18 +2098,21 @@ if __name__ == '__main__':
     # experiment_path = r'C:\Users\45292\Documents\Master\NLP\SST2\laplace'
     # write_ECE_plot_for_dataset(experiment_path, map_path=None, metric='nll')
     # breakpoint()
-    exp_paths = [r"C:\Users\45292\Documents\Master\NLP\SST2\laplace\sublayer_full_fine_grained",
-                 r"C:\Users\45292\Documents\Master\NLP\SST2\laplace\sublayer_full"
-                 ]
-    find_paths(exp_paths[0], exp_paths[1])
-
-    names = ['Fine grained', 'normal']
-
-    fig,ax = plt.subplots(1,1)
-    plotter = MultipleRampingExperiments(ramping_exp_paths=exp_paths,
-                                         ramping_exp_names = names, method = 'Laplace')
-    plotter.plot_all(fig = fig, ax = ax)
-    plt.show()
+    # experiment_path = r'C:\Users\45292\Documents\Master\NLP\SST2\laplace'
+    # write_ECE_plot_for_dataset(experiment_path, map_path=None, metric='nll')
+    # breakpoint()
+    # exp_paths = [r"C:\Users\45292\Documents\Master\NLP\SST2\laplace\sublayer_full_fine_grained",
+    #              r"C:\Users\45292\Documents\Master\NLP\SST2\laplace\sublayer_full"
+    #              ]
+    # find_paths(exp_paths[0], exp_paths[1])
+    #
+    # names = ['Fine grained', 'normal']
+    #
+    # fig,ax = plt.subplots(1,1)
+    # plotter = MultipleRampingExperiments(ramping_exp_paths=exp_paths,
+    #                                      ramping_exp_names = names, method = 'Laplace')
+    # plotter.plot_all(fig = fig, ax = ax)
+    # plt.show()
     # breakpoint()
     # fig, ax = plt.subplots(1,1)
     # # plotter.plot_all(fig, ax)
@@ -2116,19 +2120,25 @@ if __name__ == '__main__':
     # # make_rte_laplace_ll_plot()
     # # make_plot_one_swag(experiment_path, map_path = map_path, save_path=save_path)
 
-
-    # experiment_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\laplace"
-    # map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\map"
-    # save_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\Figures"
-    # make_laplace_plot_one(experiment_path, map_path=map_path, metric='nll', save_path=save_path)
-    # make_laplace_plot_two(experiment_path, map_path=map_path, save_path=save_path)
-    # make_laplace_plot_three_full(experiment_path, map_path=map_path, metric='nll', save_path=save_path)
-    # make_laplace_plot_three_predefined(experiment_path, map_path=map_path, save_path=save_path)
-    #
-    # experiment_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\swag"
-    # make_plot_one_swag(experiment_path, map_path=map_path, save_path=save_path)
-    # make_plot_two_full_swag(experiment_path, map_path=map_path, save_path=save_path)
+    # change_01_to_100(r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2_nll\laplace\sublayer_full")
     # breakpoint()
+    experiment_path_laplace = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\laplace"
+    map_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\map"
+    val_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\imdb_val_map_nll"
+    save_path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\Figures"
+    # make_laplace_plot_one(experiment_path_laplace, map_path=map_path, metric='nll', save_path=save_path)
+    # make_laplace_plot_two(experiment_path_laplace, map_path=map_path, save_path=save_path)
+    make_laplace_plot_three_full(experiment_path_laplace, map_path=map_path, metric='nll', save_path=save_path, val_path=val_path)
+    # make_laplace_plot_three_predefined(experiment_path_laplace, map_path=map_path, save_path=save_path)
+
+    # experiment_path_swag = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\imdb\swag"
+    # make_plot_one_swag(experiment_path_swag, map_path=map_path, save_path=save_path)
+    # make_plot_two_full_swag(experiment_path_swag, map_path=map_path, save_path=save_path)
+
+    # write_ECE_plot_for_dataset(experiment_path_laplace, map_path=None, metric='ECE')
+    # write_ECE_plot_for_dataset(experiment_path_swag, map_path=None, metric='ECE')
+
+    breakpoint()
 
 
     # breakpoint()
@@ -2179,6 +2189,7 @@ if __name__ == '__main__':
     # plotter = RampingExperiments(r"C:\Users\Gustav\Desktop\MasterThesisResults\NLI\mrpc\laplace\nli_last_layer")
     # plotter.get_map_metrics(map_paths=map_paths, metrics=metrics)
 
+    ### MAP METRICS ###
     write_map_metrics()
     breakpoint()
 

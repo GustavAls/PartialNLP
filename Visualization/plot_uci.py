@@ -251,7 +251,6 @@ def read_data_swag_la(path, include_map=True):
 
 
 def read_data_swag_la_combined(path, include_map=True):
-    # TODO: NLL name correction, needs correction in uci_laplace.py for correct keys
     percentages = []
     test_nll_la = []
     test_mse_la = []
@@ -580,9 +579,10 @@ def change_datasets(path):
 class PlotFunctionHolder:
 
     def __init__(self, la_swa_path = "", vi_hmc_path = "", eval_method = 'nll', calculate=True, show=True,
-                 save_path = None, la_swa_path_rand = "", vi_hmc_path_rand = ""):
+                 save_path = None, la_swa_path_rand = "", vi_hmc_path_rand = "", la_var_path = ""):
         self.la_swa_path = la_swa_path
         self.vi_hmc_path = vi_hmc_path
+        self.la_var_path = la_var_path
         self.la_swa_path_rand = la_swa_path_rand
         self.vi_hmc_path_rand = vi_hmc_path_rand
         self.calculate = calculate
@@ -591,6 +591,8 @@ class PlotFunctionHolder:
         self.plot_helper_la_swa = PlotHelper(self.la_swa_path, eval_method=eval_method, calculate=calculate)
         self.plot_helper_vi_hmc = PlotHelper(self.vi_hmc_path, eval_method=eval_method, calculate=calculate)
 
+        if self.la_var_path != "":
+            self.plot_helper_la_var = PlotHelper(self.la_var_path, eval_method=eval_method, calculate=calculate)
         if self.la_swa_path_rand != "":
             self.plot_helper_la_swa_rand = PlotHelper(self.la_swa_path_rand, eval_method=eval_method, calculate=calculate)
         if self.vi_hmc_path_rand != "":
@@ -1003,6 +1005,41 @@ class PlotFunctionHolder:
         self.show()
 
 
+    def plot_partial_percentages_la_vs_la_var_select(self, save_path = None, map=True):
+        metrics_la = self.plot_helper_la_swa.run_for_dataset(criteria='laplace', laplace=True, map=map)
+        metrics_la_var = self.plot_helper_la_var.run_for_dataset(criteria='laplace', laplace=True, map=map)
+        percentages = [0, 1, 2, 5, 8, 14, 23, 37, 61, 100] if map else [1, 2, 5, 8, 14, 23, 37, 61, 100]
+        (metrics_la, metrics_la_var), data_name = self.ensure_same_length_and_get_name(
+            [metrics_la, metrics_la_var], self.la_var_path, self.plot_helper_la_swa.eval_method
+        )
+
+        ylabel = self.eval_methods_to_names[self.plot_helper_la_swa.eval_method]
+        fig1, ax1 = plt.subplots(1,1)
+        fig2, ax2 = plt.subplots(1,1)
+
+        plot_partial_percentages(percentages=percentages,
+                                 res={'Laplace $\mu$': np.array(metrics_la), 'Laplace $\sigma^2$': np.array(metrics_la_var)},
+                                 data_name=data_name,
+                                 num_runs=len(metrics_la),
+                                 ax=[ax1,ax2], show=False, map=map,
+                                 is_ll=True if self.plot_helper_vi_hmc.eval_method == 'nll' else False)
+
+
+        ax1.set_ylabel(ylabel)
+        ax2.set_ylabel(ylabel)
+
+        self.set_bounds_and_layout((np.array(metrics_la_var), np.array(metrics_la)), np.median, fig1, ax1)
+        self.set_bounds_and_layout((np.array(metrics_la_var), np.array(metrics_la)), np.mean, fig2, ax2)
+
+        save_path = save_path if save_path is not None else self.save_path
+
+        if save_path is not None:
+            fig1.savefig(os.path.join(save_path, f'la_la_var_{ylabel}_{data_name}_{"no map" if not map else str()}_median.pdf'), format='pdf')
+            fig2.savefig(os.path.join(save_path, f'la_la_var_{ylabel}_{data_name}_{"no map" if not map else str()}_mean.pdf'), format='pdf')
+
+        self.show()
+
+
     def plot_partial_percentages_rand_vs_max(self, save_path = None, map=True, criteria='laplace'):
         laplace = True if criteria == 'laplace' else False
         if criteria == 'laplace' or criteria == 'swag':
@@ -1212,7 +1249,7 @@ class PlotFunctionHolder:
         save_path = save_path if save_path is not None else self.save_path
         data_name = self.find_data_name(self.vi_hmc_path)
         num_runs = 15
-        for method, criteria in [('Additive', 'add'), ('Multiplicative', 'node_run')]:
+        for method, criteria in [('Additive', 'add'), ('Multi.', 'node_run')]:
             fig, ax = plt.subplots(1, 1)
             for run in percentages:
                 for idx in range(num_runs):
@@ -1244,7 +1281,7 @@ class PlotFunctionHolder:
 
             self.show()
     @staticmethod
-    def find_best_and_make_bold(df, column, use_min = False, num_indices = 3):
+    def find_best_and_make_bold(df, column, use_min = False):
 
         values = list(df[column])
         if use_min:
@@ -1344,10 +1381,10 @@ class PlotFunctionHolder:
         metrics_swa = self.get_calibration_results('SWAG', 'swag')
         metrics_hmc = self.get_calibration_results('HMC', 'hmc')
         metrics_add = self.get_calibration_results('Additive', 'add')
-        metrics_mul = self.get_calibration_results('Multiplicative', 'node_run')
+        metrics_mul = self.get_calibration_results('Multi.', 'node_run')
 
         percentages = [1, 2, 5, 8, 14, 23, 37, 61, 100]
-        methods = ['Laplace', 'SWAG', 'VI', 'HMC', 'Additive', 'Multiplicative']
+        methods = ['Laplace', 'SWAG', 'VI', 'HMC', 'Additive', 'Multi.']
         use_min = True
         df = pd.DataFrame()
         for method, metric in zip(methods,
@@ -1358,15 +1395,16 @@ class PlotFunctionHolder:
             for column in df.columns:
                 df = self.find_best_and_make_bold(df, column, use_min)
         df = df.transpose()
-        df = df.rename(columns={i: f"{perc}." for i, perc in zip(df.columns, percentages)})
+        df = df.rename(columns={i: f"{perc}." for i, perc in zip(df.columns, percentages)}).round(decimals=2)
         if bold_direction == 'percentage':
             for column in df.columns:
                 df = self.find_best_and_make_bold(df, column, use_min)
+        print(r"\begin{table}", "\n", '\centering \n', '\caption{} \n',
+              df.to_latex(index=True, float_format="{{:0.2f}}".format, escape=False),
+              '\label{} \n', r"\end{table}", "\n")
 
-        print(df.to_latex(index=True, float_format="{:.3f}".format))
 
-
-    def write_latex_table(self,estimator = np.median,  save_path = None, bold_direction = 'percentage'):
+    def write_latex_table(self,estimator = np.median,  save_path = None, bold_direction = 'percentage', ndigits=2):
         metrics_vi = np.array(self.plot_helper_vi_hmc.run_for_dataset(criteria='vi_run'))[:, 1:]
         metrics_la = np.array(self.plot_helper_la_swa.run_for_dataset(criteria='laplace', laplace=True))[:, 1:]
         metrics_swa = np.array(self.plot_helper_la_swa.run_for_dataset(criteria='swag', laplace=False))[:, 1:]
@@ -1401,7 +1439,9 @@ class PlotFunctionHolder:
             for column in df.columns:
                 df = self.find_best_and_make_bold(df, column, use_min)
 
-        print(df.to_latex(index=True, float_format="{:.3f}".format))
+        print(r"\begin{table}", "\n", '\centering \n', '\caption{} \n',
+              df.to_latex(index=True, float_format="{:.3f}".format, escape=False),
+              '\label{} \n', r"\end{table}", "\n")
 
 
 class ExtendedString(str):
@@ -1454,10 +1494,13 @@ if __name__ == '__main__':
     path_la = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_Laplace_SWAG_all_metrics'
     path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_torch'
 
+    path_la_var = r"C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_Laplace_SWAG_all_metrics_var_mask"
+
     path_la_rand = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_Laplace_SWAG_all_metrics_rand'
     path_vi_rand = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_torch_rand'
 
     # datasets = ['yacht']
+    metric = 'nll'
     datasets = ['boston', 'energy', 'yacht']
     prediction_folders = [ dataset + "_models" for dataset in datasets]
 
@@ -1469,19 +1512,25 @@ if __name__ == '__main__':
         la_swa_path_rand = os.path.join(path_la_rand, prediction_folder)
         vi_hmc_path_rand = os.path.join(path_vi_rand, prediction_folder)
 
+        la_var_path = os.path.join(path_la_var, prediction_folder)
+
         save_path = os.path.join(os.getcwd(), r"Figures\Calibration")
         plot_holder = PlotFunctionHolder(la_swa_path=la_swa_path, vi_hmc_path=vi_hmc_path, calculate=True, save_path=save_path,
-                                         la_swa_path_rand=la_swa_path_rand, vi_hmc_path_rand=vi_hmc_path_rand, eval_method='nll')
+                                         la_swa_path_rand=la_swa_path_rand, vi_hmc_path_rand=vi_hmc_path_rand, eval_method=metric,
+                                         la_var_path=la_var_path)
+
+        # plot_holder.plot_partial_percentages_la_vs_la_var_select()
         # plot_holder.plot_pred_labels_vi_hmc()
-        plot_holder.plot_pred_labels_la_swa()
+        # plot_holder.plot_pred_labels_la_swa()
         # plot_holder.plot_pred_labels_node_based()
+        #
+        # plot_holder.plot_calibration_vi_hmc()
+        # plot_holder.plot_calibration_la_swa()
+        # plot_holder.plot_calibration_nodes()
 
-        plot_holder.plot_calibration_vi_hmc()
-        plot_holder.plot_calibration_la_swa()
-        plot_holder.plot_calibration_nodes()
-
-        # plot_holder.plot_correlation_matrix()
+        plot_holder.plot_correlation_matrix()
         # plot_holder.write_calibration_latex_table()
+        # plot_holder.write_latex_table()
 
         # plot_holder.plot_partial_percentages_nodes()
         # plot_holder.plot_partial_percentages_vi_hmc()
@@ -1496,6 +1545,7 @@ if __name__ == '__main__':
         # plot_holder.plot_partial_percentages_rand_vs_max(criteria='vi_run', map=False)
 
         # if 'yacht' in prediction_folder:
+        #     plot_holder.plot_partial_percentages_la_vs_la_var_select(map=False)
             # plot_holder.plot_partial_percentages_nodes(map=False)
             # plot_holder.plot_partial_percentages_la_swa(map=False)
 

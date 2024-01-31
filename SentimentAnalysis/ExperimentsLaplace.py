@@ -397,7 +397,7 @@ class LaplaceExperiments:
             with open(os.path.join(save_path, f'run_number_{run_number}.pkl'), 'wb') as handle:
                 pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-    def run_sublayer_ramping_experiment(self, run_number, use_uninformed=True, predefined_percentiles = False):
+    def run_sublayer_ramping_experiment(self, run_number, use_uninformed=True, predefined_percentiles = False, percentiles_list=None):
         print("Running sublayer full ramping experiment on ", self.default_args.dataset_name)
         results = {'results': {}, 'percentile': {}}
         save_path = self.args.output_path
@@ -409,6 +409,8 @@ class LaplaceExperiments:
             self.percentiles = np.linspace(predefined_percentiles[0],
                                            predefined_percentiles[1],
                                            predefined_percentiles[2], endpoint=True)
+        elif percentiles_list:
+            self.percentiles = percentiles_list
         else:
             self.percentiles = np.linspace(1, 30, 6, endpoint=True)
         remaining_percentiles = self.get_num_remaining_percentiles(save_path, run_number)
@@ -674,7 +676,7 @@ def run_sublayer_ramping_full(args, nli=False):
 
     la_args = Namespace(**la_args)
     lap_exp = LaplaceExperiments(args=la_args, nli=nli)
-    lap_exp.run_sublayer_ramping_experiment(args.run_number, args.uninformed_prior, args.percentile_range)
+    lap_exp.run_sublayer_ramping_experiment(args.run_number, args.uninformed_prior, args.percentile_range, args.percentile_list)
 
 def sequential_last_layer(args, nli = False):
     num_runs = 5
@@ -699,6 +701,16 @@ def parse_percentile_ramping_specification(args):
 
     return args
 
+def parse_percentile_list(args):
+    if args.percentile_list:
+        splitted = args.percentile_list.split()
+        try:
+            percentiles = [float(num) for num in splitted]
+        except:
+            raise ValueError("each element in --percentile_list must be castable to float")
+
+        args.percentile_list = percentiles
+    return args
 
 
 if __name__ == '__main__':
@@ -727,9 +739,15 @@ if __name__ == '__main__':
     parser.add_argument('--include_last_layer', type = ast.literal_eval, default=False)
     parser.add_argument('--last_layer_full', type = ast.literal_eval, default=False)
     parser.add_argument('--percentile_range', type = str, default = "")
+    parser.add_argument('--percentile_list', type=str, default="")
     args = parser.parse_args()
 
     args = parse_percentile_ramping_specification(args)
+    # args = parse_percentile_list(args)
+    # RTE experiment with percentile list
+    keys = ['1.048888888888889', '1.767777777777778', '2.486666666666667', '3.2055555555555557', '3.9244444444444446', '4.6433333333333335', '5.362222222222222', '6.081111111111111', '6.8', '100', '12.6', '18.4', '24.2', '30.0', '33']
+    keys = [float(key) for key in keys]
+    args.percentile_list = keys
     if args.map_eval:
         if args.dataset_name == 'mrpc' or args.dataset_name == 'qqp' or args.dataset_name == 'qnli' or args.dataset_name == 'rte':
             run_map_eval(args, nli=True)

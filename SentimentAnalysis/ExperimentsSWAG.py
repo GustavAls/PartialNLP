@@ -31,7 +31,6 @@ EXPERIMENTS = ['random_ramping',
 class SWAGExperiments:
 
     def __init__(self, args=None):
-        # TODO set correct train and val sizes
         self.default_args = {'output_path': args.output_path,
                              'train_batch_size': args.batch_size, 'eval_batch_size': args.batch_size,'device_batch_size': args.batch_size,
                              'device': 'cuda', 'num_epochs': 1.0, 'dataset_name': args.dataset_name, 'train': True,
@@ -43,7 +42,7 @@ class SWAGExperiments:
         self.default_args.data_path = getattr(args, 'data_path', None)
         self.default_args_swag = {'n_iterations_between_snapshots': 5,
                                   'module_names': None, 'num_columns': 20, 'num_mc_samples': args.mc_samples,
-                                  'min_var': 1e-20, 'reduction': 'mean', 'num_classes': 2, 'optim_max_num_steps': 100 ,
+                                  'min_var': 1e-20, 'reduction': 'mean', 'num_classes': 2, 'optim_max_num_steps': 400 ,
                                   'max_num_steps': 2000}
         self.last_layer = getattr(args, 'last_layer', False)
 
@@ -156,7 +155,7 @@ class SWAGExperiments:
         learning_rates = np.array([1e-3, 1e-2, 2e-2, 1e-1])
         neg_log_likelihoods = []
         pbar = tqdm(learning_rates, desc='Optimizing Learning Rates')
-        random_subset_indices_val = torch.randperm(len(self.tokenized_val))[:int(len(self.tokenized_val) * 0.25)]
+        random_subset_indices_val = torch.randperm(len(self.tokenized_val))[:int(len(self.tokenized_val) * 0.5)]
         new_tokenized_val = datasets.Dataset.from_dict(self.tokenized_val[random_subset_indices_val])
         for learning_rate in pbar:
             self.fit(**{'learning_rate': learning_rate, 'max_num_steps': self.default_args_swag['optim_max_num_steps']})

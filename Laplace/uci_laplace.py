@@ -597,9 +597,6 @@ if __name__ == "__main__":
     parser.add_argument('--kron', type = ast.literal_eval, default=False)
     parser.add_argument('--largest_variance_mask', type = ast.literal_eval, default=False)
 
-
-    # TODO: Save dataset such that it can be loaded in uci_hmc.py
-
     args = parser.parse_args()
 
     if args.dataset == "yacht":
