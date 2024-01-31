@@ -244,6 +244,7 @@ class PlotHelper:
 
         if not self.calculate and self.eval_method != 'all':
 
+
             if self.eval_method not in pcl[key]:
                 if self.eval_method == 'nll_glm':
                     return pcl[key]['glm_nll']
@@ -315,9 +316,9 @@ class PlotHelper:
 
     def run_for_all_keys(self, pcl, map=True):
         if map:
-            all_keys = ['map_results', '1', '2', '5', '8', '14', '23', '37', '61', '100']
+            all_keys = ['map_results', '1', '2', '5', '8', '14', '23', '37', '61']
         else:
-            all_keys = ['1', '2', '5', '8', '14', '23', '37', '61', '100']
+            all_keys = ['1', '2', '5', '8', '14', '23', '37', '61']
 
         if all(isinstance(key, int) for key in pcl.keys()):
             all_keys = [1,2,3]

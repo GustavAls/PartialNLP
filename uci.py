@@ -18,7 +18,7 @@ from VI.partial_bnn_functional import *
 from jax import random
 import re
 import matplotlib.pyplot as plt
-
+from transformers.models.distilbert import DistilBertModel
 
 def _gap_train_test_split(X, y, gap_column, test_size):
     n_data = X.shape[0]
@@ -510,7 +510,7 @@ if __name__ == "__main__":
                             seed=np.random.randint(0, 1000),
                             val_fraction_of_train=0.1)
 
-    n_train, p = dataset.X_train.shape
+    n_train, p = dataset.X_train.shapex
     n_val = dataset.X_val.shape[0]
     out_dim = dataset.y_train.shape[1]
     n_test = dataset.X_test.shape[0]

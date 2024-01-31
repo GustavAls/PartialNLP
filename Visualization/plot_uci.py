@@ -162,10 +162,11 @@ def plot_estimator(df, errorbar_func, estimator=None, ax=None, data_name=None, s
                                       color_scheme_1=color_scheme_1, map=map)
             color_scheme_1 = not color_scheme_1
 
+    method_names[0] = 'KFAC Laplace'
     title = " & ".join(method_names) + " - " + estimator.__name__ + " - " + data_name
     ax.set_title(label=title, pad=0)
     # Set labels and legend
-    ax.set_xlabel("Percentages")
+    ax.set_xlabel("Num. Modules")
 
     if df[key].shape[0] == 45:
         nll_array = np.array(df[key]).reshape((15, 3))
@@ -183,8 +184,8 @@ def plot_estimator(df, errorbar_func, estimator=None, ax=None, data_name=None, s
     fully_stochastic_val = estimated[-1]
     ax.axhline(y=fully_stochastic_val, linestyle='--', linewidth=1, alpha=0.7,
                color=stochastic_color, label='100% Stochastic' if not color_scheme_1 else '_nolegend_')
-    ax.axhline(y=0.43,linestyle='--', linewidth=1, alpha=0.7,
-               color=stochastic_color, label='Regular Laplace 1 pct')
+    ax.axhline(y=2.51,linestyle='--', linewidth=1, alpha=0.7,
+               color='tab:red', label='GGN Laplace 5 pct')
     if show:
         plt.show(block=False)
 
@@ -952,7 +953,8 @@ class PlotFunctionHolder:
 
         ax1.set_ylabel(ylabel)
         ax2.set_ylabel(ylabel)
-        ax1.legend()
+        ax1.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
+                  ncol=1, fancybox=True, shadow=True)
         ax2.legend()
         save_path = save_path if save_path is not None else self.save_path
 
@@ -1441,14 +1443,14 @@ if __name__ == '__main__':
     # change_datasets(path_la)
 
     # GUSTAV PATHS
-    # path_la = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG\KFAC\yacht'
-    # save_path = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG\KFAC\Figures\Yacht'
-    # plot_holder = PlotFunctionHolder(la_swa_path=path_la, calculate=False,
-    #                                  save_path=save_path,
-    #                                  eval_method='nll_glm')
+    path_la = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG\KFAC\boston'
+    save_path = r'C:\Users\45292\Documents\Master\UCI_Laplace_SWAG\KFAC\Figures\Boston'
+    plot_holder = PlotFunctionHolder(la_swa_path=path_la, calculate=False,
+                                     save_path=save_path,
+                                     eval_method='nll_glm')
     plot_holder.plot_partial_percentages_kron()
 
-
+    breakpoint()
     path_la = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_Laplace_SWAG_all_metrics'
     path_vi = r'C:\Users\Gustav\Desktop\MasterThesisResults\UCI\UCI_HMC_VI_torch'
 

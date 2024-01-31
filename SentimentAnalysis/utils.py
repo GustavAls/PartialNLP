@@ -50,8 +50,197 @@ point_err_color = 'tab:blue'
 plt.rcParams['axes.unicode_minus'] = False
 
 
+
+class Point:
+
+    def __init__(self, x, y, color, marker = 'o', label = None, name = None):
+        self.x = x
+        self.y = y
+        self.color = color
+        self.marker = marker
+        self.label = label
+        self.name = name
+    def draw(self, ax):
+        ax.plot(self.x, self.y, marker = self.marker, color = self.color, label = self.label)
+        return ax
+
+class Line:
+
+    def __init__(self, point_one, point_two):
+        self.point_one = point_one
+        self.point_two = point_two
+
+    def draw(self, ax):
+
+        if self.point_one.color != self.point_two.color:
+            raise ValueError("Points have different color, likely a mistake somewhere else")
+
+        ax.plot([self.point_one.x, self.point_two.x], [self.point_one.y, self.point_two.y],
+                color = self.point_one.color, linewidth = 2)
+
+        return ax
+
+class LayerCombiner:
+
+    def __init__(self,  layer_one, layer_two):
+        self.layer_one = layer_one
+        self.layer_two = layer_two
+
+        self.combining_lines = []
+        for point_one in self.layer_one:
+            for point_two in self.layer_two:
+                if point_one.name == point_two.name:
+                    self.combining_lines.append(Line(point_one, point_two))
+
+    def draw(self, ax):
+        for line in self.combining_lines:
+            ax = line.draw(ax)
+        return ax
+
+class RankingPlotter:
+
+    def __init__(self, rankings, names, modules):
+
+        self.rankings = rankings
+        self.names = names
+        self.modules = modules
+        self.point_type = 'o'
+        self.colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:pink']
+
+        self.layers = []
+        for idx, mod in enumerate(self.modules):
+            self.layers.append(self.make_layer(idx))
+
+        self.layer_combiners = []
+        for layer_one, layer_two in zip(self.layers[:-1], self.layers[1:]):
+            self.layer_combiners.append(LayerCombiner(layer_one, layer_two))
+
+
+    def draw(self,  ax):
+
+        for layer in self.layers:
+            for point in layer:
+                ax = point.draw(ax)
+        for combiner in self.layer_combiners:
+            ax = combiner.draw(ax)
+
+        return ax
+    def make_layer(self, idx):
+        counter_to_pos_two = {i: {0: -0.2, 1: 0.2} for i in range(5)}
+        counter_to_pos_three = {i : {0: -0.2, 1: 0, 2: 0.2} for i in range(5)}
+        counter_two = {i: 0 for i in range(5)}
+        counter_three = {i: 0 for i in range(5)}
+        layer = []
+        scores = self.rankings[idx]
+
+        for i, name in enumerate(self.names):
+            score = scores[i]
+            if np.sum(score == scores) == 1:
+                x_pos = self.modules[idx]
+            elif np.sum(score == scores) == 2:
+                x_pos = self.modules[idx] + counter_to_pos_two[int(score)][counter_two[int(score)]]
+                counter_two[int(score)] += 1
+            elif np.sum(score == scores) == 3:
+                x_pos = self.modules[idx] + counter_to_pos_three[int(score)][counter_three[int(score)]]
+                counter_three[int(score)] += 1
+            else:
+                raise ValueError("Something is terribly wrong")
+
+            layer.append(Point(x_pos, score, self.colors[i], self.point_type, name, name))
+        return layer
+
+
+
 def save_laplace(save_path, laplace_cfg, **kwargs):
     pass
+
+
+class MemoryCalculator:
+    def __init__(self, num_modules = None, percentage = None, module_type = None, laplace = False, SWAG=False):
+
+        self.num_modules = num_modules
+        self.percentage = percentage
+        if self.percentage is not None:
+            self.percentage = self.percentage / 100
+        self.module_type = module_type
+        self.laplace = laplace
+        self.SWAG = SWAG
+
+        self.num_linear_weights = 43100930
+        self.num_small_linears = 25
+        self.num_mlp_linears = 12
+        self.num_classifiers = 1
+        self.small_in = 768
+        self.small_out = 768
+        self.big_in = 768
+        self.big_out = 3072
+        self.memory_calculator = self.construct_memory_calculator()
+        self.true_gb_number = 1073741824
+    def memory_calculator_skfac(self):
+
+        small_a_and_b = 2 * (self.small_in*self.percentage * self.small_out*self.percentage) * self.num_small_linears
+        big_a_and_b = ((self.big_in * self.percentage * self.big_in * self.percentage) +
+                       self.big_out * self.percentage * self.big_out * self.percentage) * self.num_mlp_linears
+
+        num_params = ((self.small_in*self.percentage * self.small_out*self.percentage) * self.num_small_linears +
+                      self.big_in * self.percentage * self.big_out * self.percentage)
+
+        number_of_floats_kfac = small_a_and_b + big_a_and_b
+        number_of_floats_jac = num_params * 2
+        return self.floats_to_gb(number_of_floats_kfac + number_of_floats_jac)
+
+    def floats_to_gb(self, num_floats):
+        return num_floats * 4
+
+
+    def memory_calculator_modules_la(self, num_modules = None, module_type = None):
+
+        num_mod = self.num_modules if num_modules is None else num_modules
+        module_type = self.module_type if module_type is None else module_type
+        if module_type == 'mlp':
+            number_of_floats_kfac = num_mod * (self.big_out**2 * 2 + self.big_in**2)
+            number_of_floats_jac = num_mod * self.big_out * self.big_in + num_mod/2 * self.big_in**2 + num_mod/2 * self.big_out**2
+
+        elif module_type == 'attn':
+            number_of_floats_kfac = num_mod * (self.small_in**2*2 + self.small_out ** 2)
+            number_of_floats_jac = num_mod * self.small_in * self.small_out + num_mod * self.small_in**2
+
+        elif module_type == 'random':
+            num_mod_attn = self.num_small_linears / (self.num_small_linears + self.num_mlp_linears) * self.num_modules
+            num_mod_mlp = self.num_mlp_linears / (self.num_small_linears + self.num_mlp_linears) * self.num_modules
+            return self.memory_calculator_modules_la(num_mod_attn, 'attn') +\
+                self.memory_calculator_modules_la(num_mod_mlp, 'mlp')
+        else:
+            raise ValueError("")
+
+        return self.floats_to_gb(number_of_floats_kfac + number_of_floats_jac)
+
+
+    def memory_calculator_modules_swag(self):
+
+        num_params = self.num_modules / (self.num_mlp_linears + self.num_small_linears) * self.num_linear_weights
+        num_floats = 21 * num_params
+        return self.floats_to_gb(num_floats)
+
+    def memory_calculator_percentage_swag(self):
+        pass
+
+    def construct_memory_calculator(self):
+
+        if self.laplace:
+            if self.module_type == 'last_layer':
+                return lambda: self.floats_to_gb((768*2)**2 + 768*2)
+
+            elif self.percentage is not None:
+                return self.memory_calculator_skfac
+            else:
+                return self.memory_calculator_modules_la
+        elif self.SWAG:
+            if self.percentage is not None:
+                return self.memory_calculator_percentage_swag
+            else:
+                return self.memory_calculator_modules_swag
+
 
 
 class Evaluator:
@@ -324,30 +513,39 @@ class MultipleRampingExperiments:
               '\label{} \n', r"\end{table}", "\n")
 
 
-    def find_best_measure(self, other_path, num_modules = None):
+    def find_best_measure(self, other_path, num_modules = None, max_mod = None, return_uncertainty = False):
         ramping_experiment = RampingExperiments(other_path, metric=self.metric)
         results = ramping_experiment.get_metrics_from_all_files(has_seen_softmax=True)
 
         df = ramping_experiment.get_specific_results(results, self.metric)
         best_score, best_mod = None, None
-        medians, modules = [], []
+        medians, modules, uncertainties = [], [], []
         if num_modules is None:
-            for mod in df['modules'].unique():
+            all_mods = df['modules'].unique()
+            if max_mod:
+                all_mods = [mod for mod in df['modules'].unique() if mod < max_mod]
+            for mod in all_mods:
                 scores = df[df['modules'] == mod][self.metric]
                 medians.append(scores.median())
+                uncertainties.append(list(scores))
                 modules.append(mod)
                 if self.metric not in ['nll', 'ECE', 'RMSCE', 'MCE']:
                     best_score = np.max(medians)
                     best_mod = modules[np.argmax(medians)]
+                    uncertainty = uncertainties[np.argmax(medians)]
                 else:
                     best_score = np.min(medians)
                     best_mod = modules[np.argmin(medians)]
+                    uncertainty = uncertainties[np.argmin(medians)]
         else:
             scores = df[df['modules'] == num_modules][self.metric]
             best_score = scores.median()
             best_mod = num_modules
-
-        return best_score, best_mod   # Not really sure I need to return best_mod here, but it never hurts
+            uncertainty = list(scores)
+        if return_uncertainty:
+            return best_score, best_mod, uncertainty
+        else:
+            return best_score, best_mod   # Not really sure I need to return best_mod here, but it never hurts
     def draw_line_at_best(self, other_path, ax, name=None, color=None, num_modules=None, best_mod=True,
                           set_point_instead=False, sublayer_ramping=False):
 
@@ -372,7 +570,7 @@ class MultipleRampingExperiments:
             best_score = scores.median().item()
             best_mod = int(num_modules)
 
-        if name != 'Last layer':
+        if  'Last layer' not in name:
             if sublayer_ramping:
                 best_mod = np.round(self.percentile_to_actual_percentile(best_mod), 3)
 
@@ -413,7 +611,7 @@ class MultipleRampingExperiments:
             ax.set_xticklabels(ticks)
         else:
 
-            ax.axhline(y=best_score, linestyle='--', linewidth=1.5, alpha=0.7,
+            ax.axhline(y=best_score, linestyle='--', linewidth=2.5, alpha=0.7,
                        color='tab:red' if color is None else color, label=label_name)
             ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
                       ncol=1, fancybox=True, shadow=True)
@@ -440,7 +638,7 @@ class MultipleRampingExperiments:
 
         return dfs
 
-    def plot_all(self, fig=None, ax=None, subset_ = None):
+    def plot_all(self, fig=None, ax=None, subset_ = None, spec_subset = None):
         if ax is None:
             fig, ax = plt.subplots(1, 1)
 
@@ -456,8 +654,9 @@ class MultipleRampingExperiments:
         for idx, key in enumerate(self.ramping_experiments.keys()):
             df = dataframes[key]
             if subset_ is not None:
+                # df = df[df['modules'] != sorted(df['modules'])[7]]
                 for mod in df['modules'].unique():
-                    if mod < subset_:
+                    if 0 < mod < subset_:
                         df = df[df['modules'] != mod]
 
             name = self.path_to_names[key]
@@ -468,8 +667,9 @@ class MultipleRampingExperiments:
                           join=False,
                           capsize=.30,
                           markers="d",
-                          scale=1.0,
-                          err_kws={'linewidth': 0.7}, estimator=np.median,
+                          markersize = 50,
+                          scale=1.5,
+                          err_kws={'linewidth': 1.5}, estimator=np.median,
                           color=color,
                           label=name,
                           ax=ax)
@@ -973,20 +1173,20 @@ def make_laplace_plot_two(experiment_path, map_path=None, save_path=""):
 def choose_right_ones_full(path):
     # experiment_to_paths = make_experiment_to_path_mapping(experiment_path)
     if 'RTE' in path:
-        names = ['Random ramping', 'Last layer']
-        keys = ['random_ramping', 'last_layer']
+        names = ['Random ramping', 'Last layer F. GGN'][1:]
+        keys = ['random_ramping', 'last_layer'][1:]
 
     elif 'sst2_nll' in path:
         names = ['Random ramping', 'Last layer']
         keys = ['random_ramping', 'last_layer']
 
     elif 'SST2' in path:
-        names = ['Random ramping', 'Last layer']
-        keys = ['random_ramping', 'last_layer']
+        names = ['Random ramping', 'Last layer F. GGN'][1:]
+        keys = ['random_ramping', 'last_layer'][1:]
 
     elif 'MRPC' in path:
-        names = ['Random ramping', 'Last layer']
-        keys = ['random_ramping', 'last_layer']
+        names = ['Random ramping', 'Last layer F. GGN'][1:]
+        keys = ['random_ramping', 'last_layer'][1:]
 
     elif 'imdb' in path:
         names = ['Operator norm attn', 'Last layer']
@@ -1049,12 +1249,13 @@ def make_laplace_plot_three_full(experiment_path, map_path=None, save_path="", m
 
     colors = ['tab:green', 'tab:orange', 'tab:brown']
     names_, keys_ = choose_right_ones_full(experiment_path)
-
-    plotter = MultipleRampingExperiments(exp_paths, names, map_path if val_path is None else None,
+    #
+    # plotter = MultipleRampingExperiments(exp_paths, names, map_path if val_path is None else None,
+    #                                      sublayer_ramping=True, metric = metric, method='Laplace')
+    plotter = MultipleRampingExperiments(exp_paths, names,map_path=None,
                                          sublayer_ramping=True, metric = metric, method='Laplace')
-
     fig, ax = plt.subplots(1, 1)
-    plotter.plot_all(fig=fig, ax=ax, subset_=5)
+    plotter.plot_all(fig=fig, ax=ax, subset_=8)
     for idx, (n, k) in enumerate(zip(names_, keys_)):
         p = experiment_to_paths[k]
         col = colors[idx]
@@ -1073,15 +1274,31 @@ def make_laplace_plot_three_full(experiment_path, map_path=None, save_path="", m
         elif ybounds[1] < (best_score - diff / 4):
             y1 = best_score + diff / 3
             ax.set_ybound(ybounds[0], y1)
+        # min_ = 100
+        # for line in ax.get_lines():
+        #     data = line.get_data()[-1]
+        #     if np.min(data) < min_:
+        #         min_ = np.min(data)
 
+        # ax.set_ybound(min_ - 1e-3,ybounds[1])
         color = 'tab:red'
         label_name = 'Temp. scaled MAP'
-        ax.axhline(y=best_score, linestyle='--', linewidth=1.5, alpha=0.7,
+        tick_labels = ax.get_xmajorticklabels()
+        for tick in tick_labels:
+            if int(tick._text[0]) >= 1:
+                if len(tick._text) > 3:
+                    tick.set_text(tick._text[:-1])
+
+        if tick_labels[-1]._text == '100.':
+            tick_labels[-1].set_text('100')
+            # ax.set_xticklabels(tick_labels)
+        ax.set_xticklabels(tick_labels)
+        ax.axhline(y=best_score, linestyle='--', linewidth=2.5, alpha=0.7,
                    color='tab:red' if color is None else color, label=label_name)
         ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.01),
                   ncol=1, fancybox=True, shadow=True)
+        # ax.set_xscale('log')
         # ax.xaxis.set_major_formatter('{x:1.3f}')
-
 
     fig.tight_layout()
     if save_path:
@@ -1089,7 +1306,7 @@ def make_laplace_plot_three_full(experiment_path, map_path=None, save_path="", m
             save_name = f"laplace_plot_three_full_fgrained_{metric}_w_map.pdf"
             fig.savefig(os.path.join(save_path, save_name))
         else:
-            save_name = f"laplace_plot_three_full_fgrained_{metric}.pdf"
+            save_name = f"laplace_plot_three_RTE_full_fgrained_{metric}.pdf"
             fig.savefig(os.path.join(save_path, save_name))
 
     plt.show()
@@ -1289,6 +1506,8 @@ def find_stuff_for_class_swag(labels, preds_map, preds_swa, class_number, data):
     return data_cls
 
 
+
+
 def find_stuff_for_class(labels, preds_map, preds_la, class_number, data):
 
     data = data.T
@@ -1329,14 +1548,18 @@ def make_main_plot_specific_experiment(ax, experiment_path, counter, metric = 'n
 
     if 'laplace' in experiment_path.lower():
         experiment_name_prefix = 'LA'
-        keys = ['operator_norm_ramping_mlp', 'operator_norm_ramping_attn', 'random_ramping', 'sublayer_full']
-        names = ['Operator norm LA', 'Operator norm attn. LA', 'Random ramping LA', 'S-KFAC LA']
-        point_types = ['o', 'v', 'p', 's']
-        colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red']
+        keys = ['operator_norm_ramping_mlp', 'operator_norm_ramping_attn', 'random_ramping', 'sublayer_full_fine_grained',
+                'last_layer_full']
+        names = ['Operator norm LA', 'Operator norm attn. LA', 'Random ramping LA', 'S-KFAC LA',
+                 'Last Layer LA F. GGN']
+        point_types = ['o', 'v', 'p', 's','d']
+        colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:pink']
     elif 'swag' in experiment_path.lower():
         experiment_name_prefix = 'SWAG'
         keys = ['operator_norm_ramping_mlp', 'operator_norm_ramping_attn', 'random_ramping', 'sublayer_full']
         names = ['Operator norm SWAG', 'Operator norm attn. SWAG', 'Random ramping SWAG', 'Sublayer l1 SWAG']
+        keys = ['random_ramping']
+        names = ['Random ramping SWAG']
         point_types = ["P", '*', 'H', 'd']
         colors = ['tab:purple', 'tab:brown', 'tab:pink', 'tab:olive']
     else:
@@ -1356,21 +1579,167 @@ def make_main_plot_specific_experiment(ax, experiment_path, counter, metric = 'n
 
         return ax
 
+    def plot_uncertainty(ax, x, y, yvals, point, color, name):
+
+        error = np.array([y- np.percentile(yvals, 25), np.percentile(yvals, 75)-y])[:, None]
+        ax.errorbar(x, y, error, fmt = 'None',color = color, elinewidth = 3.8)
+        return ax
+    def get_experiment_type(name, laplace = True):
+        if laplace:
+            if 'att' in name.lower():
+                return 'attn'
+            elif 'norm' in name.lower():
+                return 'mlp'
+            elif 'random' in name.lower():
+                return 'random'
+            elif 'kfac' in name.lower():
+                return 'sublayer'
+            elif 'last' in name.lower():
+                return 'last_layer'
+            else:
+                breakpoint()
+        else:
+            return 'random'
     experiment_to_paths = make_experiment_to_path_mapping(experiment_path)
     experiment_paths = [experiment_to_paths[key] for key in keys]
 
     plotter = MultipleRampingExperiments(experiment_paths, metric=metric)
+    laplace = 'laplace' in experiment_path.lower()
+    swag = 'swag' in experiment_path.lower()
 
     for path, name, point, color in zip(experiment_paths, names, point_types, colors):
         best_mod = globals().get(f'best_mod_{path}', None)
-        best_val, best_mod = plotter.find_best_measure(path, best_mod)
-        if np.isnan(best_val):
-            breakpoint()
-        plot_point(ax, counter, best_val, point, color, name)
+        experiment_type = get_experiment_type(name, laplace)
+        if experiment_type == 'sublayer':
+            max_mod = 62
+        else:
+            max_mod = None
+        best_val, best_mod, uncertainty = plotter.find_best_measure(path, best_mod, max_mod, return_uncertainty=True)
+        max_, min_ = np.max(uncertainty), np.min(uncertainty)
+
+        if experiment_type == 'sublayer':
+            percentage = best_mod
+            num_modules = None
+        else:
+            percentage = None
+            num_modules = best_mod
+
+        memory_calculator = MemoryCalculator(num_modules, percentage, experiment_type, laplace, swag)
+        memory_usage = memory_calculator.memory_calculator()
+
+        plot_point(ax, memory_usage, best_val, point, color, name)
+        plot_uncertainty(ax, memory_usage,best_val, uncertainty, point, color, name)
         counter += 1
         globals().__setitem__(f'best_mod_{path}', best_mod)
 
     return ax, counter
+
+def update_data_dict(data_dict, path, dataset,metric = 'nll', la = True):
+
+
+    if la:
+        keys = ['operator_norm_ramping_mlp', 'operator_norm_ramping_attn', 'random_ramping',
+                'operator_norm_ramping_mlp_min','operator_norm_ramping_attn_min']
+        names = ['Max operator norm LA', 'Max operator norm attn. LA', 'Random ramping LA',
+                 'Min operator norm LA', 'Min operator norm attn. LA']
+        point_types = ['o', 'v', 'p', 's', 'd']
+
+    else:
+        keys = ['operator_norm_ramping_mlp', 'operator_norm_ramping_attn', 'random_ramping', 'sublayer_full']
+        names = ['Operator norm SWAG', 'Operator norm attn. SWAG', 'Random ramping SWAG', 'Sublayer l1 SWAG']
+        keys = ['random_ramping']
+        names = ['Random ramping SWAG']
+
+
+    def get_medians_and_take_out(df, maximum = 11):
+
+        df = df[df['modules'] <= maximum]
+        modules = sorted(df['modules'].unique())
+        medians = []
+        for mod in modules:
+            medians.append(df[df['modules'] == mod][metric].median())
+
+        return medians
+
+    experiment_to_paths = make_experiment_to_path_mapping(path)
+    experiment_paths = [experiment_to_paths[key] for key in keys]
+
+    plotter = MultipleRampingExperiments(experiment_paths, metric=metric)
+
+    dataframe_dict = plotter.get_dfs()
+    for key, df_key in zip(keys, dataframe_dict.keys()):
+        dataframe = dataframe_dict[df_key]
+        if key not in data_dict:
+            data_dict[key] = []
+        medians = get_medians_and_take_out(dataframe)
+        data_dict[key].append(medians)
+
+    return data_dict
+
+def make_ranking_plot(experiment_paths):
+
+    def extract_laplace_and_swag(experiment_path):
+        if any(('swag' in experiment_path, 'laplace' in experiment_path)):
+            raise ValueError("This is a function that is supposed to plot for both experiments you dumb fucker")
+
+        laplace_path = [os.path.join(experiment_path, p)
+                        for p in os.listdir(experiment_path) if 'laplace' in p.lower()][0]
+        swag_path = [os.path.join(experiment_path, p) for p in os.listdir(experiment_path) if 'swag' in p.lower()][0]
+        return laplace_path, swag_path
+
+    dataset_name_to_swag_la_paths = {}
+    for path in experiment_paths:
+        la_path, swa_path = extract_laplace_and_swag(path)
+        if 'sst2' in path.lower():
+            dataset_name_to_swag_la_paths['SST2'] = {'LA': la_path, 'swa': swa_path}
+        elif 'mrpc' in path.lower():
+            dataset_name_to_swag_la_paths['MRPC'] = {'LA': la_path, 'swa': swa_path}
+        elif 'rte' in path.lower():
+            dataset_name_to_swag_la_paths['RTE'] = {'LA': la_path, 'swa': swa_path}
+        else:
+            raise ValueError("Why are you giving paths that dont contain the dataset name, are you out of your mind???")
+
+    module_numbers = [1,2,3,4,5,6,7]
+    font = {'family': 'serif',
+            'size': 20,
+            'serif': 'cmr10'
+            }
+    mpl.rc('font', **font)
+    mpl.rc('legend', fontsize=17)
+    mpl.rc('axes', labelsize=25)
+    # fig, ax = plt.subplots(2, 3, figsize = (13,9.6))   # [NLL x ECE] [SST2 MRPC RTE]^T  if you enjoy some outer products :))
+    metrics = ['nll', 'ECE']
+    datasets = ['SST2', 'MRPC', 'RTE']
+
+    data_dict = {}
+    for j, dataset in enumerate(datasets):
+        counter = 0
+        la_path, swa_path = dataset_name_to_swag_la_paths[dataset]['LA'], dataset_name_to_swag_la_paths[dataset]['swa']
+        data_dict = update_data_dict(data_dict, la_path, dataset)
+
+
+    full_rankings = np.zeros((len(module_numbers),len(data_dict)))
+    for idx, module_number in enumerate(module_numbers):
+        names = list(data_dict.keys())
+        vps = []
+        for i in range(3):
+            values = [data_dict[name][i][idx] for name in names]
+            argsorted = np.argsort(values)
+            vps.append(argsorted)
+        vps = np.array(vps)
+        medians = np.median(vps, axis = 0)
+        full_rankings[idx] = medians
+
+
+    names = ['Max operator norm LA', 'Max operator norm attn. LA', 'Random ramping LA',
+             'Min operator norm LA', 'Min operator norm attn. LA']
+
+    plotter = RankingPlotter(full_rankings, names, module_numbers)
+    fig, ax = plt.subplots(1,1)
+    plotter.draw(ax)
+    plt.show()
+    breakpoint()
+
 
 
 def make_main_plot(experiment_paths, save_path = "", lazy = False):
@@ -1414,15 +1783,23 @@ def make_main_plot(experiment_paths, save_path = "", lazy = False):
 
         y_label = 'NLL' if metric == 'nll' else 'ECE'
         if column == 0:
-            ax.set_ylabel(y_label)
+            ax.set_ylabel(y_label + r"$\downarrow$")
 
         ax.yaxis.set_major_formatter('{x:1.3f}')
-        if row == 1:
-            ax.set_xlabel(dataset, labelpad=25)
-            ax.set_xticks([])
-        else:
-            ax.get_xaxis().set_visible(False)  # there is no reason to have an unordered axis
+        ax.set_xscale('log')
+        # if row == 1:
+        #     ax.set_xlabel(dataset, labelpad=25)
+        #     ax.set_xticks([])
+        # else:
+        #     ax.get_xaxis().set_visible(False)  # there is no reason to have an unordered axis
         ax.grid(True)
+        # plt.setp(ax.get_xticklabels(), visible = True)
+        # ax.set_xticklabels(ax.get_xmajorticklabels())
+        if row == 0:
+            ax.set_title(dataset)
+            # ax.get_xaxis().set_visible(False)
+        if row == 1:
+            ax.set_xlabel(f'Num. Floats $\downarrow$', labelpad=5)
         return ax
 
     font = {'family': 'serif',
@@ -1485,7 +1862,7 @@ def make_main_plot(experiment_paths, save_path = "", lazy = False):
     plt.show()
 
 
-def find_and_dataset_paths_and_plot(overall_path, save_path = ""):
+def find_and_dataset_paths_and_plot(overall_path, save_path = "", ranking = False):
 
     """
     This is a function primarily for me because it really requires that you have put all your stuff
@@ -1496,7 +1873,13 @@ def find_and_dataset_paths_and_plot(overall_path, save_path = ""):
 
     names = ['MRPC', 'SST2', 'RTE']
     paths = [os.path.join(overall_path, name) for name in names]
-    make_main_plot(experiment_paths=paths, save_path=save_path)
+    if not ranking:
+        make_main_plot(experiment_paths=paths, save_path=save_path)
+    else:
+        make_ranking_plot(experiment_paths=paths)
+
+
+
 
 def make_acc_swag_plots_across_datasets(experiment_paths, map_paths, save_path = ""):
 
@@ -1640,10 +2023,10 @@ if __name__ == '__main__':
 
 
 
-    # overall_path = r'C:\Users\45292\Documents\Master\NLP'
-    # save_path = r'C:\Users\45292\Documents\Master\NLP\Overall Figures'
-    # find_and_dataset_paths_and_plot(overall_path, save_path = save_path)
-    # breakpoint()
+    overall_path = r'C:\Users\45292\Documents\Master\NLP'
+    save_path = r'C:\Users\45292\Documents\Master\Article\Figures'
+    find_and_dataset_paths_and_plot(overall_path, save_path, ranking=True)
+    breakpoint()
 
     # path = r"C:\Users\Gustav\Desktop\MasterThesisResults\SentimentAnalysis\sst2\laplace\operator_norm_ramping"
     # save_path = path
@@ -1676,11 +2059,12 @@ if __name__ == '__main__':
     # #                                     save_path= save_path)
     # # breakpoint()
 
-    experiment_path = r"C:\Users\45292\Documents\Master\NLP\SST2\laplace"
-    map_path = r"C:\Users\45292\Documents\Master\NLP\SST2\map"
-    save_path = r"C:\Users\45292\Documents\Master\NLP\SST2\Figures\Laplace"
-    val_path =  r"C:\Users\45292\Documents\Master\NLP\SST2\map_val"
-    make_laplace_plot_three_full(experiment_path, map_path=map_path, val_path=val_path, metric='nll', save_path = save_path)
+    experiment_path = r"C:\Users\45292\Documents\Master\NLP\RTE\laplace"
+    map_path = r"C:\Users\45292\Documents\Master\NLP\RTE\map"
+    save_path = r"C:\Users\45292\Documents\Master\Article\Figures"
+    val_path =  r"C:\Users\45292\Documents\Master\NLP\RTE\map_val"
+    make_laplace_plot_three_full(experiment_path, map_path=map_path, val_path=val_path, metric='nll',
+                                 save_path=save_path)
     breakpoint()
     #
     #
@@ -1694,7 +2078,7 @@ if __name__ == '__main__':
     # estimator, temp_map = plotter.collect_predictions_and_calculate_calib(key = '1.0', map_path = map_path, val_path=val_path)
     # plotter.plot_calibration(*estimator, ax = ax, color = 'tab:orange', label = 'S-KFAC 0.01 pct')
     # plotter.plot_calibration(*map, ax = ax, color = 'tab:blue', label = 'MAP')
-    # plotter.plot_calibration(*temp_map, ax = ax, color = 'tab:brown', label = 'Temp. scaled MAP')
+    plotter.plot_calibration(*temp_map, ax = ax, color = 'tab:brown', label = 'Temp. scaled MAP')
     # ax.set_ybound(0, 1.2)
     # ax.legend()
     # ax.set_title('MRPC Calibration Curves')
